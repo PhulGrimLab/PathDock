@@ -1,0 +1,20 @@
+<UserControl x:Class="PathDock.App.Views.TerminalPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="clr-namespace:PathDock.App.Controls">
+    <!-- 터미널 패널: 머리글 오른쪽에 셸 상태. DataContext: TerminalViewModel -->
+    <ctl:PanelCard Header="터미널 - PowerShell" Symbol="WindowConsole20">
+        <ctl:PanelCard.HeaderTrailing>
+            <TextBlock FontSize="12" Text="{Binding StatusText}"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       AutomationProperties.AutomationId="TerminalStatus"
+                       AutomationProperties.Name="{Binding StatusText}" />
+        </ctl:PanelCard.HeaderTrailing>
+        <!-- 터미널은 테마와 무관하게 어두운 화면을 유지한다(셸 색상 체계 보존). -->
+        <Border Background="#0C0C0C" Padding="8,6" ClipToBounds="True">
+            <ctl:TerminalControl x:Name="TerminalView" Session="{Binding Session}"
+                                 AutomationProperties.AutomationId="Terminal"
+                                 AutomationProperties.Name="터미널" />
+        </Border>
+    </ctl:PanelCard>
+</UserControl>

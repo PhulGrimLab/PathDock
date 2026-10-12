@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PathDock.App/PathDock.App.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="src/PathDock.Core/PathDock.Core.csproj" />
+    <Project Path="src/PathDock.Tests/PathDock.Tests.csproj" />
+    <Project Path="src/PathDock.UiAutomation.Tests/PathDock.UiAutomation.Tests.csproj">
+      <Platform Project="x64" />
+    </Project>
+  </Folder>
+</Solution>

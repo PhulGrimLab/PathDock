@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\PathDock.ico</ApplicationIcon>
+    <AssemblyName>PathDock.App</AssemblyName>
+    <RootNamespace>PathDock.App</RootNamespace>
+    <Version>1.0.0</Version>
+    <Product>PathDock</Product>
+    <Company>PhulgrimLab</Company>
+    <Copyright>© PhulgrimLab</Copyright>
+    <Description>폴더 즐겨찾기, 파일 탐색기, 내장 터미널을 한 화면에 묶은 개발자용 작업 공간</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Assets\PathDock.png" />
+    <Resource Include="Assets\PathDock.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PathDock.Core\PathDock.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,21 @@
+<Window x:Class="PathDock.App.Views.InputDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Width="420" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="{DynamicResource ApplicationBackgroundBrush}"
+        Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+    <StackPanel Margin="20">
+        <TextBlock x:Name="LabelText" Margin="0,0,0,8" TextWrapping="Wrap" />
+        <ui:TextBox x:Name="InputBox" AutomationProperties.AutomationId="InputBox" />
+        <TextBlock x:Name="ErrorText" Margin="0,6,0,0" Foreground="#E5484D" TextWrapping="Wrap"
+                   AutomationProperties.AutomationId="InputError" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <ui:Button Content="확인" Appearance="Primary" MinWidth="80" Margin="0,0,8,0" IsDefault="True"
+                       Click="Ok_Click" AutomationProperties.AutomationId="InputOk" />
+            <ui:Button Content="취소" MinWidth="80" IsCancel="True"
+                       AutomationProperties.AutomationId="InputCancel" />
+        </StackPanel>
+    </StackPanel>
+</Window>

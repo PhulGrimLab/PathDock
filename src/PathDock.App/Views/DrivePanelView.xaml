@@ -1,0 +1,26 @@
+<UserControl x:Class="PathDock.App.Views.DrivePanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="clr-namespace:PathDock.App.Controls"
+             xmlns:vm="clr-namespace:PathDock.App.ViewModels">
+    <!-- 드라이브 목록: 사용량 막대 + 클릭 시 해당 드라이브 이동. DataContext: MainViewModel -->
+    <ctl:PanelCard Header="드라이브" Symbol="HardDrive20" ContentPadding="6">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" AutomationProperties.AutomationId="DriveList">
+            <ItemsControl ItemsSource="{Binding Drives}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:DriveItemViewModel}">
+                        <ctl:DriveCard Title="{Binding Title}"
+                                       Detail="{Binding UsageText}"
+                                       UsedPercent="{Binding UsedPercent, Mode=OneWay}"
+                                       IsLow="{Binding IsLow}"
+                                       IsCurrent="{Binding IsCurrent}"
+                                       Command="{Binding OpenCommand}"
+                                       ToolTip="{Binding UsageText}"
+                                       AutomationProperties.AutomationId="{Binding AutomationId}"
+                                       AutomationProperties.Name="{Binding Title}" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </ctl:PanelCard>
+</UserControl>
