@@ -4,6 +4,8 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
+    <!-- App은 self-contained, 이 프로젝트는 App의 실행 파일만 필요하므로 검사를 끈다. -->
+    <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
   </PropertyGroup>
   <ItemGroup>
     <!-- 빌드 순서 보장용(실행 파일만 필요하고 어셈블리 참조는 하지 않는다). -->

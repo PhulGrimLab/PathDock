@@ -3,6 +3,13 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <!-- 다른 PC에서 Debug/Release 폴더만 복사해 실행할 수 있도록 .NET 런타임(WPF 네이티브 DLL, VC++ 런타임 포함)을 출력 폴더에 함께 넣는다. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <!-- 출력 경로를 기존 그대로(bin\x64\Debug\net10.0-windows) 유지한다. -->
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    <!-- 런타임이 싣고 오는 다국어 리소스 폴더(독일어, 일본어 등)는 빼고 한국어/영어만 둔다. -->
+    <SatelliteResourceLanguages>ko;en</SatelliteResourceLanguages>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\PathDock.ico</ApplicationIcon>
     <AssemblyName>PathDock.App</AssemblyName>
