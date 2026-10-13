@@ -37,8 +37,8 @@
     </UserControl.Resources>
 
     <!-- Mdir 스타일 상위 폴더 열: 머리글=열 폴더 이름, 현재 경로가 지나는 항목이 선택 표시. DataContext: AncestorColumnViewModel -->
-    <ctl:PanelCard Header="{Binding Title}" Symbol="FolderOpen24" ContentPadding="6">
-        <ListBox ItemsSource="{Binding Items}" FontSize="12"
+    <ctl:PanelCard Header="{Binding Title}" Symbol="FolderOpen24" ContentPadding="6" ToolTip="{Binding FullPath}">
+        <ListBox ItemsSource="{Binding Items}" FontSize="{DynamicResource PdFontSize}"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                  SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
                  ItemContainerStyle="{StaticResource AncestorItemStyle}"

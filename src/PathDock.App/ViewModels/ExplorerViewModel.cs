@@ -70,7 +70,7 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
         _cache = cache;
         _dialogs = dialogs;
         UpdateHeaders();
-        GrandParent = new AncestorColumnViewModel("AncestorColumn_2", p => NavigateTo(p, ChangeOrigin.User));
+        GrandParent = new AncestorColumnViewModel("AncestorColumn_2", p => NavigateTo(p, ChangeOrigin.User), marksHiddenAncestors: true);
         Parent = new AncestorColumnViewModel("AncestorColumn_1", p => NavigateTo(p, ChangeOrigin.User));
     }
 

@@ -29,7 +29,9 @@ public partial class App : Application
 
         var settings = new SettingsService(dataDir, _logger);
         // 테마는 창이 만들어지기 전에 적용해야 첫 화면부터 올바른 색으로 그려진다.
-        Services.ThemeService.Apply(settings.Load().Theme);
+        AppSettings loaded = settings.Load();
+        Services.ThemeService.Apply(loaded.Theme);
+        Services.FontService.ApplyUi(loaded.UiFontSize);
         var sizeCache = new FolderSizeCache(dataDir, _logger);
         _viewModel = new MainViewModel(settings, sizeCache, _logger);
         var window = new MainWindow(_viewModel);

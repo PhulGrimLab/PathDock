@@ -6,7 +6,7 @@
     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
         <ui:SymbolIcon Symbol="ArrowSync24" FontSize="14" Margin="0,0,6,0"
                        Foreground="{DynamicResource SystemAccentColorPrimaryBrush}" />
-        <TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="경로 동기화" FontSize="12"
+        <TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="경로 동기화" FontSize="{DynamicResource PdFontSize}"
                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
         <ComboBox MinWidth="150" Height="28"
                   ItemsSource="{Binding SyncModes}"
@@ -16,7 +16,7 @@
             <!-- 선택 표시와 목록 항목 모두 명시적 TextBlock으로 그려 글자 크기를 다른 UI와 맞춘다. -->
             <ComboBox.ItemTemplate>
                 <DataTemplate>
-                    <TextBlock Text="{Binding Label}" FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Label}" FontSize="{DynamicResource PdFontSize}" VerticalAlignment="Center" />
                 </DataTemplate>
             </ComboBox.ItemTemplate>
         </ComboBox>

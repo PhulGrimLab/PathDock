@@ -7,7 +7,7 @@
     <UserControl.Resources>
         <!-- 열 머리글: 기본(굵은 14pt)보다 한 단계 작고 가벼운 글자로 정리 -->
         <Style x:Key="PdHeaderStyle" TargetType="GridViewColumnHeader" BasedOn="{StaticResource UiGridViewColumnHeaderStyle}">
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource PdFontSize}" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
     </UserControl.Resources>
@@ -19,7 +19,7 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <ui:ListView x:Name="FileList" Grid.Row="0" Margin="4,4,4,0" BorderThickness="0" Background="Transparent" FontSize="12"
+            <ui:ListView x:Name="FileList" Grid.Row="0" Margin="4,4,4,0" BorderThickness="0" Background="Transparent" FontSize="{DynamicResource PdFontSize}"
                          ItemsSource="{Binding Items}"
                          SelectedItem="{Binding SelectedItem}"
                          AutomationProperties.AutomationId="FileList"
@@ -63,7 +63,7 @@
             <!-- 요약 줄 -->
             <Border Grid.Row="1" Padding="12,6" BorderThickness="0,1,0,0"
                     BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
-                <TextBlock Text="{Binding SummaryText}" TextWrapping="Wrap" FontSize="12"
+                <TextBlock Text="{Binding SummaryText}" TextWrapping="Wrap" FontSize="{DynamicResource PdFontSize}"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            AutomationProperties.AutomationId="FolderSummary"
                            AutomationProperties.Name="{Binding SummaryText}" />

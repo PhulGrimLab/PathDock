@@ -14,6 +14,9 @@ public interface IDialogService
 
     /// <summary>프로그램 정보 창(모달)을 연다.</summary>
     void ShowAbout();
+
+    /// <summary>설정 창(모달)을 연다. <paramref name="dataContext"/>는 창의 바인딩 대상(MainViewModel).</summary>
+    void ShowSettings(object dataContext);
 }
 
 /// <summary>WPF 구현. Owner: App/MainViewModel, Lifetime: 앱 전체. UI 스레드에서만 호출한다.</summary>
@@ -31,6 +34,11 @@ public sealed class WpfDialogService : IDialogService
     public void ShowAbout()
     {
         new AboutWindow { Owner = Application.Current?.MainWindow }.ShowDialog();
+    }
+
+    public void ShowSettings(object dataContext)
+    {
+        new SettingsWindow { Owner = Application.Current?.MainWindow, DataContext = dataContext }.ShowDialog();
     }
 
     public string? Prompt(string title, string label, string initialValue)

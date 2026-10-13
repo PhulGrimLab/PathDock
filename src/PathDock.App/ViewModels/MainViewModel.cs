@@ -83,7 +83,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         GpuPercent = u.GpuPercent ?? 0;
         GpuText = u.GpuPercent is { } g ? $"{g:0}%" : "N/A";
         MemoryPercent = u.MemoryPercent;
-        MemoryText = $"{SizeFormatter.Format(u.MemoryUsedBytes)} / {SizeFormatter.Format(u.MemoryTotalBytes)}";
+        MemoryText = $"{SizeFormatter.Format(u.MemoryUsedBytes)} / {SizeFormatter.Format(u.MemoryTotalBytes)} ({u.MemoryPercent:0}%)";
         UsageText = FormatUsage(u);
     }
 
@@ -104,6 +104,56 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IsDarkTheme = !IsDarkTheme;
         Services.ThemeService.Apply(Settings.Theme);
         _log.Info($"테마 변경: {Settings.Theme}");
+    }
+
+    // ----- 설정 창 -----
+
+    /// <summary>화면 글자 크기. 바꾸면 즉시 반영되고 설정에 저장된다.</summary>
+    [ObservableProperty]
+    private double _uiFontSize;
+
+    /// <summary>터미널 글자 크기. 바꾸면 즉시 반영되고 설정에 저장된다.</summary>
+    [ObservableProperty]
+    private double _terminalFontSize;
+
+    partial void OnUiFontSizeChanged(double value)
+    {
+        Settings.UiFontSize = Services.FontService.NormalizeUi(value);
+        Services.FontService.ApplyUi(Settings.UiFontSize);
+    }
+
+    partial void OnTerminalFontSizeChanged(double value)
+    {
+        Settings.TerminalFontSize = Services.FontService.NormalizeTerminal(value);
+        Terminal.FontSize = Settings.TerminalFontSize;
+    }
+
+    /// <summary>제목 표시줄 톱니 버튼: 설정 창.</summary>
+    [RelayCommand]
+    private void ShowSettings() => _dialogs.ShowSettings(this);
+
+    /// <summary>글자 크기를 기본값으로 되돌린다.</summary>
+    [RelayCommand]
+    private void ResetFonts()
+    {
+        UiFontSize = AppSettings.DefaultUiFontSize;
+        TerminalFontSize = AppSettings.DefaultTerminalFontSize;
+    }
+
+    /// <summary>즐겨찾기 10칸을 모두 비운다(확인 후).</summary>
+    [RelayCommand]
+    private void ResetFavorites()
+    {
+        if (!_dialogs.Confirm("즐겨찾기 초기화", "등록된 즐겨찾기를 모두 비웁니다. 계속할까요?"))
+        {
+            return;
+        }
+        foreach (FavoriteSlotViewModel slot in Favorites)
+        {
+            slot.Path = string.Empty;
+            slot.Name = string.Empty;
+        }
+        _log.Info("즐겨찾기 전체 초기화");
     }
 
     /// <summary>제목 표시줄 로고 클릭: 프로그램 정보 창.</summary>
@@ -131,6 +181,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Explorer = new ExplorerViewModel(log, _sizeCache, _dialogs);
         _isDarkTheme = Services.ThemeService.Normalize(Settings.Theme) == Services.ThemeService.Dark;
         Terminal = new TerminalViewModel(log);
+        _uiFontSize = Services.FontService.NormalizeUi(Settings.UiFontSize);
+        _terminalFontSize = Services.FontService.NormalizeTerminal(Settings.TerminalFontSize);
+        Terminal.FontSize = _terminalFontSize;
+        Terminal.IsCollapsed = Settings.TerminalCollapsed;
         _sync = new PathSyncService(Explorer, Terminal, log) { Mode = Settings.SyncMode };
         _selectedSyncMode = SyncModes.First(o => o.Mode == Settings.SyncMode);
 
@@ -282,6 +336,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             .Select(f => new FavoriteEntry { Name = f.Name, Path = f.Path })
             .ToList();
         Settings.LastPath = Explorer.CurrentPath ?? string.Empty;
+        Settings.TerminalCollapsed = Terminal.IsCollapsed;
         _settingsService.Save(Settings);
         _sizeCache.Save();
         _log.Info("설정 저장");

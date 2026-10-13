@@ -39,6 +39,7 @@ public sealed partial class FileItemViewModel : ObservableObject
         FileCategory.Video => SymbolRegular.Video24,
         FileCategory.Archive => SymbolRegular.FolderZip24,
         FileCategory.Executable => SymbolRegular.Rocket24,
+        FileCategory.Library => SymbolRegular.PuzzlePiece24,
         _ => SymbolRegular.Document24,
     };
 
@@ -56,6 +57,7 @@ public sealed partial class FileItemViewModel : ObservableObject
         [FileCategory.Video] = Make(0xEF, 0x62, 0x5E),
         [FileCategory.Archive] = Make(0xE8, 0x93, 0x3C),
         [FileCategory.Executable] = Make(0x2E, 0xB5, 0xC2),
+        [FileCategory.Library] = Make(0x7C, 0x8C, 0xF0),
         [FileCategory.Other] = Make(0x9A, 0xA0, 0xA6),
     };
 
@@ -134,10 +136,12 @@ public sealed partial class AncestorColumnViewModel : ObservableObject
 {
     private readonly Action<string> _onUserSelect;
     private bool _suppress;
+    private readonly bool _marksHiddenAncestors;
 
-    public AncestorColumnViewModel(string automationId, Action<string> onUserSelect)
+    public AncestorColumnViewModel(string automationId, Action<string> onUserSelect, bool marksHiddenAncestors = false)
     {
         AutomationId = automationId;
+        _marksHiddenAncestors = marksHiddenAncestors;
         _onUserSelect = onUserSelect;
     }
 
@@ -147,6 +151,10 @@ public sealed partial class AncestorColumnViewModel : ObservableObject
     /// <summary>열 머리글: 이 열이 나열하는 폴더의 이름(루트면 "C:\").</summary>
     [ObservableProperty]
     private string _title = string.Empty;
+
+    /// <summary>이 열 폴더의 전체 경로(머리글 툴팁). 비어 있으면 폴더 없음.</summary>
+    [ObservableProperty]
+    private string _fullPath = string.Empty;
 
     [ObservableProperty]
     private AncestorItemViewModel? _selectedItem;
@@ -170,7 +178,11 @@ public sealed partial class AncestorColumnViewModel : ObservableObject
         try
         {
             Items.Clear();
-            Title = folderPath is null ? "—" : (Path.GetFileName(folderPath) is { Length: > 0 } n ? n : folderPath);
+            string name = folderPath is null ? "—" : (Path.GetFileName(folderPath) is { Length: > 0 } n ? n : folderPath);
+            // 이 열의 왼쪽에 더 보여줄 열이 없는데 위에 폴더가 더 있으면 "…\"로 알린다.
+            bool hasHiddenAncestors = _marksHiddenAncestors && folderPath is not null && Core.Explorer.ExplorerService.GetParent(folderPath) is not null;
+            Title = hasHiddenAncestors ? $"…\\{name}" : name;
+            FullPath = folderPath ?? string.Empty;
             AncestorItemViewModel? sel = null;
             foreach (FileItem f in folders)
             {

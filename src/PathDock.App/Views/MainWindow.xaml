@@ -34,7 +34,8 @@
         <ui:TitleBar Grid.Row="0" Title="PathDock">
             <ui:TitleBar.Header>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <ui:Button x:Name="AboutButton" Appearance="Transparent" Padding="8,3" Margin="6,0,0,0"
+                    <!-- 로고 왼쪽 끝을 아래 띠의 콘텐츠 시작 열(12px)에 맞춘다. TitleBar Header가 앞쪽에 32px 여백을 두므로 12-32=-20 -->
+                    <ui:Button x:Name="AboutButton" Appearance="Transparent" Padding="0,3,8,3" Margin="-20,0,0,0"
                                Command="{Binding ShowAboutCommand}"
                                ToolTip="PathDock 정보"
                                AutomationProperties.AutomationId="AboutButton"
@@ -48,24 +49,41 @@
                 </StackPanel>
             </ui:TitleBar.Header>
             <ui:TitleBar.TrailingContent>
-                <ui:Button Appearance="Transparent" Margin="0,0,4,0" Padding="10,4"
-                           Command="{Binding ToggleThemeCommand}"
-                           ToolTip="{Binding ThemeToolTip}"
-                           AutomationProperties.AutomationId="ThemeButton"
-                           AutomationProperties.Name="테마 전환">
-                    <ui:SymbolIcon FontSize="14">
-                        <ui:SymbolIcon.Style>
-                            <Style TargetType="ui:SymbolIcon">
-                                <Setter Property="Symbol" Value="WeatherMoon24" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsDarkTheme}" Value="True">
-                                        <Setter Property="Symbol" Value="WeatherSunny24" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </ui:SymbolIcon.Style>
-                    </ui:SymbolIcon>
-                </ui:Button>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- 현재 날짜/시간(초 단위). 더블 클릭하면 Windows 알림 센터의 달력을 연다 -->
+                    <TextBlock x:Name="ClockText" Background="Transparent" VerticalAlignment="Center"
+                               Margin="0,0,8,0" Padding="6,4"
+                               FontSize="{DynamicResource PdFontSize}"
+                               ToolTip="더블 클릭: 달력 열기"
+                               PreviewMouseLeftButtonDown="OnClockMouseDown"
+                               AutomationProperties.AutomationId="ClockText"
+                               AutomationProperties.Name="현재 날짜와 시간" />
+                    <ui:Button Appearance="Transparent" Margin="0,0,4,0" Padding="10,4"
+                               Command="{Binding ShowSettingsCommand}"
+                               ToolTip="설정"
+                               AutomationProperties.AutomationId="SettingsButton"
+                               AutomationProperties.Name="설정">
+                        <ui:SymbolIcon Symbol="Settings24" FontSize="14" />
+                    </ui:Button>
+                    <ui:Button Appearance="Transparent" Margin="0,0,4,0" Padding="10,4"
+                               Command="{Binding ToggleThemeCommand}"
+                               ToolTip="{Binding ThemeToolTip}"
+                               AutomationProperties.AutomationId="ThemeButton"
+                               AutomationProperties.Name="테마 전환">
+                        <ui:SymbolIcon FontSize="14">
+                            <ui:SymbolIcon.Style>
+                                <Style TargetType="ui:SymbolIcon">
+                                    <Setter Property="Symbol" Value="WeatherMoon24" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsDarkTheme}" Value="True">
+                                            <Setter Property="Symbol" Value="WeatherSunny24" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ui:SymbolIcon.Style>
+                        </ui:SymbolIcon>
+                    </ui:Button>
+                </StackPanel>
             </ui:TitleBar.TrailingContent>
         </ui:TitleBar>
 
@@ -130,7 +148,7 @@
         </Border>
 
         <!-- 탐색기/터미널 높이 조절 막대(눈에 보이는 구분선) -->
-        <GridSplitter Grid.Row="4" Height="5" HorizontalAlignment="Stretch"
+        <GridSplitter x:Name="TerminalSplitter" Grid.Row="4" Height="5" HorizontalAlignment="Stretch"
                       Background="{DynamicResource SolidBackgroundFillColorQuarternaryBrush}"
                       ResizeDirection="Rows" ResizeBehavior="PreviousAndNext" />
 

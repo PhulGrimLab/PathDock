@@ -18,6 +18,12 @@ public sealed class AppSettings
     /// <summary>즐겨찾기 최대 칸 수(기획서: 약 10개).</summary>
     public const int MaxFavorites = 10;
 
+    public const double DefaultUiFontSize = 12;
+    public const double MinUiFontSize = 10;
+    public const double MaxUiFontSize = 20;
+    public const double DefaultTerminalFontSize = 14;
+    public const double MinTerminalFontSize = 10;
+    public const double MaxTerminalFontSize = 28;
     public List<FavoriteEntry> Favorites { get; set; } = new();
     public SyncMode SyncMode { get; set; } = SyncMode.Bidirectional;
     public string LastPath { get; set; } = string.Empty;
@@ -31,6 +37,12 @@ public sealed class AppSettings
     public double ExplorerRatio { get; set; } = 0.5;
     /// <summary>화면 테마("Dark" 또는 "Light").</summary>
     public string Theme { get; set; } = "Dark";
+    /// <summary>화면(탐색기/즐겨찾기/상태 표시줄 등) 글자 크기.</summary>
+    public double UiFontSize { get; set; } = DefaultUiFontSize;
+    /// <summary>터미널 글자 크기.</summary>
+    public double TerminalFontSize { get; set; } = DefaultTerminalFontSize;
+    /// <summary>터미널 패널을 접은 상태로 시작할지.</summary>
+    public bool TerminalCollapsed { get; set; }
 }
 
 /// <summary>

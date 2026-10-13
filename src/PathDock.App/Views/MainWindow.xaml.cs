@@ -1,5 +1,9 @@
 using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
 using System.Windows;
+using System.Windows.Input;
+using System.Windows.Threading;
 using PathDock.App.ViewModels;
 using Wpf.Ui.Controls;
 
@@ -17,7 +21,10 @@ public partial class MainWindow : FluentWindow
     private const double OffscreenMarginTop = 20;
     private const double OffscreenMarginBottom = 100;
 
+    private const double TerminalMinHeight = 120;
+
     private readonly MainViewModel _vm;
+    private double _expandedRatio = 0.5;
 
     public MainWindow(MainViewModel vm)
     {
@@ -25,8 +32,54 @@ public partial class MainWindow : FluentWindow
         InitializeComponent();
         DataContext = vm;
         RestoreWindowState();
+        _vm.Terminal.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(TerminalViewModel.IsCollapsed))
+            {
+                ApplyTerminalCollapsed();
+            }
+        };
+        ApplyTerminalCollapsed();
         Closing += OnClosing;
         Loaded += (_, _) => TerminalPanel.FocusTerminal();
+        StartClock();
+    }
+
+    /// <summary>제목 표시줄 시계를 시작한다. 창과 수명이 같고, 창이 닫히면 멈춘다.</summary>
+    private void StartClock()
+    {
+        var timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(250) };
+        timer.Tick += (_, _) => UpdateClock();
+        Closed += (_, _) => timer.Stop();
+        UpdateClock();
+        timer.Start();
+    }
+
+    private void UpdateClock()
+    {
+        string text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
+        if (ClockText.Text != text)
+        {
+            ClockText.Text = text;
+        }
+    }
+
+    /// <summary>시계를 더블 클릭하면 Windows 알림 센터(달력 포함)를 연다. 제목 표시줄의 더블 클릭 최대화는 막는다.</summary>
+    private void OnClockMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount != 2)
+        {
+            return;
+        }
+        e.Handled = true;
+        try
+        {
+            Process.Start(new ProcessStartInfo("ms-actioncenter:") { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+        {
+            _vm.InfoMessage = $"달력을 열 수 없습니다: {ex.Message}";
+        }
     }
 
     /// <summary>저장된 창 위치/크기/최대화/분할 비율을 복원한다(화면 밖이면 위치는 OS 기본값).</summary>
@@ -50,8 +103,37 @@ public partial class MainWindow : FluentWindow
             WindowState = WindowState.Maximized;
         }
         double ratio = Math.Clamp(s.ExplorerRatio, MinExplorerRatio, MaxExplorerRatio);
+        _expandedRatio = ratio;
         ExplorerRow.Height = new GridLength(ratio, GridUnitType.Star);
         TerminalRow.Height = new GridLength(1 - ratio, GridUnitType.Star);
+    }
+
+    /// <summary>터미널을 접으면 머리글 높이만 남기고 탐색기가 나머지를 채운다. 펼치면 접기 전 비율로 되돌린다.</summary>
+    private void ApplyTerminalCollapsed()
+    {
+        if (_vm.Terminal.IsCollapsed)
+        {
+            double total = ExplorerRow.ActualHeight + TerminalRow.ActualHeight;
+            if (total > 0 && TerminalRow.Height.IsStar)
+            {
+                _expandedRatio = Math.Clamp(ExplorerRow.ActualHeight / total, MinExplorerRatio, MaxExplorerRatio);
+            }
+            else
+            {
+                // 레이아웃 전(시작 시 접힌 상태): 복원해 둔 비율을 유지한다.
+            }
+            ExplorerRow.Height = new GridLength(1, GridUnitType.Star);
+            TerminalRow.MinHeight = 0;
+            TerminalRow.Height = GridLength.Auto;
+            TerminalSplitter.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            TerminalRow.MinHeight = TerminalMinHeight;
+            ExplorerRow.Height = new GridLength(_expandedRatio, GridUnitType.Star);
+            TerminalRow.Height = new GridLength(1 - _expandedRatio, GridUnitType.Star);
+            TerminalSplitter.Visibility = Visibility.Visible;
+        }
     }
 
     private static bool IsVisibleOnScreen(double left, double top)
@@ -72,7 +154,11 @@ public partial class MainWindow : FluentWindow
         s.WindowWidth = bounds.Width;
         s.WindowHeight = bounds.Height;
         double total = ExplorerRow.ActualHeight + TerminalRow.ActualHeight;
-        if (total > 0)
+        if (_vm.Terminal.IsCollapsed)
+        {
+            s.ExplorerRatio = _expandedRatio;
+        }
+        else if (total > 0)
         {
             s.ExplorerRatio = ExplorerRow.ActualHeight / total;
         }

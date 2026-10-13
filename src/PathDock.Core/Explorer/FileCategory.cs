@@ -12,6 +12,7 @@ public enum FileCategory
     Video,
     Archive,
     Executable,
+    Library,
     Other,
 }
 
@@ -49,7 +50,8 @@ public static class FileCategorizer
         Add(FileCategory.Audio, ".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a", ".wma");
         Add(FileCategory.Video, ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".flv");
         Add(FileCategory.Archive, ".zip", ".7z", ".rar", ".tar", ".gz", ".bz2", ".xz", ".nupkg", ".iso", ".cab");
-        Add(FileCategory.Executable, ".exe", ".msi", ".dll", ".lnk", ".com", ".appx", ".msix");
+        Add(FileCategory.Executable, ".exe", ".msi", ".lnk", ".com", ".appx", ".msix");
+        Add(FileCategory.Library, ".dll");
         return m;
     }
 }

@@ -40,7 +40,7 @@
                                     <ui:SymbolIcon x:Name="HeaderIcon" Grid.Column="0" Margin="0,0,7,0" FontSize="14"
                                                    Symbol="{TemplateBinding Symbol}"
                                                    Foreground="{DynamicResource SystemAccentColorPrimaryBrush}" />
-                                    <TextBlock Grid.Column="1" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="12"
+                                    <TextBlock Grid.Column="1" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="{DynamicResource PdFontSize}"
                                                Text="{TemplateBinding Header}" TextTrimming="CharacterEllipsis" />
                                     <ContentPresenter Grid.Column="2" VerticalAlignment="Center"
                                                       Content="{TemplateBinding HeaderTrailing}" />
@@ -113,7 +113,7 @@
                             <StackPanel Orientation="Horizontal">
                                 <ui:SymbolIcon Margin="0,0,7,0" FontSize="16" Symbol="{TemplateBinding Symbol}"
                                                Foreground="{DynamicResource SystemAccentColorPrimaryBrush}" />
-                                <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" FontSize="12"
+                                <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" FontSize="{DynamicResource PdFontSize}"
                                            Text="{TemplateBinding Title}" TextTrimming="CharacterEllipsis" />
                             </StackPanel>
                             <ProgressBar x:Name="Bar" Height="5" Margin="0,7,0,4" Minimum="0" Maximum="100"
@@ -169,7 +169,7 @@
                             </Border>
                             <ui:SymbolIcon x:Name="Glyph" Margin="7,0,4,0" FontSize="14" Symbol="Folder24"
                                            Foreground="{DynamicResource SystemAccentColorPrimaryBrush}" />
-                            <TextBlock x:Name="Label" MaxWidth="170" VerticalAlignment="Center" FontSize="12"
+                            <TextBlock x:Name="Label" MaxWidth="170" VerticalAlignment="Center" FontSize="{DynamicResource PdFontSize}"
                                        Text="{TemplateBinding Title}" TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                     </Border>

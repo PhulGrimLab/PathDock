@@ -18,7 +18,6 @@ namespace PathDock.App.Controls;
 /// </summary>
 public sealed class TerminalControl : FrameworkElement
 {
-    private const double FontSizeDip = 14;
     private const int RefreshIntervalMs = 33;
     private const int WheelLines = 3;
     private const int MinCols = 20;
@@ -30,6 +29,10 @@ public sealed class TerminalControl : FrameworkElement
     public static readonly DependencyProperty SessionProperty = DependencyProperty.Register(
         nameof(Session), typeof(TerminalSession), typeof(TerminalControl),
         new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, (d, _) => ((TerminalControl)d).OnSessionChanged()));
+
+    public static readonly DependencyProperty TerminalFontSizeProperty = DependencyProperty.Register(
+        nameof(TerminalFontSize), typeof(double), typeof(TerminalControl),
+        new FrameworkPropertyMetadata(14.0, FrameworkPropertyMetadataOptions.AffectsRender, (d, _) => ((TerminalControl)d).OnFontSizeChanged()));
 
     private readonly Dictionary<uint, Brush> _brushes = new();
     private readonly DispatcherTimer _timer;
@@ -47,8 +50,14 @@ public sealed class TerminalControl : FrameworkElement
         set => SetValue(SessionProperty, value);
     }
 
-    public TerminalControl()
+    /// <summary>글자 크기(DIP). 바뀌면 셀 크기를 다시 재고 열/행 수를 다시 계산한다.</summary>
+    public double TerminalFontSize
     {
+        get => (double)GetValue(TerminalFontSizeProperty);
+        set => SetValue(TerminalFontSizeProperty, value);
+    }
+
+    public TerminalControl()    {
         Focusable = true;
         FocusVisualStyle = null;
         ClipToBounds = true;
@@ -73,11 +82,18 @@ public sealed class TerminalControl : FrameworkElement
         ApplySize();
     }
 
+    private void OnFontSizeChanged()
+    {
+        MeasureCell();
+        _renderedVersion = -1;
+        ApplySize();
+    }
+
     /// <summary>"M" 한 글자로 셀 크기를 잰다(고정폭 폰트 가정).</summary>
     private void MeasureCell()
     {
         double dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
-        var ft = new FormattedText("M", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, _normal, FontSizeDip, Brushes.White, dpi);
+        var ft = new FormattedText("M", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, _normal, TerminalFontSize, Brushes.White, dpi);
         _cellW = Math.Max(1, ft.WidthIncludingTrailingWhitespace);
         _cellH = Math.Max(1, Math.Ceiling(ft.Height));
     }
@@ -222,7 +238,7 @@ public sealed class TerminalControl : FrameworkElement
     private void DrawText(DrawingContext dc, string text, int col, double y, uint fg, CellAttr style, double dpi)
     {
         Typeface face = (style & CellAttr.Bold) != 0 ? _bold : _normal;
-        var ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, face, FontSizeDip, BrushFor(fg), dpi);
+        var ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, face, TerminalFontSize, BrushFor(fg), dpi);
         if ((style & CellAttr.Italic) != 0)
         {
             // 이탤릭 서체 별도 로드는 생략: 속성만 유지한다(고정폭 정렬 우선).

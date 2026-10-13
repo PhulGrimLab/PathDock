@@ -26,6 +26,20 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
     [ObservableProperty]
     private string _statusText = "터미널 시작 중...";
 
+    /// <summary>터미널 글자 크기(DIP). TerminalControl에 바인딩된다.</summary>
+    [ObservableProperty]
+    private double _fontSize = PathDock.Core.Settings.AppSettings.DefaultTerminalFontSize;
+
+    /// <summary>패널을 접었는지(머리글만 보임). 화면 배치는 MainWindow가 이 값을 보고 바꾼다.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CollapseToolTip))]
+    private bool _isCollapsed;
+
+    public string CollapseToolTip => IsCollapsed ? "터미널 펼치기" : "터미널 접기";
+
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private void ToggleCollapsed() => IsCollapsed = !IsCollapsed;
+
     /// <summary>경로 변경 보고(UI 스레드). 두 번째 인자: 앱이 주입한 cd로 인한 변경이면 true.</summary>
     public event Action<string, bool>? CwdChanged;
 

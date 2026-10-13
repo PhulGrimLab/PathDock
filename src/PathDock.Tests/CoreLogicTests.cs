@@ -656,6 +656,7 @@ public class FileCategorizerTests
     [DataRow("clip.mkv", FileCategory.Video)]
     [DataRow("pack.zip", FileCategory.Archive)]
     [DataRow("setup.exe", FileCategory.Executable)]
+    [DataRow("PathDock.Core.dll", FileCategory.Library)]
     [DataRow("noext", FileCategory.Other)]
     [DataRow("weird.zzz", FileCategory.Other)]
     public void Categorize_ByExtension_CaseInsensitive(string name, FileCategory expected)
