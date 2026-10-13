@@ -257,6 +257,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Settings.TerminalForeground = TerminalForeground;
         Settings.TerminalBackground = TerminalBackground;
         Terminal.ColorScheme = TerminalThemes.Resolve(Settings.TerminalTheme, TerminalForeground, TerminalBackground);
+        OnPropertyChanged(nameof(TerminalForegroundPreview));
+        OnPropertyChanged(nameof(TerminalBackgroundPreview));
+    }
+
+    /// <summary>설정 창 색 입력 옆 미리보기: 지금 터미널에 적용되는 글자색/배경색(비었거나 잘못되면 테마 기본값).</summary>
+    public System.Windows.Media.Brush TerminalForegroundPreview => PreviewBrush(Terminal.ColorScheme.Foreground);
+
+    public System.Windows.Media.Brush TerminalBackgroundPreview => PreviewBrush(Terminal.ColorScheme.Background);
+
+    private static System.Windows.Media.Brush PreviewBrush(uint argb)
+    {
+        var brush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb((byte)(argb >> 16), (byte)(argb >> 8), (byte)argb));
+        brush.Freeze();
+        return brush;
     }
 
     /// <summary>터미널 색을 기본 테마로 되돌린다.</summary>

@@ -58,7 +58,7 @@
                     <!-- 현재 날짜/시간(초 단위). 더블 클릭하면 Windows 알림 센터의 달력을 연다 -->
                     <TextBlock x:Name="ClockText" Background="Transparent" VerticalAlignment="Center"
                                Margin="0,0,8,0" Padding="6,4"
-                               FontSize="14"
+                               FontSize="{DynamicResource PdFontSizeLarge}"
                                ToolTip="더블 클릭: 달력 열기"
                                PreviewMouseLeftButtonDown="OnClockMouseDown"
                                AutomationProperties.AutomationId="ClockText"
@@ -68,28 +68,28 @@
                                ToolTip="계산기 (Ctrl+Alt+C)"
                                AutomationProperties.AutomationId="CalculatorButton"
                                AutomationProperties.Name="계산기">
-                        <ui:SymbolIcon Symbol="Calculator24" FontSize="14" />
+                        <ui:SymbolIcon Symbol="Calculator24" FontSize="{DynamicResource PdFontSizeLarge}" />
                     </ui:Button>
                     <ui:Button Appearance="Transparent" Margin="0,0,4,0" Padding="10,4"
                                Command="{Binding EmptyRecycleBinCommand}"
                                ToolTip="휴지통 비우기 (Ctrl+Alt+E)"
                                AutomationProperties.AutomationId="EmptyRecycleBinButton"
                                AutomationProperties.Name="휴지통 비우기">
-                        <ui:SymbolIcon Symbol="Delete24" FontSize="14" />
+                        <ui:SymbolIcon Symbol="Delete24" FontSize="{DynamicResource PdFontSizeLarge}" />
                     </ui:Button>
                     <ui:Button Appearance="Transparent" Margin="0,0,4,0" Padding="10,4"
                                Command="{Binding ShowSettingsCommand}"
                                ToolTip="설정"
                                AutomationProperties.AutomationId="SettingsButton"
                                AutomationProperties.Name="설정">
-                        <ui:SymbolIcon Symbol="Settings24" FontSize="14" />
+                        <ui:SymbolIcon Symbol="Settings24" FontSize="{DynamicResource PdFontSizeLarge}" />
                     </ui:Button>
                     <ui:Button Appearance="Transparent" Margin="0,0,4,0" Padding="10,4"
                                Command="{Binding ToggleThemeCommand}"
                                ToolTip="{Binding ThemeToolTip}"
                                AutomationProperties.AutomationId="ThemeButton"
                                AutomationProperties.Name="테마 전환">
-                        <ui:SymbolIcon FontSize="14">
+                        <ui:SymbolIcon FontSize="{DynamicResource PdFontSizeLarge}">
                             <ui:SymbolIcon.Style>
                                 <Style TargetType="ui:SymbolIcon">
                                     <Setter Property="Symbol" Value="WeatherMoon24" />
@@ -158,11 +158,11 @@
 
                 <!-- 2행: 네 개의 영역 -->
                 <v:DrivePanelView Grid.Row="1" Grid.Column="0" />
-                <GridSplitter Grid.Row="1" Grid.Column="1" Width="6" HorizontalAlignment="Stretch" Background="Transparent" />
+                <GridSplitter Grid.Row="1" Grid.Column="1" Width="6" HorizontalAlignment="Stretch" Background="Transparent" Focusable="False" />
                 <v:AncestorColumnView Grid.Row="1" Grid.Column="2" DataContext="{Binding Explorer.GrandParent}" />
-                <GridSplitter Grid.Row="1" Grid.Column="3" Width="6" HorizontalAlignment="Stretch" Background="Transparent" />
+                <GridSplitter Grid.Row="1" Grid.Column="3" Width="6" HorizontalAlignment="Stretch" Background="Transparent" Focusable="False" />
                 <v:AncestorColumnView Grid.Row="1" Grid.Column="4" DataContext="{Binding Explorer.Parent}" />
-                <GridSplitter Grid.Row="1" Grid.Column="5" Width="6" HorizontalAlignment="Stretch" Background="Transparent" />
+                <GridSplitter Grid.Row="1" Grid.Column="5" Width="6" HorizontalAlignment="Stretch" Background="Transparent" Focusable="False" />
                 <v:FileListView Grid.Row="1" Grid.Column="6" DataContext="{Binding Explorer}" />
             </Grid>
         </Border>

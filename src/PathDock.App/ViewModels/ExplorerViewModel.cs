@@ -316,7 +316,8 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
             else
             {
                 long dirBytes = snapshot.Where(i => i.IsDirectory && i.Stats is not null).Sum(i => i.Stats!.TotalSize);
-                text += $" · 전체 {SizeFormatter.Format(fileBytes + dirBytes)}";
+                bool capped = snapshot.Any(i => i.IsDirectory && i.OverLimit);
+                text += $" · 전체 {SizeFormatter.Format(fileBytes + dirBytes)}{(capped ? " 이상" : string.Empty)}";
             }
         }
         SummaryText = text;

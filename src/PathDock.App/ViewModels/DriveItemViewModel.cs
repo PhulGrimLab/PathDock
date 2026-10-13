@@ -31,7 +31,16 @@ public sealed partial class DriveItemViewModel : ObservableObject
     /// <summary>용량 문구. 예: "120.5 GB 사용 / 465.8 GB (26%)". 용량 미상이면 "사용 불가".</summary>
     public string UsageText => Entry.TotalSize > 0
         ? $"{SizeFormatter.Format(Entry.UsedSize)} 사용 / {SizeFormatter.Format(Entry.TotalSize)} ({Entry.UsedRatio:P0})"
-        : "사용 불가";
+        : UnavailableText;
+
+    /// <summary>용량을 읽지 못한 이유를 드라이브 종류별로 안내한다.</summary>
+    private string UnavailableText => Entry.Type switch
+    {
+        DriveType.Removable => "사용 불가 · 미디어가 없거나 준비되지 않음",
+        DriveType.CDRom => "사용 불가 · 디스크가 없음",
+        DriveType.Network => "사용 불가 · 네트워크에 연결되지 않음",
+        _ => "사용 불가 · 준비되지 않음",
+    };
 
     /// <summary>여유 공간이 10% 미만이면 경고색으로 표시하기 위한 플래그.</summary>
     public bool IsLow => Entry.TotalSize > 0 && Entry.UsedRatio >= 0.9;

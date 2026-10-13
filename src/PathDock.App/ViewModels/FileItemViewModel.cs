@@ -100,7 +100,7 @@ public sealed partial class FileItemViewModel : ObservableObject
     }
 
     /// <summary>집계가 5GB 한도에서 멈췄는지(이 경우 크기와 개수는 "이상"으로 표시).</summary>
-    private bool OverLimit => Stats is not null && Stats.TotalSize >= FolderSizeCalculator.SizeLimit;
+    public bool OverLimit => Stats is not null && Stats.TotalSize >= FolderSizeCalculator.SizeLimit;
 
     /// <summary>폴더의 하위 파일/폴더 수. 예: "파일 12 · 폴더 3", 1000개 이상은 "1천개 이상".</summary>
     public string CountText => Stats is null ? string.Empty : $"파일 {CountPart(Stats.FileCount)} · 폴더 {CountPart(Stats.FolderCount)}";

@@ -66,6 +66,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="86" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -75,21 +76,30 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <TextBlock Text="테마" VerticalAlignment="Center" Margin="0,4" />
-                    <ComboBox Grid.Column="1" Margin="0,4" ItemsSource="{Binding TerminalThemeNames}" SelectedIndex="{Binding TerminalThemeIndex}"
+                    <ComboBox Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4" ItemsSource="{Binding TerminalThemeNames}" SelectedIndex="{Binding TerminalThemeIndex}"
                               AutomationProperties.AutomationId="TerminalThemeCombo" AutomationProperties.Name="터미널 테마" />
                     <TextBlock Grid.Row="1" Text="글자색" VerticalAlignment="Center" Margin="0,4" />
                     <ui:TextBox Grid.Row="1" Grid.Column="1" Margin="0,4" MaxLength="7" PlaceholderText="#RRGGBB (비우면 테마 기본값)"
                                 Text="{Binding TerminalForeground, UpdateSourceTrigger=PropertyChanged}"
                                 AutomationProperties.AutomationId="TerminalForegroundBox" AutomationProperties.Name="터미널 글자색" />
+                    <!-- 지금 적용되는 색 미리보기(비우면 테마 기본값) -->
+                    <Border Grid.Row="1" Grid.Column="2" Width="28" Height="28" Margin="8,4,0,4" CornerRadius="4" BorderThickness="1"
+                            BorderBrush="{DynamicResource ControlStrongStrokeColorDefaultBrush}"
+                            Background="{Binding TerminalForegroundPreview}" ToolTip="현재 적용되는 글자색"
+                            AutomationProperties.AutomationId="TerminalForegroundPreview" />
                     <TextBlock Grid.Row="2" Text="배경색" VerticalAlignment="Center" Margin="0,4" />
                     <ui:TextBox Grid.Row="2" Grid.Column="1" Margin="0,4" MaxLength="7" PlaceholderText="#RRGGBB (비우면 테마 기본값)"
                                 Text="{Binding TerminalBackground, UpdateSourceTrigger=PropertyChanged}"
                                 AutomationProperties.AutomationId="TerminalBackgroundBox" AutomationProperties.Name="터미널 배경색" />
-                    <TextBlock Grid.Row="3" Grid.ColumnSpan="2" Margin="0,4,0,0" TextWrapping="Wrap" Foreground="#E5484D"
+                    <Border Grid.Row="2" Grid.Column="2" Width="28" Height="28" Margin="8,4,0,4" CornerRadius="4" BorderThickness="1"
+                            BorderBrush="{DynamicResource ControlStrongStrokeColorDefaultBrush}"
+                            Background="{Binding TerminalBackgroundPreview}" ToolTip="현재 적용되는 배경색"
+                            AutomationProperties.AutomationId="TerminalBackgroundPreview" />
+                    <TextBlock Grid.Row="3" Grid.ColumnSpan="3" Margin="0,4,0,0" TextWrapping="Wrap" Foreground="#E5484D"
                                Text="{Binding ColorErrorText}"
                                Visibility="{Binding HasColorError, Converter={StaticResource BoolToVis}}"
                                AutomationProperties.AutomationId="TerminalColorError" />
-                    <ui:Button Grid.Row="4" Grid.ColumnSpan="2" Content="기본 색으로" Icon="{ui:SymbolIcon ArrowReset24}"
+                    <ui:Button Grid.Row="4" Grid.ColumnSpan="3" Content="기본 색으로" Icon="{ui:SymbolIcon ArrowReset24}"
                                HorizontalAlignment="Right" Margin="0,8,0,0"
                                Command="{Binding ResetTerminalColorsCommand}"
                                AutomationProperties.AutomationId="ResetTerminalColorsButton" />
@@ -116,7 +126,7 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="등록한 즐겨찾기 10칸을 모두 비웁니다." VerticalAlignment="Center"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                    <ui:Button Grid.Column="1" Content="즐겨찾기 초기화" Icon="{ui:SymbolIcon Delete24}"
+                    <ui:Button Grid.Column="1" Content="즐겨찾기 초기화" Icon="{ui:SymbolIcon Delete24}" Appearance="Danger"
                                Command="{Binding ResetFavoritesCommand}"
                                AutomationProperties.AutomationId="ResetFavoritesButton" />
                 </Grid>

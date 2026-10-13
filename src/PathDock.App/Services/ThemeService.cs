@@ -13,18 +13,44 @@ public static class ThemeService
     public static string Normalize(string? theme) =>
         string.Equals(theme, Light, StringComparison.OrdinalIgnoreCase) ? Light : Dark;
 
+    private static string? _theme = Dark;
+    private static bool _watching;
+
+    /// <summary>
+    /// 테마를 적용한다. Windows 고대비 모드이면 사용자의 다크/라이트 선택 대신 시스템 고대비 색을 따른다.
+    /// 고대비 설정을 켜거나 끄면 자동으로 다시 적용한다.
+    /// </summary>
     public static void Apply(string? theme)
     {
-        ApplicationTheme t = Normalize(theme) == Light ? ApplicationTheme.Light : ApplicationTheme.Dark;
+        _theme = theme;
+        if (!_watching)
+        {
+            _watching = true;
+            System.Windows.SystemParameters.StaticPropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(System.Windows.SystemParameters.HighContrast))
+                {
+                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => Apply(_theme));
+                }
+            };
+        }
+        bool highContrast = System.Windows.SystemParameters.HighContrast;
+        ApplicationTheme t = highContrast ? ApplicationTheme.HighContrast : Normalize(theme) == Light ? ApplicationTheme.Light : ApplicationTheme.Dark;
         ApplicationThemeManager.Apply(t, WindowBackdropType.Mica, updateAccent: true);
-        ApplyAddressBarColors(t == ApplicationTheme.Light);
+        ApplyAddressBarColors(t == ApplicationTheme.Light, highContrast);
         ApplyTextContrast(t == ApplicationTheme.Light);
     }
 
     /// <summary>주소 표시줄을 주변 카드와 구분되는 슬레이트 블루로 칠한다(테마별 값).</summary>
-    private static void ApplyAddressBarColors(bool light)
+    private static void ApplyAddressBarColors(bool light, bool highContrast)
     {
         System.Windows.ResourceDictionary res = System.Windows.Application.Current.Resources;
+        if (highContrast)
+        {
+            res["PdAddressBarBackgroundBrush"] = System.Windows.SystemColors.WindowBrush;
+            res["PdAddressBarBorderBrush"] = System.Windows.SystemColors.WindowTextBrush;
+            return;
+        }
         res["PdAddressBarBackgroundBrush"] = Frozen(light ? "#E6EFFA" : "#1E2F45");
         res["PdAddressBarBorderBrush"] = Frozen(light ? "#9DB8D9" : "#3B5A80");
     }

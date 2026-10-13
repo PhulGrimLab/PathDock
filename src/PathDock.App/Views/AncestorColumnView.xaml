@@ -14,7 +14,8 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                        <Border x:Name="Root" CornerRadius="2" Padding="{TemplateBinding Padding}" Background="Transparent">
+                        <Border x:Name="Root" CornerRadius="2" Padding="{TemplateBinding Padding}" Background="Transparent"
+                                BorderThickness="1" BorderBrush="Transparent">
                             <Grid>
                                 <Border x:Name="Bar" Width="3" Height="14" CornerRadius="1" HorizontalAlignment="Left"
                                         Margin="-4,0,0,0" Visibility="Collapsed"
@@ -25,6 +26,9 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Root" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource SystemAccentColorPrimaryBrush}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="Root" Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
@@ -51,7 +55,27 @@
                 <ui:SymbolIcon Symbol="ArrowUp24" FontSize="14" />
            </ui:Button>
         </ctl:PanelCard.HeaderTrailing>
-        <ListBox ItemsSource="{Binding Items}" FontSize="{DynamicResource PdFontSize}"
+        <Grid>
+        <!-- 열이 비어 있을 때 이유를 알린다: 더 위가 없는 최상위(경로 없음) 또는 하위 폴더가 없음 -->
+        <TextBlock FontSize="{DynamicResource PdFontSize}" Margin="10,8" TextWrapping="Wrap"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                   AutomationProperties.AutomationId="{Binding AutomationId, StringFormat={}{0}_Empty}">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock">
+                    <Setter Property="Text" Value="하위 폴더 없음" />
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding FullPath}" Value="">
+                            <Setter Property="Text" Value="더 위 폴더 없음(최상위)" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding HasItems, ElementName=FolderList}" Value="False">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
+        <ListBox x:Name="FolderList" ItemsSource="{Binding Items}" FontSize="{DynamicResource PdFontSize}"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                  SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
                  ItemContainerStyle="{StaticResource AncestorItemStyle}"
@@ -68,5 +92,6 @@
                 </DataTemplate>
             </ListBox.ItemTemplate>
         </ListBox>
+        </Grid>
     </ctl:PanelCard>
 </UserControl>

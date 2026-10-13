@@ -24,7 +24,7 @@ public partial class MainWindow : FluentWindow
     private const double TerminalMinHeight = 120;
 
     private readonly MainViewModel _vm;
-    private double _expandedRatio = 0.5;
+    private double _expandedRatio = 0.6;
 
     public MainWindow(MainViewModel vm)
     {

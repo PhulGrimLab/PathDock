@@ -35,7 +35,7 @@ public sealed class AppSettings
     public double WindowHeight { get; set; } = 750;
     public bool WindowMaximized { get; set; }
     /// <summary>탐색기 영역 높이 비율(0~1, 나머지는 터미널).</summary>
-    public double ExplorerRatio { get; set; } = 0.5;
+    public double ExplorerRatio { get; set; } = 0.6;
     /// <summary>화면 테마("Dark" 또는 "Light").</summary>
     public string Theme { get; set; } = "Dark";
     /// <summary>화면(탐색기/즐겨찾기/상태 표시줄 등) 글자 크기.</summary>
