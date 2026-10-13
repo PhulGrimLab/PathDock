@@ -110,6 +110,28 @@ public partial class FileListView : UserControl
         }
     }
 
+    /// <summary>이름 칸 툴팁: 이미지 파일이면 썸네일을 읽어 보여주고, 그 밖의 항목이거나 읽을 수 없으면 열지 않는다.</summary>
+    private async void OnNameToolTipOpening(object sender, ToolTipEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: FileItemViewModel item } element)
+        {
+            return;
+        }
+        if (!item.IsPreviewable)
+        {
+            e.Handled = true; // 이미지가 아니면 툴팁을 띄우지 않는다.
+            return;
+        }
+        if (item.Preview is not null)
+        {
+            return;
+        }
+        if (!await item.LoadPreviewAsync() && ToolTipService.GetToolTip(element) is ToolTip tip)
+        {
+            tip.IsOpen = false; // 손상되었거나 읽을 수 없는 이미지: 조용히 닫는다.
+        }
+    }
+
     private void FileList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         Vm?.SetSelection(FileList.SelectedItems.OfType<FileItemViewModel>());

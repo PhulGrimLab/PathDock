@@ -107,6 +107,26 @@ public sealed partial class FileItemViewModel : ObservableObject
 
     private string CountPart(int n) => n >= 1000 ? "1천개 이상" : OverLimit ? $"{n:N0}개 이상" : n.ToString("N0");
 
+    /// <summary>마우스를 올리면 썸네일을 보여줄 이미지 파일인지.</summary>
+    public bool IsPreviewable => !IsDirectory && ImagePreviewTypes.IsPreviewable(Name);
+
+    /// <summary>툴팁 미리보기(처음 보여줄 때 읽어 채운다. 읽을 수 없으면 null로 남는다).</summary>
+    [ObservableProperty]
+    private Services.ImagePreview? _preview;
+
+    /// <summary>미리보기를 읽는다. 이미 있거나 읽으면 true, 읽을 수 없는 이미지면 false.</summary>
+    public async Task<bool> LoadPreviewAsync()
+    {
+        if (Preview is null && !_previewFailed)
+        {
+            Preview = await Services.ImagePreviewService.LoadAsync(FullPath);
+            _previewFailed = Preview is null; // 같은 파일을 마우스를 올릴 때마다 다시 시도하지 않는다.
+        }
+        return Preview is not null;
+    }
+
+    private bool _previewFailed;
+
     /// <summary>캐시에서 가져온 오래된 값이라 백그라운드에서 다시 계산 중인지.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SizeText))]

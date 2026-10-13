@@ -65,7 +65,20 @@
                         <ui:GridViewColumn x:Name="NameColumn" Header="이름" Width="280">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate DataType="{x:Type vm:FileItemViewModel}">
-                                    <StackPanel Orientation="Horizontal">
+                                    <StackPanel Orientation="Horizontal" ToolTipService.InitialShowDelay="400"
+                                                ToolTipOpening="OnNameToolTipOpening">
+                                        <!-- 이미지 파일 위에서만 뜨는 썸네일 툴팁(그 밖의 파일은 코드 숨김에서 열리지 않게 막는다) -->
+                                        <StackPanel.ToolTip>
+                                            <ToolTip FontFamily="{StaticResource PdFontFamily}">
+                                                <StackPanel>
+                                                    <Image Source="{Binding Preview.Image}" MaxWidth="240" Stretch="Uniform" StretchDirection="DownOnly"
+                                                           RenderOptions.BitmapScalingMode="HighQuality"
+                                                           AutomationProperties.AutomationId="ImagePreview" />
+                                                    <TextBlock Margin="0,4,0,0" HorizontalAlignment="Center"
+                                                               Text="{Binding Preview.InfoText, TargetNullValue=불러오는 중…, FallbackValue=불러오는 중…}" />
+                                                </StackPanel>
+                                            </ToolTip>
+                                        </StackPanel.ToolTip>
                                         <ui:SymbolIcon Margin="0,0,8,0" FontSize="16"
                                                        Symbol="{Binding IconSymbol}"
                                                        Foreground="{Binding IconBrush}"
