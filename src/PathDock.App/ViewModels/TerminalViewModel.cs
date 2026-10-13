@@ -73,6 +73,10 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
         }
     }
 
+    /// <summary>터미널 화면과 지난 출력을 지운다.</summary>
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private void ClearScreen() => Session.ClearScreen();
+
     [CommunityToolkit.Mvvm.Input.RelayCommand]
     private void ToggleCollapsed() => IsCollapsed = !IsCollapsed;
 

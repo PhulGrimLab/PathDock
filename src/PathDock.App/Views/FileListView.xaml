@@ -14,32 +14,23 @@
     </UserControl.Resources>
     <!-- 현재 폴더 목록: 종류별 아이콘, 정렬 가능한 머리글, 폴더 크기/하위 항목, 요약 줄. DataContext: ExplorerViewModel -->
     <ctl:PanelCard Header="{Binding CurrentFolderName}" Symbol="Folder24">
+        <ctl:PanelCard.HeaderTrailing>
+            <!-- 이름 검색(Ctrl+F로 이동): 입력한 글자가 이름에 들어간 파일/폴더만 목록에 보인다. Esc나 폴더 이동 시 해제 -->
+            <ui:TextBox x:Name="FilterBox" Width="170" MinHeight="26" Height="26" Margin="8,-4,-6,-4" Padding="6,2"
+                        FontSize="{DynamicResource PdFontSize}"
+                        PlaceholderText="이름 검색 (Ctrl+F)"
+                        Icon="{ui:SymbolIcon Search24}"
+                        Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                        KeyDown="FilterBox_KeyDown"
+                        AutomationProperties.AutomationId="FilterBox" AutomationProperties.Name="이름 검색" />
+        </ctl:PanelCard.HeaderTrailing>
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!-- 이름 필터(Ctrl+F). Esc로 닫는다 -->
-            <Grid Grid.Row="0" Margin="8,6,8,2" Visibility="{Binding IsFilterVisible, Converter={StaticResource BoolToVis}}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <ui:TextBox x:Name="FilterBox" PlaceholderText="이름 필터 (Esc: 닫기)"
-                            Icon="{ui:SymbolIcon Search24}"
-                            Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
-                            KeyDown="FilterBox_KeyDown"
-                            AutomationProperties.AutomationId="FilterBox" AutomationProperties.Name="이름 필터" />
-                <ui:Button Grid.Column="1" Appearance="Transparent" Margin="4,0,0,0" Padding="8,5"
-                           Command="{Binding CloseFilterCommand}" ToolTip="필터 닫기"
-                           AutomationProperties.Name="필터 닫기">
-                    <ui:SymbolIcon Symbol="Dismiss24" FontSize="14" />
-                </ui:Button>
-            </Grid>
-
-            <ui:ListView x:Name="FileList" Grid.Row="1" Margin="4,4,4,0" BorderThickness="0" Background="Transparent" FontSize="{DynamicResource PdFontSize}"
+            <ui:ListView x:Name="FileList" Grid.Row="0" Margin="4,4,4,0" BorderThickness="0" Background="Transparent" FontSize="{DynamicResource PdFontSize}"
                          ItemsSource="{Binding Items}"
                          SelectedItem="{Binding SelectedItem}"
                          SelectionMode="Extended"
@@ -67,19 +58,24 @@
                                 <DataTemplate DataType="{x:Type vm:FileItemViewModel}">
                                     <StackPanel Orientation="Horizontal" ToolTipService.InitialShowDelay="400"
                                                 ToolTipOpening="OnNameToolTipOpening">
-                                        <!-- 이미지 파일 위에서만 뜨는 썸네일 툴팁(그 밖의 파일은 코드 숨김에서 열리지 않게 막는다) -->
+                                        <!-- 이미지(썸네일)·텍스트(앞 20줄) 파일 위에서만 뜨는 툴팁(그 밖의 파일은 코드 숨김에서 열리지 않게 막는다) -->
                                         <StackPanel.ToolTip>
                                             <ToolTip FontFamily="{StaticResource PdFontFamily}">
                                                 <StackPanel>
                                                     <Image Source="{Binding Preview.Image}" MaxWidth="240" Stretch="Uniform" StretchDirection="DownOnly"
+                                                           Visibility="{Binding IsImageFile, Converter={StaticResource BoolToVis}}"
                                                            RenderOptions.BitmapScalingMode="HighQuality"
                                                            AutomationProperties.AutomationId="ImagePreview" />
+                                                    <TextBlock Text="{Binding TextPreview.Text}" Width="480" MaxHeight="360" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                                               FontFamily="Cascadia Mono, Consolas, D2Coding, Malgun Gothic"
+                                                               Visibility="{Binding IsTextFile, Converter={StaticResource BoolToVis}}"
+                                                               AutomationProperties.AutomationId="TextPreview" />
                                                     <TextBlock Margin="0,4,0,0" HorizontalAlignment="Center"
-                                                               Text="{Binding Preview.InfoText, TargetNullValue=불러오는 중…, FallbackValue=불러오는 중…}" />
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               Text="{Binding PreviewInfo}" />
                                                 </StackPanel>
                                             </ToolTip>
-                                        </StackPanel.ToolTip>
-                                        <ui:SymbolIcon Margin="0,0,8,0" FontSize="16"
+                                        </StackPanel.ToolTip>                                        <ui:SymbolIcon Margin="0,0,8,0" FontSize="16"
                                                        Symbol="{Binding IconSymbol}"
                                                        Foreground="{Binding IconBrush}"
                                                        Filled="{Binding IsDirectory}" />
@@ -100,12 +96,12 @@
             </ui:ListView>
 
             <!-- 요약 줄 -->
-            <Border Grid.Row="2" Padding="12,6" BorderThickness="0,1,0,0"
+            <Border Grid.Row="1" Padding="12,6" BorderThickness="0,1,0,0"
                     BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
-                <TextBlock Text="{Binding SummaryText}" TextWrapping="Wrap" FontSize="{DynamicResource PdFontSize}"
+                <TextBlock Text="{Binding SummaryDisplay}" TextWrapping="Wrap" FontSize="{DynamicResource PdFontSize}"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            AutomationProperties.AutomationId="FolderSummary"
-                           AutomationProperties.Name="{Binding SummaryText}" />
+                           AutomationProperties.Name="{Binding SummaryDisplay}" />
             </Border>
         </Grid>
     </ctl:PanelCard>

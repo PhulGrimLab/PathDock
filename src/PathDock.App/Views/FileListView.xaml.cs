@@ -104,13 +104,13 @@ public partial class FileListView : UserControl
     {
         if (e.Key == Key.Escape && Vm is { } vm)
         {
-            vm.CloseFilterCommand.Execute(null);
+            vm.FilterText = string.Empty;
             FileList.Focus();
             e.Handled = true;
         }
     }
 
-    /// <summary>이름 칸 툴팁: 이미지 파일이면 썸네일을 읽어 보여주고, 그 밖의 항목이거나 읽을 수 없으면 열지 않는다.</summary>
+    /// <summary>이름 칸 툴팁: 이미지는 썸네일, 텍스트는 앞 20줄을 읽어 보여주고, 그 밖의 항목이거나 읽을 수 없으면 열지 않는다.</summary>
     private async void OnNameToolTipOpening(object sender, ToolTipEventArgs e)
     {
         if (sender is not FrameworkElement { DataContext: FileItemViewModel item } element)
@@ -119,11 +119,7 @@ public partial class FileListView : UserControl
         }
         if (!item.IsPreviewable)
         {
-            e.Handled = true; // 이미지가 아니면 툴팁을 띄우지 않는다.
-            return;
-        }
-        if (item.Preview is not null)
-        {
+            e.Handled = true; // 미리보기 대상이 아니면 툴팁을 띄우지 않는다.
             return;
         }
         if (!await item.LoadPreviewAsync() && ToolTipService.GetToolTip(element) is ToolTip tip)
@@ -174,12 +170,8 @@ public partial class FileListView : UserControl
         }
         else if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control)
         {
-            vm.ShowFilterCommand.Execute(null);
-            Dispatcher.BeginInvoke(() =>
-            {
-                FilterBox.Focus();
-                FilterBox.SelectAll();
-            }, System.Windows.Threading.DispatcherPriority.Input);
+            FilterBox.Focus();
+            FilterBox.SelectAll();
         }
         else if (e.Key == Key.F2)
         {

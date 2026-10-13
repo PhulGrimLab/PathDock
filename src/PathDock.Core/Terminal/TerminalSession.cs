@@ -286,6 +286,25 @@ public sealed class TerminalSession : IDisposable
         return sb.ToString();
     }
 
+    /// <summary>
+    /// 터미널 화면과 지난 출력(스크롤백)을 지운다. 프롬프트 대기 중이면 셸에 지우기 명령을 보내 셸이 프롬프트를 다시 그리게 하고
+    /// (먼저 Esc로 입력 중이던 줄을 버린다), 명령이 실행 중이면 화면만 직접 지운다(실행 중인 프로그램의 출력은 계속 이어진다).
+    /// </summary>
+    public void ClearScreen()
+    {
+        if (IsIdle)
+        {
+            SendInput(_shell == TerminalShell.CommandPrompt ? "\u001bcls\r" : "\u001bClear-Host\r");
+            return;
+        }
+        lock (Screen.SyncRoot)
+        {
+            Screen.EraseDisplay(3);
+            Screen.MoveTo(0, 0);
+        }
+        ScreenChanged?.Invoke();
+    }
+
     public void Resize(int cols, int rows)
     {
         lock (Screen.SyncRoot)

@@ -43,13 +43,10 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
     [ObservableProperty]
     private FileItemViewModel? _selectedItem;
 
-    // ----- 이름 필터(Ctrl+F): 현재 폴더 목록에서 이름에 입력한 글자가 들어간 항목만 보인다. 이동하면 해제된다. -----
+    // ----- 이름 검색(머리글 오른쪽 입력칸, Ctrl+F): 현재 폴더 목록에서 이름에 입력한 글자가 들어간 항목만 보인다. 이동하면 해제된다. -----
 
     [ObservableProperty]
     private string _filterText = string.Empty;
-
-    [ObservableProperty]
-    private bool _isFilterVisible;
 
     partial void OnFilterTextChanged(string value)
     {
@@ -58,23 +55,32 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
         view.Filter = needle.Length == 0
             ? null
             : o => o is FileItemViewModel f && f.Name.Contains(needle, StringComparison.OrdinalIgnoreCase);
+        OnPropertyChanged(nameof(SummaryDisplay));
     }
 
-    [RelayCommand]
-    private void ShowFilter() => IsFilterVisible = true;
-
-    [RelayCommand]
-    private void CloseFilter()
+    /// <summary>목록 아래 요약 줄에 보여줄 문구. 검색 중이면 맨 앞에 일치 개수를 붙인다. 예: "'sys' 검색: 7개 일치 · 폴더 78개 · ...".</summary>
+    public string SummaryDisplay
     {
-        FilterText = string.Empty;
-        IsFilterVisible = false;
+        get
+        {
+            string needle = FilterText.Trim();
+            if (needle.Length == 0)
+            {
+                return SummaryText;
+            }
+            int matches = System.Windows.Data.CollectionViewSource.GetDefaultView(Items).Cast<object>().Count();
+            return $"'{needle}' 검색: {matches:N0}개 일치 · {SummaryText}";
+        }
     }
+
+
     /// <summary>상위 2단계 폴더 열(왼쪽부터 조부모, 부모). 현재 폴더 왼쪽에 Mdir 스타일로 표시한다.</summary>
     public AncestorColumnViewModel GrandParent { get; }
     public AncestorColumnViewModel Parent { get; }
 
     /// <summary>목록 아래 요약 줄. 예: "폴더 3개 · 파일 8개 (12.3 MB) · 전체 45 MB".</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SummaryDisplay))]
     private string _summaryText = string.Empty;
 
     // 폴더 크기 계산/상위 열 로딩을 이동마다 취소·무효화하기 위한 토큰. UI 스레드에서만 접근.
@@ -158,10 +164,7 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
 
     private void ApplyListing(List<FileItem> items)
     {
-        if (FilterText.Length > 0 || IsFilterVisible)
-        {
-            CloseFilter(); // 다른 폴더로 이동하면 필터를 해제한다(새로고침도 포함).
-        }
+        FilterText = string.Empty; // 다른 폴더로 이동하면 검색을 해제한다(새로고침도 포함).
         Items.Clear();
         foreach (FileItemViewModel vm in SortItems(items.Select(i => new FileItemViewModel(i))))
         {
