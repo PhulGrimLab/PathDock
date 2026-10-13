@@ -12,6 +12,9 @@ public sealed record FolderStats(long TotalSize, int FileCount, int FolderCount,
 /// </summary>
 public static class FolderSizeCalculator
 {
+    /// <summary>이 크기에 이르면 집계를 멈춘다. 이때 결과의 크기와 개수는 실제보다 작을 수 있다.</summary>
+    public const long SizeLimit = 5L * 1024 * 1024 * 1024;
+
     public static FolderStats Calculate(string path, CancellationToken ct = default)
     {
         long total = 0;
@@ -41,6 +44,10 @@ public static class FolderSizeCalculator
                 {
                     files++;
                     total += length;
+                    if (total >= SizeLimit)
+                    {
+                        break; // 5GB 이상이면 더 세지 않는다(표시는 "5 GB 이상").
+                    }
                 }
             }
         }

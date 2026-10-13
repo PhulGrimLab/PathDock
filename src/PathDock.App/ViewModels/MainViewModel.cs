@@ -90,22 +90,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _nextInfoIsSuccess = false;
         InfoSeverity = success ? Wpf.Ui.Controls.InfoBarSeverity.Success : Wpf.Ui.Controls.InfoBarSeverity.Warning;
         InfoTitle = success ? "완료" : "알림";
-        if (success)
+        // 성공은 5초, 경고/오류는 읽을 시간을 더 주고 10초 뒤 저절로 닫는다(직접 닫기도 가능).
+        if (_infoTimer is null)
         {
-            if (_infoTimer is null)
+            _infoTimer = new System.Windows.Threading.DispatcherTimer();
+            _infoTimer.Tick += (_, _) =>
             {
-                _infoTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-                _infoTimer.Tick += (_, _) =>
-                {
-                    _infoTimer.Stop();
-                    if (InfoSeverity == Wpf.Ui.Controls.InfoBarSeverity.Success)
-                    {
-                        InfoMessage = string.Empty;
-                    }
-                };
-            }
-            _infoTimer.Start();
+                _infoTimer.Stop();
+                InfoMessage = string.Empty;
+            };
         }
+        _infoTimer.Interval = TimeSpan.FromSeconds(success ? 5 : 10);
+        _infoTimer.Start();
     }
 
     private const int MonitorIntervalMs = 2000;

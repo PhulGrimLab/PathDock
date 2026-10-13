@@ -80,7 +80,7 @@
                                            DisplayMemberBinding="{Binding ModifiedText}" />
                         <ui:GridViewColumn x:Name="SizeColumn" Header="크기" Width="130"
                                            DisplayMemberBinding="{Binding SizeText}" />
-                        <ui:GridViewColumn Header="하위 항목" Width="150"
+                        <ui:GridViewColumn x:Name="CountColumn" Header="하위 항목" Width="150"
                                            DisplayMemberBinding="{Binding CountText}" />
                     </ui:GridView>
                 </ui:ListView.View>

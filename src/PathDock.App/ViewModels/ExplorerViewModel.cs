@@ -30,7 +30,7 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
     {
         get
         {
-            string p = PathText;
+            string p = _service.Current ?? PathText;
             if (string.IsNullOrEmpty(p))
             {
                 return "폴더";
@@ -125,7 +125,14 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
         catch (Exception ex) when (ex is DirectoryNotFoundException or UnauthorizedAccessException or IOException or ArgumentException)
         {
             _log.Warn($"탐색기 이동 실패: {path} ({ex.GetType().Name})");
-            PathText = _service.Current ?? string.Empty;
+            if (origin != ChangeOrigin.User || !string.Equals(PathText, path, StringComparison.Ordinal))
+            {
+                PathText = _service.Current ?? string.Empty;
+            }
+            else
+            {
+                // 주소창에 직접 친 경로가 틀린 경우: 지우지 않고 남겨 고쳐 쓸 수 있게 한다(Esc나 이동 성공 시 현재 경로로 돌아온다).
+            }
             ErrorOccurred?.Invoke(ex is UnauthorizedAccessException
                 ? $"접근 권한이 없습니다: {path}"
                 : $"폴더를 열 수 없습니다: {path}");
@@ -158,6 +165,7 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
             Items.Add(vm);
         }
         PathText = _service.Current ?? string.Empty;
+        OnPropertyChanged(nameof(CurrentFolderName));
         GoBackCommand.NotifyCanExecuteChanged();
         GoForwardCommand.NotifyCanExecuteChanged();
         GoUpCommand.NotifyCanExecuteChanged();

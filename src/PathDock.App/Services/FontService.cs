@@ -12,6 +12,9 @@ public static class FontService
     public static double NormalizeTerminal(double size) =>
         double.IsNaN(size) ? AppSettings.DefaultTerminalFontSize : Math.Clamp(size, AppSettings.MinTerminalFontSize, AppSettings.MaxTerminalFontSize);
 
+    /// <summary>화면 글자 크기가 바뀌었음(열 폭 등 글자 크기에 비례하는 배치를 다시 계산하라는 신호).</summary>
+    public static event Action? UiFontChanged;
+
     public static void ApplyUi(double size)
     {
         double s = NormalizeUi(size);
@@ -20,5 +23,6 @@ public static class FontService
         r["PdFontSizeSmall"] = s - 1;
         r["PdFontSizeLarge"] = s + 2;
         r["ControlContentThemeFontSize"] = s;
+        UiFontChanged?.Invoke();
     }
 }

@@ -10,13 +10,19 @@
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+        <Grid Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
             <ui:SymbolIcon Symbol="ArrowSync24" FontSize="14" Margin="0,0,6,0"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-            <TextBlock FontSize="{DynamicResource PdFontSize}" Text="{Binding SyncSummary}"
+            <!-- 좁은 창/큰 글자에서 오른쪽 미터와 겹치지 않도록 잘라서(…) 보여준다 -->
+            <TextBlock Grid.Column="1" FontSize="{DynamicResource PdFontSize}" Text="{Binding SyncSummary}"
+                       TextTrimming="CharacterEllipsis" ToolTip="{Binding SyncSummary}"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        AutomationProperties.AutomationId="SyncSummary" />
-        </StackPanel>
+        </Grid>
 
         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
             <ctl:UsageMeter Label="CPU" Value="{Binding CpuPercent}" ValueText="{Binding CpuText}"

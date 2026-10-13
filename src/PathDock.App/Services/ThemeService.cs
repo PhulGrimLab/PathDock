@@ -18,6 +18,7 @@ public static class ThemeService
         ApplicationTheme t = Normalize(theme) == Light ? ApplicationTheme.Light : ApplicationTheme.Dark;
         ApplicationThemeManager.Apply(t, WindowBackdropType.Mica, updateAccent: true);
         ApplyAddressBarColors(t == ApplicationTheme.Light);
+        ApplyTextContrast(t == ApplicationTheme.Light);
     }
 
     /// <summary>주소 표시줄을 주변 카드와 구분되는 슬레이트 블루로 칠한다(테마별 값).</summary>
@@ -26,6 +27,25 @@ public static class ThemeService
         System.Windows.ResourceDictionary res = System.Windows.Application.Current.Resources;
         res["PdAddressBarBackgroundBrush"] = Frozen(light ? "#E6EFFA" : "#1E2F45");
         res["PdAddressBarBorderBrush"] = Frozen(light ? "#9DB8D9" : "#3B5A80");
+    }
+
+    /// <summary>
+    /// 밝은 테마에서 보조 글자색(회색)은 배경 대비가 약 3:1이라 읽기 어렵다. 4.5:1 이상이 되도록 더 진하게 덮어쓰고,
+    /// 어두운 테마에서는 덮어쓴 값을 지워 WPF-UI 기본값을 쓴다.
+    /// </summary>
+    private static void ApplyTextContrast(bool light)
+    {
+        System.Windows.ResourceDictionary res = System.Windows.Application.Current.Resources;
+        if (light)
+        {
+            res["TextFillColorSecondaryBrush"] = Frozen("#595959");
+            res["TextFillColorTertiaryBrush"] = Frozen("#6B6B6B");
+        }
+        else
+        {
+            res.Remove("TextFillColorSecondaryBrush");
+            res.Remove("TextFillColorTertiaryBrush");
+        }
     }
 
     private static System.Windows.Media.SolidColorBrush Frozen(string hex)

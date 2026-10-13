@@ -18,6 +18,27 @@ public partial class FileListView : UserControl
         InitializeComponent();
         FileList.AddHandler(GridViewColumnHeader.ClickEvent, new RoutedEventHandler(OnColumnHeaderClick));
         DataContextChanged += OnDataContextChanged;
+        FileList.SizeChanged += (_, _) => FitColumns();
+        Loaded += (_, _) =>
+        {
+            Services.FontService.UiFontChanged += FitColumns;
+            FitColumns();
+        };
+        Unloaded += (_, _) => Services.FontService.UiFontChanged -= FitColumns;
+    }
+
+    /// <summary>
+    /// 날짜/크기/하위 항목 열은 글자 크기에 비례한 폭으로, 이름 열은 남는 폭을 채운다.
+    /// 고정 폭이면 기본 창에서도 크기 열이 잘려 가로 스크롤이 필요했다.
+    /// </summary>
+    private void FitColumns()
+    {
+        double fs = TryFindResource("PdFontSize") is double d ? d : 12;
+        ModifiedColumn.Width = Math.Round(fs * 10.7);
+        SizeColumn.Width = Math.Round(fs * 7.3);
+        CountColumn.Width = Math.Round(fs * 11);
+        double available = FileList.ActualWidth - ModifiedColumn.Width - SizeColumn.Width - CountColumn.Width - SystemParameters.VerticalScrollBarWidth - 14;
+        NameColumn.Width = Math.Max(110, available);
     }
 
     private ExplorerViewModel? Vm => DataContext as ExplorerViewModel;

@@ -94,12 +94,18 @@ public sealed partial class FileItemViewModel : ObservableObject
             {
                 return CalculatingText;
             }
-            return SizeFormatter.Format(Stats.TotalSize) + (Stats.Incomplete ? "+" : string.Empty) + (IsStale ? " (갱신 중)" : string.Empty);
+            string size = OverLimit ? SizeFormatter.Format(FolderSizeCalculator.SizeLimit) + " 이상" : SizeFormatter.Format(Stats.TotalSize) + (Stats.Incomplete ? "+" : string.Empty);
+            return size + (IsStale ? " (갱신 중)" : string.Empty);
         }
     }
 
-    /// <summary>폴더의 하위 파일/폴더 수. 예: "파일 12 · 폴더 3".</summary>
-    public string CountText => Stats is null ? string.Empty : $"파일 {Stats.FileCount:N0} · 폴더 {Stats.FolderCount:N0}";
+    /// <summary>집계가 5GB 한도에서 멈췄는지(이 경우 크기와 개수는 "이상"으로 표시).</summary>
+    private bool OverLimit => Stats is not null && Stats.TotalSize >= FolderSizeCalculator.SizeLimit;
+
+    /// <summary>폴더의 하위 파일/폴더 수. 예: "파일 12 · 폴더 3", 1000개 이상은 "1천개 이상".</summary>
+    public string CountText => Stats is null ? string.Empty : $"파일 {CountPart(Stats.FileCount)} · 폴더 {CountPart(Stats.FolderCount)}";
+
+    private string CountPart(int n) => n >= 1000 ? "1천개 이상" : OverLimit ? $"{n:N0}개 이상" : n.ToString("N0");
 
     /// <summary>캐시에서 가져온 오래된 값이라 백그라운드에서 다시 계산 중인지.</summary>
     [ObservableProperty]

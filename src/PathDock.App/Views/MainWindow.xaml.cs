@@ -31,6 +31,14 @@ public partial class MainWindow : FluentWindow
         _vm = vm;
         InitializeComponent();
         DataContext = vm;
+        ApplyMinSize(vm.UiFontSize);
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.UiFontSize))
+            {
+                ApplyMinSize(vm.UiFontSize);
+            }
+        };
         RestoreWindowState();
         _vm.Terminal.PropertyChanged += (_, e) =>
         {
@@ -43,6 +51,26 @@ public partial class MainWindow : FluentWindow
         Closing += OnClosing;
         Loaded += (_, _) => TerminalPanel.FocusTerminal();
         StartClock();
+    }
+
+    /// <summary>
+    /// 화면 글자가 커지면 즐겨찾기 줄 수와 목록 행 높이가 늘어 같은 창 크기로는 탐색기가 사라지므로, 창/탐색기 최소 크기를 글자 크기에 비례해 키운다.
+    /// 작업 영역보다 커지지는 않는다.
+    /// </summary>
+    private void ApplyMinSize(double fontSize)
+    {
+        double extra = Math.Max(0, fontSize - 12);
+        MinWidth = Math.Min(760 + extra * 25, SystemParameters.WorkArea.Width);
+        MinHeight = Math.Min(600 + extra * 25, SystemParameters.WorkArea.Height);
+        ExplorerRow.MinHeight = 260 + extra * 12;
+        if (Width < MinWidth)
+        {
+            Width = MinWidth;
+        }
+        if (Height < MinHeight)
+        {
+            Height = MinHeight;
+        }
     }
 
     /// <summary>제목 표시줄 시계를 시작한다. 창과 수명이 같고, 창이 닫히면 멈춘다.</summary>
