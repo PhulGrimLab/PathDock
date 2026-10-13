@@ -194,31 +194,11 @@ public sealed class TerminalControl : FrameworkElement
         ScreenBuffer b = s.Screen;
         lock (b.SyncRoot)
         {
-            if (_hasSelection && b.ScrolledLines != _selScrolled)
-            {
-                // 새 출력으로 줄이 위로 밀렸으면 선택도 같은 만큼 따라간다. 스크롤백 밖으로 밀려나면 선택을 푼다.
-                int shift = (int)Math.Min(b.ScrolledLines - _selScrolled, int.MaxValue / 2);
-                _selAnchor.Line -= shift;
-                _selEnd.Line -= shift;
-                _selScrolled = b.ScrolledLines;
-                if (Math.Max(_selAnchor.Line, _selEnd.Line) < -b.ScrollbackCount)
-                {
-                    _hasSelection = false;
-                    _dragging = false;
-                }
-                else
-                {
-                    _selAnchor.Line = Math.Max(_selAnchor.Line, -b.ScrollbackCount);
-                    _selEnd.Line = Math.Max(_selEnd.Line, -b.ScrollbackCount);
-                }
-            }
+            FollowSelectionWithScroll(b);
             _renderedVersion = b.Version;
             _scrollOffset = Math.Min(_scrollOffset, b.ScrollbackCount);
-            (int Line, int Col) selStart = _selAnchor, selStop = _selEnd;
-            if (selStop.Line < selStart.Line || (selStop.Line == selStart.Line && selStop.Col < selStart.Col))
-            {
-                (selStart, selStop) = (selStop, selStart);
-            }
+            (int Line, int Col) selStart, selStop;
+            (selStart, selStop) = OrderedSelection();
             for (int y = 0; y < b.Rows; y++)
             {
                 int line = y - _scrollOffset;
@@ -243,6 +223,40 @@ public sealed class TerminalControl : FrameworkElement
                 // 스크롤백 보는 중이거나 포커스 없음: 커서를 그리지 않는다.
             }
         }
+    }
+
+    /// <summary>
+    /// 새 출력으로 줄이 위로 밀렸으면 선택도 같은 만큼 따라간다. 스크롤백 밖으로 밀려나면 선택을 푼다.
+    /// 호출 시 <see cref="ScreenBuffer.SyncRoot"/>를 잡고 있어야 한다.
+    /// </summary>
+    private void FollowSelectionWithScroll(ScreenBuffer b)
+    {
+        if (!_hasSelection || b.ScrolledLines == _selScrolled)
+        {
+            return;
+        }
+        int shift = (int)Math.Min(b.ScrolledLines - _selScrolled, int.MaxValue / 2);
+        _selAnchor.Line -= shift;
+        _selEnd.Line -= shift;
+        _selScrolled = b.ScrolledLines;
+        if (Math.Max(_selAnchor.Line, _selEnd.Line) < -b.ScrollbackCount)
+        {
+            _hasSelection = false;
+            _dragging = false;
+        }
+        else
+        {
+            _selAnchor.Line = Math.Max(_selAnchor.Line, -b.ScrollbackCount);
+            _selEnd.Line = Math.Max(_selEnd.Line, -b.ScrollbackCount);
+        }
+    }
+
+    /// <summary>선택의 시작/끝을 화면 순서(위→아래, 왼쪽→오른쪽)로 정렬해 돌려준다(드래그 방향과 무관).</summary>
+    private ((int Line, int Col) Start, (int Line, int Col) Stop) OrderedSelection()
+    {
+        return _selEnd.Line < _selAnchor.Line || (_selEnd.Line == _selAnchor.Line && _selEnd.Col < _selAnchor.Col)
+            ? (_selEnd, _selAnchor)
+            : (_selAnchor, _selEnd);
     }
 
     /// <summary>한 줄을 그린다: 배경 사각형 → 같은 스타일의 연속 반각 문자를 묶은 텍스트, 전각은 칸에 맞춰 개별 출력.</summary>
@@ -485,39 +499,14 @@ public sealed class TerminalControl : FrameworkElement
         {
             return false;
         }
-        (int Line, int Col) a = _selAnchor, b = _selEnd;
-        if (b.Line < a.Line || (b.Line == a.Line && b.Col < a.Col))
-        {
-            (a, b) = (b, a);
-        }
-        var sb = new System.Text.StringBuilder();
+        string selected;
         lock (s.Screen.SyncRoot)
         {
-            for (int line = a.Line; line <= b.Line; line++)
-            {
-                Cell[] row = s.Screen.GetLine(line);
-                int from = line == a.Line ? a.Col : 0;
-                int to = Math.Min(line == b.Line ? b.Col : row.Length - 1, row.Length - 1);
-                var text = new System.Text.StringBuilder();
-                for (int x = from; x <= to; x++)
-                {
-                    Cell c = row[x];
-                    if ((c.Attr & CellAttr.WideTrail) != 0)
-                    {
-                        continue;
-                    }
-                    text.Append(c.Ch == 0 ? " " : char.ConvertFromUtf32(c.Ch));
-                }
-                if (line > a.Line)
-                {
-                    sb.Append("\r\n");
-                }
-                sb.Append(text.ToString().TrimEnd());
-            }
+            selected = ExtractSelectedText(s.Screen);
         }
         try
         {
-            Clipboard.SetText(sb.ToString());
+            Clipboard.SetText(selected);
         }
         catch (System.Runtime.InteropServices.ExternalException)
         {
@@ -527,6 +516,42 @@ public sealed class TerminalControl : FrameworkElement
         _hasSelection = false;
         InvalidateVisual();
         return true;
+    }
+
+    /// <summary>선택 범위의 글자를 줄 단위로 모은다(줄 끝 공백 제거, 줄바꿈은 CRLF). 호출 시 SyncRoot를 잡고 있어야 한다.</summary>
+    private string ExtractSelectedText(ScreenBuffer screen)
+    {
+        (int Line, int Col) a, b;
+        (a, b) = OrderedSelection();
+        var sb = new System.Text.StringBuilder();
+        for (int line = a.Line; line <= b.Line; line++)
+        {
+            Cell[] row = screen.GetLine(line);
+            int from = line == a.Line ? a.Col : 0;
+            int to = Math.Min(line == b.Line ? b.Col : row.Length - 1, row.Length - 1);
+            if (line > a.Line)
+            {
+                sb.Append("\r\n");
+            }
+            sb.Append(RowText(row, from, to).TrimEnd());
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>한 줄에서 from~to 칸의 글자(전각 문자의 뒤쪽 칸은 건너뛰고, 빈 칸은 공백).</summary>
+    private static string RowText(Cell[] row, int from, int to)
+    {
+        var text = new System.Text.StringBuilder();
+        for (int x = from; x <= to; x++)
+        {
+            Cell c = row[x];
+            if ((c.Attr & CellAttr.WideTrail) != 0)
+            {
+                continue;
+            }
+            text.Append(c.Ch == 0 ? " " : char.ConvertFromUtf32(c.Ch));
+        }
+        return text.ToString();
     }
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)

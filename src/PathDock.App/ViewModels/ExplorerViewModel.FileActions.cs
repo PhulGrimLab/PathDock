@@ -173,30 +173,7 @@ public sealed partial class ExplorerViewModel
         {
             return;
         }
-        var errors = new List<string>();
-        var sources = new List<string>();
-        await Task.Run(() =>
-        {
-            foreach (string p in paths)
-            {
-                try
-                {
-                    if (cut)
-                    {
-                        FileOperations.MoveInto(p, dest);
-                    }
-                    else
-                    {
-                        FileOperations.CopyInto(p, dest);
-                    }
-                    sources.Add(p);
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
-                {
-                    errors.Add($"{Path.GetFileName(p)}: {ex.Message}");
-                }
-            }
-        });
+        (List<string> sources, List<string> errors) = await Task.Run(() => CopyOrMoveInto(paths, dest, cut));
         _log.Info($"붙여넣기({(cut ? "이동" : "복사")}): 성공 {sources.Count}, 실패 {errors.Count} -> {dest}");
         _cache.InvalidateWithAncestors(dest);
         if (cut)
@@ -211,11 +188,45 @@ public sealed partial class ExplorerViewModel
         {
             ErrorOccurred?.Invoke($"붙여넣기 실패 {errors.Count}건 - {errors[0]}");
         }
+        Reload();
+    }
+
+    /// <summary>각 경로를 대상 폴더로 복사(또는 이동)한다. 성공한 원본 경로와 실패 문구를 따로 모아 돌려준다. 백그라운드 스레드용.</summary>
+    private static (List<string> Sources, List<string> Errors) CopyOrMoveInto(IReadOnlyList<string> paths, string dest, bool cut)
+    {
+        var sources = new List<string>();
+        var errors = new List<string>();
+        foreach (string p in paths)
+        {
+            try
+            {
+                if (cut)
+                {
+                    FileOperations.MoveInto(p, dest);
+                }
+                else
+                {
+                    FileOperations.CopyInto(p, dest);
+                }
+                sources.Add(p);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                errors.Add($"{Path.GetFileName(p)}: {ex.Message}");
+            }
+        }
+        return (sources, errors);
+    }
+
+    /// <summary>현재 폴더를 같은 경로로 다시 읽는다(Navigated 이벤트는 발생하지 않는다).</summary>
+    private void Reload()
+    {
         if (_service.Current is { } current)
         {
             NavigateTo(current, ChangeOrigin.User);
         }
     }
+
 
     /// <summary>여러 경로에 같은 조작을 적용한다. 실패는 모아서 한 번에 알리고, 끝나면 캐시를 무효화하고 목록을 새로 읽는다.</summary>
     private void RunBatch(string failureMessage, IReadOnlyList<string> paths, Func<string, string?> operation)
@@ -239,11 +250,9 @@ public sealed partial class ExplorerViewModel
         {
             ErrorOccurred?.Invoke($"{failureMessage} ({errors.Count}건) - {errors[0]}");
         }
-        if (_service.Current is { } current)
-        {
-            NavigateTo(current, ChangeOrigin.User);
-        }
+        Reload();
     }
+
     /// <summary>현재 폴더에 새 폴더 만들기(Ctrl+Shift+N).</summary>
     [RelayCommand]
     private void NewFolder()

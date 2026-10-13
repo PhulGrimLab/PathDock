@@ -126,7 +126,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         CpuText = $"{u.CpuPercent:0}%";
         GpuAvailable = u.GpuPercent is not null;
         GpuPercent = u.GpuPercent ?? 0;
-        GpuText = u.GpuPercent is { } g ? $"{g:0}%" : "N/A";
+        GpuText = FormatGpu(u.GpuPercent);
         MemoryPercent = u.MemoryPercent;
         MemoryText = $"{SizeFormatter.Format(u.MemoryUsedBytes)} / {SizeFormatter.Format(u.MemoryTotalBytes)} ({u.MemoryPercent:0}%)";
         UsageText = FormatUsage(u);
@@ -298,6 +298,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void OpenCalculator()
     {
+        if (Services.CalculatorLauncher.TryActivateExisting())
+        {
+            return;
+        }
         try
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("calc.exe") { UseShellExecute = true })?.Dispose();
@@ -371,11 +375,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>상태 표시줄 왼쪽에 보이는 동기화 요약. 예: "경로 동기화: 양방향".</summary>
     public string SyncSummary => $"경로 동기화: {SelectedSyncMode.Label}";
 
+    private static string FormatGpu(double? percent) => percent is { } g ? $"{g:0}%" : "N/A";
+
     /// <summary>측정값을 표시 문구로 바꾼다. GPU 카운터가 없는 환경이면 "N/A".</summary>
     public static string FormatUsage(SystemUsage u)
     {
-        string gpu = u.GpuPercent is { } g ? $"{g:0}%" : "N/A";
-        return $"CPU {u.CpuPercent:0}% | GPU {gpu} | 메모리 {SizeFormatter.Format(u.MemoryUsedBytes)} / {SizeFormatter.Format(u.MemoryTotalBytes)} ({u.MemoryPercent:0}%)";
+        return $"CPU {u.CpuPercent:0}% | GPU {FormatGpu(u.GpuPercent)} | 메모리 {SizeFormatter.Format(u.MemoryUsedBytes)} / {SizeFormatter.Format(u.MemoryTotalBytes)} ({u.MemoryPercent:0}%)";
     }
 
     public MainViewModel(SettingsService settingsService, FolderSizeCache sizeCache, ILog log)
@@ -387,8 +392,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         _sizeCache.Load();
         Explorer = new ExplorerViewModel(log, _sizeCache, _dialogs);
-        _isDarkTheme = Services.ThemeService.Normalize(Settings.Theme) == Services.ThemeService.Dark;
         Terminal = new TerminalViewModel(log, _dialogs);
+        _isDarkTheme = Services.ThemeService.Normalize(Settings.Theme) == Services.ThemeService.Dark;
         _startAtLastPath = Settings.StartAtLastPath;
         _terminalThemeIndex = Math.Max(0, TerminalThemes.All.ToList().FindIndex(t => t.Key == TerminalThemes.Find(Settings.TerminalTheme).Key));
         _terminalForeground = Settings.TerminalForeground ?? string.Empty;
@@ -403,7 +408,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _selectedSyncMode = SyncModes.First(o => o.Mode == Settings.SyncMode);
 
         BuildFavoriteSlots();
+        WireEvents();
 
+        // 하단 시스템 사용량: 측정은 백그라운드 타이머에서, 표시 갱신은 UI 스레드에서.
+        _monitor = new SystemMonitor(log, MonitorIntervalMs);
+        _monitor.Updated += u => Application.Current?.Dispatcher.BeginInvoke(() => ApplyUsage(u));
+    }
+
+    /// <summary>탐색기·터미널·동기화 서비스의 이벤트를 서로 연결한다.</summary>
+    private void WireEvents()
+    {
         Explorer.Navigated += (path, origin) =>
         {
             ClearInfo();
@@ -412,24 +426,23 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _ = RefreshDrivesAsync();
         };
         Explorer.ErrorOccurred += msg => InfoMessage = msg;
-        Terminal.Notice += (msg, success) =>
-        {
-            if (success)
-            {
-                NotifySuccess(msg);
-            }
-            else
-            {
-                InfoMessage = msg;
-            }
-        };
+        Terminal.Notice += Notify;
+
         Terminal.CwdChanged += (path, fromRequest) =>
             _sync.OnTerminalCwdChanged(path, fromRequest ? ChangeOrigin.Sync : ChangeOrigin.User);
         _sync.Warning += w => InfoMessage = w.Message;
+    }
 
-        // 하단 시스템 사용량: 측정은 백그라운드 타이머에서, 표시 갱신은 UI 스레드에서.
-        _monitor = new SystemMonitor(log, MonitorIntervalMs);
-        _monitor.Updated += u => Application.Current?.Dispatcher.BeginInvoke(() => ApplyUsage(u));
+    private void Notify(string message, bool success)
+    {
+        if (success)
+        {
+            NotifySuccess(message);
+        }
+        else
+        {
+            InfoMessage = message;
+        }
     }
 
     /// <summary>시작 경로(마지막 경로 → 사용자 폴더)로 탐색기를 열고 터미널을 같은 경로에서 시작한다.</summary>

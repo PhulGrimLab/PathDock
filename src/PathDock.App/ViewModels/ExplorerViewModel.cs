@@ -124,18 +124,7 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
         }
         catch (Exception ex) when (ex is DirectoryNotFoundException or UnauthorizedAccessException or IOException or ArgumentException)
         {
-            _log.Warn($"탐색기 이동 실패: {path} ({ex.GetType().Name})");
-            if (origin != ChangeOrigin.User || !string.Equals(PathText, path, StringComparison.Ordinal))
-            {
-                PathText = _service.Current ?? string.Empty;
-            }
-            else
-            {
-                // 주소창에 직접 친 경로가 틀린 경우: 지우지 않고 남겨 고쳐 쓸 수 있게 한다(Esc나 이동 성공 시 현재 경로로 돌아온다).
-            }
-            ErrorOccurred?.Invoke(ex is UnauthorizedAccessException
-                ? $"접근 권한이 없습니다: {path}"
-                : $"폴더를 열 수 없습니다: {path}");
+            ReportNavigationFailure(path, origin, ex);
             return false;
         }
 
@@ -151,6 +140,20 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
             // 새로고침: 목록만 갱신했으므로 알림 없음.
         }
         return true;
+    }
+
+    /// <summary>이동 실패를 기록하고 알린다. 주소창을 현재 경로로 되돌리되, 사용자가 직접 친 경로면 고쳐 쓸 수 있게 남겨 둔다.</summary>
+    private void ReportNavigationFailure(string path, ChangeOrigin origin, Exception ex)
+    {
+        _log.Warn($"탐색기 이동 실패: {path} ({ex.GetType().Name})");
+        bool typedByUser = origin == ChangeOrigin.User && string.Equals(PathText, path, StringComparison.Ordinal);
+        if (!typedByUser)
+        {
+            PathText = _service.Current ?? string.Empty;
+        }
+        ErrorOccurred?.Invoke(ex is UnauthorizedAccessException
+            ? $"접근 권한이 없습니다: {path}"
+            : $"폴더를 열 수 없습니다: {path}");
     }
 
     private void ApplyListing(List<FileItem> items)
@@ -224,7 +227,27 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
             return;
         }
 
-        // 1) 캐시 선적용: Fresh는 그대로 확정(재계산 없음), Stale은 값을 먼저 보여주되 다시 계산, 강제 새로 고침이면 캐시를 무시한다.
+        (int done, List<FileItemViewModel> todo) = ApplyCachedSizes(dirs, force);
+        UpdateSummary(snapshot, done);
+        ResortIfBySize();
+        if (todo.Count == 0)
+        {
+            return;
+        }
+
+        await ComputeSizesAsync(snapshot, todo, done, ct);
+        if (!ct.IsCancellationRequested)
+        {
+            ResortIfBySize(); // 크기 정렬 중이면 모든 폴더 크기가 확정된 뒤 한 번 정렬한다(계산 중 행이 계속 움직이지 않도록).
+        }
+    }
+
+    /// <summary>
+    /// 캐시 선적용: Fresh는 그대로 확정(재계산 없음), Stale은 값을 먼저 보여주되 다시 계산, 강제 새로 고침이면 캐시를 무시한다.
+    /// 확정된 폴더 수와 아직 계산해야 할 폴더 목록을 돌려준다.
+    /// </summary>
+    private (int Done, List<FileItemViewModel> Todo) ApplyCachedSizes(List<FileItemViewModel> dirs, bool force)
+    {
         int done = 0;
         var todo = new List<FileItemViewModel>();
         foreach (FileItemViewModel d in dirs)
@@ -235,17 +258,9 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
             {
                 state = _cache.Lookup(d.FullPath, out hit);
             }
-            else
-            {
-                // 강제 새로 고침: 캐시를 보지 않는다.
-            }
             if (hit is not null)
             {
                 d.SetStats(hit, stale: state == CacheFreshness.Stale);
-            }
-            else
-            {
-                // 캐시에 없음(또는 강제 새로 고침): "계산 중…" 상태로 둔다.
             }
             if (state == CacheFreshness.Fresh)
             {
@@ -256,14 +271,12 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
                 todo.Add(d);
             }
         }
-        UpdateSummary(snapshot, done);
-        ResortIfBySize();
-        if (todo.Count == 0)
-        {
-            return;
-        }
+        return (done, todo);
+    }
 
-        // 2) 나머지만 백그라운드에서 계산(최대 SizeWorkers개 동시).
+    /// <summary>캐시에 없거나 오래된 폴더만 백그라운드에서 계산한다(최대 SizeWorkers개 동시). 끝나는 대로 표시와 요약을 갱신한다.</summary>
+    private async Task ComputeSizesAsync(List<FileItemViewModel> snapshot, List<FileItemViewModel> todo, int done, CancellationToken ct)
+    {
         using var gate = new SemaphoreSlim(SizeWorkers);
         var tasks = todo.Select(async d =>
         {
@@ -281,7 +294,7 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
                 ct.ThrowIfCancellationRequested(); // 계산이 끝난 직후 다른 폴더로 이동했다면 오래된 결과로 요약을 덮어쓰지 않는다.
                 _cache.Store(d.FullPath, stats);
                 d.SetStats(stats);
-                done++;
+                done++; // await 뒤에는 UI 스레드로 돌아오므로 동시 증가 문제가 없다.
                 UpdateSummary(snapshot, done);
             }
             catch (OperationCanceledException)
@@ -294,12 +307,7 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
             }
         }).ToList();
         await Task.WhenAll(tasks);
-        if (!ct.IsCancellationRequested)
-        {
-            ResortIfBySize(); // 크기 정렬 중이면 모든 폴더 크기가 확정된 뒤 한 번 정렬한다(계산 중 행이 계속 움직이지 않도록).
-        }
     }
-
     /// <summary>요약 줄 갱신. 폴더 크기 계산이 끝나지 않았으면 진행 상황을 함께 표시한다.</summary>
     private void UpdateSummary(List<FileItemViewModel> snapshot, int dirsDone)
     {
