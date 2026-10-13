@@ -56,6 +56,7 @@
             </Border.Style>
             <ctl:TerminalControl x:Name="TerminalView" Session="{Binding Session}"
                                  TerminalFontSize="{Binding FontSize}"
+                                 ColorScheme="{Binding ColorScheme}"
                                  AutomationProperties.AutomationId="Terminal"
                                  AutomationProperties.Name="터미널" />
         </Border>

@@ -130,6 +130,44 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     partial void OnTerminalShellIndexChanged(int value) =>
         Settings.TerminalShell = value == 1 ? TerminalShell.CommandPrompt : TerminalShell.PowerShell;
 
+    /// <summary>설정 창 콤보박스에 보여줄 터미널 테마 이름(TerminalThemes.All과 같은 순서).</summary>
+    public IReadOnlyList<string> TerminalThemeNames { get; } = TerminalThemes.All.Select(t => t.DisplayName).ToList();
+
+    [ObservableProperty]
+    private int _terminalThemeIndex;
+
+    /// <summary>터미널 글자색(#RRGGBB). 비우면 테마 기본값.</summary>
+    [ObservableProperty]
+    private string _terminalForeground = string.Empty;
+
+    /// <summary>터미널 배경색(#RRGGBB). 비우면 테마 기본값.</summary>
+    [ObservableProperty]
+    private string _terminalBackground = string.Empty;
+
+    partial void OnTerminalThemeIndexChanged(int value) => ApplyTerminalColors();
+
+    partial void OnTerminalForegroundChanged(string value) => ApplyTerminalColors();
+
+    partial void OnTerminalBackgroundChanged(string value) => ApplyTerminalColors();
+
+    private void ApplyTerminalColors()
+    {
+        int index = Math.Clamp(TerminalThemeIndex, 0, TerminalThemes.All.Count - 1);
+        Settings.TerminalTheme = TerminalThemes.All[index].Key;
+        Settings.TerminalForeground = TerminalForeground;
+        Settings.TerminalBackground = TerminalBackground;
+        Terminal.ColorScheme = TerminalThemes.Resolve(Settings.TerminalTheme, TerminalForeground, TerminalBackground);
+    }
+
+    /// <summary>터미널 색을 기본 테마로 되돌린다.</summary>
+    [RelayCommand]
+    private void ResetTerminalColors()
+    {
+        TerminalThemeIndex = 0;
+        TerminalForeground = string.Empty;
+        TerminalBackground = string.Empty;
+    }
+
     partial void OnUiFontSizeChanged(double value)
     {
         Settings.UiFontSize = Services.FontService.NormalizeUi(value);
@@ -196,7 +234,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _isDarkTheme = Services.ThemeService.Normalize(Settings.Theme) == Services.ThemeService.Dark;
         Terminal = new TerminalViewModel(log);
         _startAtLastPath = Settings.StartAtLastPath;
-        _terminalShellIndex = Settings.TerminalShell == TerminalShell.CommandPrompt ? 1 : 0;
+        _terminalThemeIndex = Math.Max(0, TerminalThemes.All.ToList().FindIndex(t => t.Key == TerminalThemes.Find(Settings.TerminalTheme).Key));
+        _terminalForeground = Settings.TerminalForeground ?? string.Empty;
+        _terminalBackground = Settings.TerminalBackground ?? string.Empty;
+        Terminal.ColorScheme = TerminalThemes.Resolve(Settings.TerminalTheme, _terminalForeground, _terminalBackground);
+        _terminalShellIndex =Settings.TerminalShell == TerminalShell.CommandPrompt ? 1 : 0;
         _uiFontSize = Services.FontService.NormalizeUi(Settings.UiFontSize);
         _terminalFontSize = Services.FontService.NormalizeTerminal(Settings.TerminalFontSize);
         Terminal.FontSize = _terminalFontSize;

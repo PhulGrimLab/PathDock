@@ -58,6 +58,36 @@
                           AutomationProperties.AutomationId="StartAtLastPathCheck" />
             </ctl:PanelCard>
 
+            <ctl:PanelCard Margin="0,14,0,0" Header="터미널 색상" Symbol="Color24" ContentPadding="14,10">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="86" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="테마" VerticalAlignment="Center" Margin="0,4" />
+                    <ComboBox Grid.Column="1" Margin="0,4" ItemsSource="{Binding TerminalThemeNames}" SelectedIndex="{Binding TerminalThemeIndex}"
+                              AutomationProperties.AutomationId="TerminalThemeCombo" AutomationProperties.Name="터미널 테마" />
+                    <TextBlock Grid.Row="1" Text="글자색" VerticalAlignment="Center" Margin="0,4" />
+                    <ui:TextBox Grid.Row="1" Grid.Column="1" Margin="0,4" MaxLength="7" PlaceholderText="#RRGGBB (비우면 테마 기본값)"
+                                Text="{Binding TerminalForeground, UpdateSourceTrigger=PropertyChanged}"
+                                AutomationProperties.AutomationId="TerminalForegroundBox" AutomationProperties.Name="터미널 글자색" />
+                    <TextBlock Grid.Row="2" Text="배경색" VerticalAlignment="Center" Margin="0,4" />
+                    <ui:TextBox Grid.Row="2" Grid.Column="1" Margin="0,4" MaxLength="7" PlaceholderText="#RRGGBB (비우면 테마 기본값)"
+                                Text="{Binding TerminalBackground, UpdateSourceTrigger=PropertyChanged}"
+                                AutomationProperties.AutomationId="TerminalBackgroundBox" AutomationProperties.Name="터미널 배경색" />
+                    <ui:Button Grid.Row="3" Grid.ColumnSpan="2" Content="기본 색으로" Icon="{ui:SymbolIcon ArrowReset24}"
+                               HorizontalAlignment="Right" Margin="0,8,0,0"
+                               Command="{Binding ResetTerminalColorsCommand}"
+                               AutomationProperties.AutomationId="ResetTerminalColorsButton" />
+                </Grid>
+            </ctl:PanelCard>
+
             <ctl:PanelCard Margin="0,14,0,0" Header="터미널 셸" Symbol="WindowConsole20" ContentPadding="14,10">
                 <StackPanel>
                     <ComboBox SelectedIndex="{Binding TerminalShellIndex}"

@@ -22,14 +22,15 @@ public sealed class TerminalControl : FrameworkElement
     private const int WheelLines = 3;
     private const int MinCols = 20;
     private const int MinRows = 3;
-    private static readonly Brush DefaultBackground = Freeze(new SolidColorBrush(Color.FromRgb(0x0C, 0x0C, 0x0C)));
-    private static readonly Brush DefaultForeground = Freeze(new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)));
     private static readonly Brush SelectionBrush = Freeze(new SolidColorBrush(Color.FromArgb(0x70, 0x30, 0x80, 0xFF)));
-    private static readonly Brush CursorBrush = Freeze(new SolidColorBrush(Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF)));
 
     public static readonly DependencyProperty SessionProperty = DependencyProperty.Register(
         nameof(Session), typeof(TerminalSession), typeof(TerminalControl),
         new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, (d, _) => ((TerminalControl)d).OnSessionChanged()));
+
+    public static readonly DependencyProperty ColorSchemeProperty = DependencyProperty.Register(
+        nameof(ColorScheme), typeof(TerminalColorScheme), typeof(TerminalControl),
+        new FrameworkPropertyMetadata(TerminalThemes.All[0], FrameworkPropertyMetadataOptions.AffectsRender, (d, _) => ((TerminalControl)d).OnColorSchemeChanged()));
 
     public static readonly DependencyProperty TerminalFontSizeProperty = DependencyProperty.Register(
         nameof(TerminalFontSize), typeof(double), typeof(TerminalControl),
@@ -43,6 +44,12 @@ public sealed class TerminalControl : FrameworkElement
     private double _cellH = 16;
     private long _renderedVersion = -1;
     private int _scrollOffset;
+    private Brush _background = Freeze(new SolidColorBrush(Color.FromRgb(0x0C, 0x0C, 0x0C)));
+    private Brush _cursorBrush = Freeze(new SolidColorBrush(Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF)));
+    private uint _defaultFg = 0xFFCCCCCC;
+    private uint _defaultBg = 0xFF0C0C0C;
+    // 기본 팔레트(Campbell) ANSI 색 → 현재 테마 색. 파서가 셀에 RGB로 저장하므로 그릴 때 바꿔 끼운다(출력이 이미 있어도 즉시 반영).
+    private Dictionary<uint, uint> _ansiMap = new();
 
     // 마우스 선택 범위: 버퍼 줄 번호(음수=스크롤백)와 열. 새 출력이 오면(Version 변화) 해제한다.
     private bool _hasSelection;
@@ -55,6 +62,13 @@ public sealed class TerminalControl : FrameworkElement
     {
         get => (TerminalSession?)GetValue(SessionProperty);
         set => SetValue(SessionProperty, value);
+    }
+
+    /// <summary>색 구성(테마 + 사용자 지정 글자/배경색).</summary>
+    public TerminalColorScheme ColorScheme
+    {
+        get => (TerminalColorScheme)GetValue(ColorSchemeProperty);
+        set => SetValue(ColorSchemeProperty, value);
     }
 
     /// <summary>글자 크기(DIP). 바뀌면 셀 크기를 다시 재고 열/행 수를 다시 계산한다.</summary>
@@ -87,6 +101,22 @@ public sealed class TerminalControl : FrameworkElement
         _renderedVersion = -1;
         _scrollOffset = 0;
         ApplySize();
+    }
+
+    private void OnColorSchemeChanged()
+    {
+        TerminalColorScheme s = ColorScheme;
+        _defaultFg = s.Foreground;
+        _defaultBg = s.Background;
+        _background = BrushFor(s.Background);
+        _cursorBrush = Freeze(new SolidColorBrush(Color.FromArgb(0xB0, (byte)(s.Foreground >> 16), (byte)(s.Foreground >> 8), (byte)s.Foreground)));
+        _ansiMap = new Dictionary<uint, uint>();
+        for (int i = 0; i < 16; i++)
+        {
+            _ansiMap[Palette.Get(i)] = s.Ansi[i];
+        }
+        _renderedVersion = -1;
+        InvalidateVisual();
     }
 
     private void OnFontSizeChanged()
@@ -152,7 +182,7 @@ public sealed class TerminalControl : FrameworkElement
     protected override void OnRender(DrawingContext dc)
     {
         double w = ActualWidth, h = ActualHeight;
-        dc.DrawRectangle(DefaultBackground, null, new Rect(0, 0, w, h));
+        dc.DrawRectangle(_background, null, new Rect(0, 0, w, h));
         TerminalSession? s = Session;
         if (s is null)
         {
@@ -192,7 +222,7 @@ public sealed class TerminalControl : FrameworkElement
             if (_scrollOffset == 0 && b.CursorVisible && IsKeyboardFocused)
             {
                 int cx = Math.Min(b.CursorX, b.Cols - 1);
-                dc.DrawRectangle(CursorBrush, null, new Rect(cx * _cellW, b.CursorY * _cellH, _cellW, _cellH));
+                dc.DrawRectangle(_cursorBrush, null, new Rect(cx * _cellW, b.CursorY * _cellH, _cellW, _cellH));
             }
             else
             {
@@ -278,13 +308,13 @@ public sealed class TerminalControl : FrameworkElement
     }
 
     /// <summary>기본색(0)과 반전 속성을 반영한 실제 전경/배경(0xFFRRGGBB, 배경 기본은 0).</summary>
-    private static void ResolveColors(Cell c, out uint fg, out uint bg)
+    private void ResolveColors(Cell c, out uint fg, out uint bg)
     {
-        fg = c.Fg == 0 ? 0xFFCCCCCC : c.Fg;
-        bg = c.Bg;
+        fg = c.Fg == 0 ? _defaultFg : Themed(c.Fg);
+        bg = c.Bg == 0 ? 0 : Themed(c.Bg);
         if ((c.Attr & CellAttr.Inverse) != 0)
         {
-            uint realBg = bg == 0 ? 0xFF0C0C0C : bg;
+            uint realBg = bg == 0 ? _defaultBg : bg;
             bg = fg;
             fg = realBg;
         }
@@ -293,6 +323,8 @@ public sealed class TerminalControl : FrameworkElement
             // 반전 아님.
         }
     }
+
+    private uint Themed(uint argb) => _ansiMap.TryGetValue(argb, out uint mapped) ? mapped : argb;
 
     private Brush BrushFor(uint argb)
     {

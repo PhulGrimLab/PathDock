@@ -42,6 +42,12 @@ public sealed class AppSettings
     public double UiFontSize { get; set; } = DefaultUiFontSize;
     /// <summary>터미널 글자 크기.</summary>
     public double TerminalFontSize { get; set; } = DefaultTerminalFontSize;
+    /// <summary>터미널 색 테마 키(TerminalThemes).</summary>
+    public string TerminalTheme { get; set; } = TerminalColorScheme.DefaultKey;
+    /// <summary>터미널 글자색 직접 지정(#RRGGBB, 비우면 테마 값).</summary>
+    public string TerminalForeground { get; set; } = string.Empty;
+    /// <summary>터미널 배경색 직접 지정(#RRGGBB, 비우면 테마 값).</summary>
+    public string TerminalBackground { get; set; } = string.Empty;
     /// <summary>시작할 때 마지막으로 열었던 폴더에서 시작할지(false면 사용자 폴더).</summary>
     public bool StartAtLastPath { get; set; } = true;
     /// <summary>터미널에서 실행할 셸(다음 실행부터 적용).</summary>

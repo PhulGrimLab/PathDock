@@ -34,6 +34,10 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
     [ObservableProperty]
     private double _fontSize = PathDock.Core.Settings.AppSettings.DefaultTerminalFontSize;
 
+    /// <summary>터미널 색 구성. TerminalControl에 바인딩된다.</summary>
+    [ObservableProperty]
+    private TerminalColorScheme _colorScheme = TerminalThemes.All[0];
+
     /// <summary>패널을 접었는지(머리글만 보임). 화면 배치는 MainWindow가 이 값을 보고 바꾼다.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CollapseToolTip))]
