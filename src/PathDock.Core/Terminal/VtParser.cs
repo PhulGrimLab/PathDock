@@ -447,6 +447,11 @@ public sealed class VtParser
             return false;
         }
         string path = payload[(second + 1)..];
+        int stamp = path.IndexOf('?'); // cmd 프롬프트가 붙이는 시각(경로에는 ?를 쓸 수 없다).
+        if (stamp >= 0)
+        {
+            path = path[..stamp];
+        }
         if (path.Length > 0)
         {
             CwdReported?.Invoke(path);

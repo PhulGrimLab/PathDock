@@ -38,6 +38,7 @@ public sealed class TerminalSession : IDisposable
     private string? _expectedCwd;
     private bool _disposed;
     private string? _scriptPath;
+    private TerminalShell _shell;
 
     public ScreenBuffer Screen { get; }
 
@@ -69,9 +70,15 @@ public sealed class TerminalSession : IDisposable
         _pty = new ConPtySession(OnOutput, OnExit);
     }
 
-    /// <summary>PowerShell을 시작 폴더 <paramref name="workingDirectory"/>에서 실행한다.</summary>
-    public void Start(string? workingDirectory)
+    /// <summary>선택한 셸을 시작 폴더 <paramref name="workingDirectory"/>에서 실행한다.</summary>
+    public void Start(string? workingDirectory, TerminalShell shell = TerminalShell.PowerShell)
     {
+        _shell = shell;
+        if (shell == TerminalShell.CommandPrompt)
+        {
+            StartCommandPrompt(workingDirectory);
+            return;
+        }
         // -EncodedCommand는 PowerShell 5.1이 CLIXML을 출력해 화면이 오염되므로 임시 스크립트 파일을 -File로 실행한다.
         string dir = Path.Combine(Path.GetTempPath(), "PathDock");
         Directory.CreateDirectory(dir);
@@ -83,6 +90,20 @@ public sealed class TerminalSession : IDisposable
         string powerShell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
         string cmd = $"\"{powerShell}\" -NoLogo -NoExit -ExecutionPolicy Bypass -File \"{_scriptPath}\"";
         _log.Info($"터미널 시작: cwd={workingDirectory}");
+        _pty.Start(cmd, workingDirectory, Screen.Cols, Screen.Rows);
+    }
+
+    /// <summary>
+    /// 명령 프롬프트(cmd.exe)를 시작한다. PROMPT가 매번 창 제목 "PD:토큰:0:경로?시각"을 내보내 PowerShell과 같은 방식으로 경로/대기 상태를 알린다.
+    /// 시각($T, 1/100초)은 제목이 매번 달라지게 해 conhost가 다시 전달하도록 하고, 경로 해석 때 '?' 뒤는 버린다(경로에 올 수 없는 문자).
+    /// </summary>
+    private void StartCommandPrompt(string? workingDirectory)
+    {
+        string token = Guid.NewGuid().ToString("N");
+        _parser.MarkerToken = token;
+        string cmdExe = Path.Combine(Environment.SystemDirectory, "cmd.exe");
+        string cmd = $"\"{cmdExe}\" /K prompt $E]0;PD:{token}:0:$P?$T$E\\$P$G";
+        _log.Info($"터미널 시작(cmd): cwd={workingDirectory}");
         _pty.Start(cmd, workingDirectory, Screen.Cols, Screen.Rows);
     }
 
@@ -230,9 +251,21 @@ public sealed class TerminalSession : IDisposable
         {
             _expectedCwd = path;
         }
-        string quoted = EscapeSingleQuoted(path);
         _log.Info($"터미널 cd 주입: {path}");
+        if (_shell == TerminalShell.CommandPrompt)
+        {
+            SendInput(BuildCmdChangeDirectory(path));
+            return;
+        }
+        string quoted = EscapeSingleQuoted(path);
         SendInput($"Set-Location -LiteralPath '{quoted}'\r");
+    }
+
+    /// <summary>cmd용 이동 명령. UNC는 cd가 지원하지 않아 pushd를 쓴다. 따옴표 안에서도 %가 확장되므로 %는 ^로 끊을 수 없어 그대로 둔다(드문 경우).</summary>
+    public static string BuildCmdChangeDirectory(string path)
+    {
+        string verb = path.StartsWith(@"\\", StringComparison.Ordinal) ? "pushd" : "cd /d";
+        return $"{verb} \"{path}\"\r";
     }
 
     /// <summary>

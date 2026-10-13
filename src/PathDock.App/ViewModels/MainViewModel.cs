@@ -9,6 +9,7 @@ using PathDock.Core.Monitoring;
 using PathDock.Core.Paths;
 using PathDock.Core.Settings;
 using PathDock.Core.Sync;
+using PathDock.Core.Terminal;
 
 namespace PathDock.App.ViewModels;
 
@@ -122,6 +123,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     partial void OnStartAtLastPathChanged(bool value) => Settings.StartAtLastPath = value;
 
+    /// <summary>터미널 셸 선택(0=PowerShell, 1=명령 프롬프트). 다음 실행부터 적용된다.</summary>
+    [ObservableProperty]
+    private int _terminalShellIndex;
+
+    partial void OnTerminalShellIndexChanged(int value) =>
+        Settings.TerminalShell = value == 1 ? TerminalShell.CommandPrompt : TerminalShell.PowerShell;
+
     partial void OnUiFontSizeChanged(double value)
     {
         Settings.UiFontSize = Services.FontService.NormalizeUi(value);
@@ -188,6 +196,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _isDarkTheme = Services.ThemeService.Normalize(Settings.Theme) == Services.ThemeService.Dark;
         Terminal = new TerminalViewModel(log);
         _startAtLastPath = Settings.StartAtLastPath;
+        _terminalShellIndex = Settings.TerminalShell == TerminalShell.CommandPrompt ? 1 : 0;
         _uiFontSize = Services.FontService.NormalizeUi(Settings.UiFontSize);
         _terminalFontSize = Services.FontService.NormalizeTerminal(Settings.TerminalFontSize);
         Terminal.FontSize = _terminalFontSize;
@@ -219,7 +228,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         string start = ResolveStartPath();
         Explorer.NavigateTo(start, ChangeOrigin.Sync);
-        Terminal.Start(Explorer.CurrentPath ?? start);
+        Terminal.Start(Explorer.CurrentPath ?? start, Settings.TerminalShell);
         _ = RefreshDrivesAsync();
         _log.Info($"앱 시작: start={start}, mode={Settings.SyncMode}");
     }

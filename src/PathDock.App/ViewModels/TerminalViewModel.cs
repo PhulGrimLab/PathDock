@@ -64,9 +64,14 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
         Session.Exited += code => _ui.BeginInvoke(() => StatusText = $"터미널 종료됨 (코드 {code})");
     }
 
-    public void Start(string? workingDirectory)
+    /// <summary>패널 머리글에 표시할 셸 이름(Start에서 정해진다).</summary>
+    [ObservableProperty]
+    private string _header = "터미널 - PowerShell";
+
+    public void Start(string? workingDirectory, TerminalShell shell = TerminalShell.PowerShell)
     {
-        Session.Start(workingDirectory);
+        Header = shell == TerminalShell.CommandPrompt ? "터미널 - 명령 프롬프트" : "터미널 - PowerShell";
+        Session.Start(workingDirectory, shell);
     }
 
     public string? CurrentPath => Session.Cwd;

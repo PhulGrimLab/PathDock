@@ -77,4 +77,30 @@ public class TerminalSessionTests
         Assert.IsTrue(WaitFor(() => { lock (events) { return events.Any(e => e.Path.EndsWith("pd_b") && e.FromRequest); } }), s.Screen.GetVisibleText());
         Assert.IsNull(s.PendingPath);
     }
+
+    [TestMethod]
+    public void CommandPrompt_ReportsCwd_AndFollowsRequestedAndUserChanges()
+    {
+        string a = Path.Combine(Path.GetTempPath(), "pd_c 공백");
+        string b = Path.Combine(Path.GetTempPath(), "pd_d");
+        Directory.CreateDirectory(a);
+        Directory.CreateDirectory(b);
+        using var s = new TerminalSession(100, 30, NullLog.Instance);
+        var events = new List<(string Path, bool FromRequest)>();
+        s.CwdChanged += (p, r) => { lock (events) { events.Add((p, r)); } };
+        s.Start(Path.GetTempPath(), TerminalShell.CommandPrompt);
+        Assert.IsTrue(WaitFor(() => s.IsIdle), s.Screen.GetVisibleText());
+        Assert.IsNotNull(s.Cwd, s.Screen.GetVisibleText());
+
+        Assert.IsTrue(s.RequestChangeDirectory(a));
+        Assert.IsTrue(WaitFor(() => { lock (events) { return events.Any(e => e.Path.EndsWith("pd_c 공백") && e.FromRequest); } }), s.Screen.GetVisibleText());
+
+        // 같은 경로에서 명령만 실행해도 프롬프트(대기) 신호가 다시 와야 한다.
+        s.SendInput("echo hi\r");
+        Assert.IsTrue(WaitFor(() => !s.IsIdle));
+        Assert.IsTrue(WaitFor(() => s.IsIdle), s.Screen.GetVisibleText());
+
+        s.SendInput($"cd /d \"{b}\"\r");
+        Assert.IsTrue(WaitFor(() => { lock (events) { return events.Any(e => e.Path.EndsWith("pd_d") && !e.FromRequest); } }), s.Screen.GetVisibleText());
+    }
 }

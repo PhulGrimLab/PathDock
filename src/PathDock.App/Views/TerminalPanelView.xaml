@@ -4,7 +4,7 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:ctl="clr-namespace:PathDock.App.Controls">
     <!-- 터미널 패널: 머리글 오른쪽에 셸 상태와 접기/펼치기 버튼. DataContext: TerminalViewModel -->
-    <ctl:PanelCard Header="터미널 - PowerShell" Symbol="WindowConsole20">
+    <ctl:PanelCard Header="{Binding Header}" Symbol="WindowConsole20">
         <ctl:PanelCard.HeaderTrailing>
             <StackPanel Orientation="Horizontal">
                 <TextBlock FontSize="{DynamicResource PdFontSize}" Text="{Binding StatusText}" VerticalAlignment="Center"

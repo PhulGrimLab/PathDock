@@ -58,6 +58,18 @@
                           AutomationProperties.AutomationId="StartAtLastPathCheck" />
             </ctl:PanelCard>
 
+            <ctl:PanelCard Margin="0,14,0,0" Header="터미널 셸" Symbol="WindowConsole20" ContentPadding="14,10">
+                <StackPanel>
+                    <ComboBox SelectedIndex="{Binding TerminalShellIndex}"
+                              AutomationProperties.AutomationId="TerminalShellCombo" AutomationProperties.Name="터미널 셸">
+                        <ComboBoxItem Content="PowerShell" />
+                        <ComboBoxItem Content="명령 프롬프트 (cmd)" />
+                    </ComboBox>
+                    <TextBlock Text="바꾼 셸은 PathDock을 다시 시작하면 적용됩니다." Margin="0,6,0,0"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+            </ctl:PanelCard>
+
             <ctl:PanelCard Margin="0,14,0,0" Header="초기화" Symbol="Delete24" ContentPadding="14,10">
                 <Grid>
                     <Grid.ColumnDefinitions>
