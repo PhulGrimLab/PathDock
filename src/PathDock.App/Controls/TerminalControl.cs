@@ -316,8 +316,12 @@ public sealed class TerminalControl : FrameworkElement
         }
         if (e.ChangedButton == MouseButton.Right)
         {
-            // 선택이 있으면 복사(Windows Terminal 방식). 붙여넣기는 Ctrl+V.
-            CopySelection();
+            // 선택이 있으면 복사, 없으면 붙여넣기(Windows Terminal 방식).
+            if (!CopySelection())
+            {
+                _scrollOffset = 0;
+                PasteFromClipboard(Session);
+            }
             e.Handled = true;
         }
         else if (e.ChangedButton == MouseButton.Left)
