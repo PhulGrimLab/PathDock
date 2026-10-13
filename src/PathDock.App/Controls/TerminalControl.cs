@@ -24,6 +24,7 @@ public sealed class TerminalControl : FrameworkElement
     private const int MinRows = 3;
     private static readonly Brush DefaultBackground = Freeze(new SolidColorBrush(Color.FromRgb(0x0C, 0x0C, 0x0C)));
     private static readonly Brush DefaultForeground = Freeze(new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)));
+    private static readonly Brush SelectionBrush = Freeze(new SolidColorBrush(Color.FromArgb(0x70, 0x30, 0x80, 0xFF)));
     private static readonly Brush CursorBrush = Freeze(new SolidColorBrush(Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF)));
 
     public static readonly DependencyProperty SessionProperty = DependencyProperty.Register(
@@ -42,6 +43,12 @@ public sealed class TerminalControl : FrameworkElement
     private double _cellH = 16;
     private long _renderedVersion = -1;
     private int _scrollOffset;
+
+    // 마우스 선택 범위: 버퍼 줄 번호(음수=스크롤백)와 열. 새 출력이 오면(Version 변화) 해제한다.
+    private bool _hasSelection;
+    private bool _dragging;
+    private (int Line, int Col) _selAnchor;
+    private (int Line, int Col) _selEnd;
 
     /// <summary>표시할 세션(ViewModel에서 바인딩).</summary>
     public TerminalSession? Session
@@ -156,11 +163,31 @@ public sealed class TerminalControl : FrameworkElement
         ScreenBuffer b = s.Screen;
         lock (b.SyncRoot)
         {
+            if (_hasSelection && _renderedVersion != -1 && b.Version != _renderedVersion)
+            {
+                _hasSelection = false; // 줄 번호가 밀릴 수 있으므로 새 출력이 오면 선택을 푼다.
+                _dragging = false;
+            }
             _renderedVersion = b.Version;
             _scrollOffset = Math.Min(_scrollOffset, b.ScrollbackCount);
+            (int Line, int Col) selStart = _selAnchor, selStop = _selEnd;
+            if (selStop.Line < selStart.Line || (selStop.Line == selStart.Line && selStop.Col < selStart.Col))
+            {
+                (selStart, selStop) = (selStop, selStart);
+            }
             for (int y = 0; y < b.Rows; y++)
             {
-                DrawRow(dc, b.GetLine(y - _scrollOffset), y * _cellH, dpi);
+                int line = y - _scrollOffset;
+                DrawRow(dc, b.GetLine(line), y * _cellH, dpi);
+                if (_hasSelection && line >= selStart.Line && line <= selStop.Line)
+                {
+                    int from = line == selStart.Line ? selStart.Col : 0;
+                    int to = line == selStop.Line ? selStop.Col : b.Cols - 1;
+                    if (to >= from)
+                    {
+                        dc.DrawRectangle(SelectionBrush, null, new Rect(from * _cellW, y * _cellH, (to - from + 1) * _cellW, _cellH));
+                    }
+                }
             }
             if (_scrollOffset == 0 && b.CursorVisible && IsKeyboardFocused)
             {
@@ -283,6 +310,158 @@ public sealed class TerminalControl : FrameworkElement
     {
         base.OnMouseDown(e);
         Focus();
+        if (Session is null)
+        {
+            return;
+        }
+        if (e.ChangedButton == MouseButton.Right)
+        {
+            // 선택이 있으면 복사(Windows Terminal 방식). 붙여넣기는 Ctrl+V.
+            CopySelection();
+            e.Handled = true;
+        }
+        else if (e.ChangedButton == MouseButton.Left)
+        {
+            (int Line, int Col) cell = CellAt(e.GetPosition(this));
+            if (e.ClickCount == 2)
+            {
+                SelectWord(cell);
+                return;
+            }
+            _selAnchor = _selEnd = cell;
+            _hasSelection = false;
+            _dragging = true;
+            CaptureMouse();
+            InvalidateVisual();
+        }
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        if (!_dragging)
+        {
+            return;
+        }
+        Point p = e.GetPosition(this);
+        TerminalSession? s = Session;
+        if (s is not null && (p.Y < 0 || p.Y > ActualHeight))
+        {
+            // 위/아래 바깥으로 끌면 스크롤백을 한 줄씩 따라간다.
+            int max;
+            lock (s.Screen.SyncRoot)
+            {
+                max = s.Screen.ScrollbackCount;
+            }
+            _scrollOffset = Math.Clamp(_scrollOffset + (p.Y < 0 ? 1 : -1), 0, max);
+        }
+        _selEnd = CellAt(p);
+        _hasSelection = _selEnd != _selAnchor;
+        InvalidateVisual();
+    }
+
+    protected override void OnMouseUp(MouseButtonEventArgs e)
+    {
+        base.OnMouseUp(e);
+        if (_dragging && e.ChangedButton == MouseButton.Left)
+        {
+            _dragging = false;
+            ReleaseMouseCapture();
+        }
+    }
+
+    /// <summary>화면 좌표 → (버퍼 줄 번호, 열). 범위를 벗어나면 가장자리로 맞춘다.</summary>
+    private (int Line, int Col) CellAt(Point p)
+    {
+        TerminalSession? s = Session;
+        int cols = s?.Screen.Cols ?? 1, rows = s?.Screen.Rows ?? 1;
+        int col = Math.Clamp((int)(p.X / _cellW), 0, cols - 1);
+        int row = Math.Clamp((int)(p.Y / _cellH), 0, rows - 1);
+        return (row - _scrollOffset, col);
+    }
+
+    /// <summary>더블클릭: 공백이 아닌 연속 글자를 단어로 선택한다.</summary>
+    private void SelectWord((int Line, int Col) cell)
+    {
+        TerminalSession? s = Session;
+        if (s is null)
+        {
+            return;
+        }
+        lock (s.Screen.SyncRoot)
+        {
+            Cell[] row = s.Screen.GetLine(cell.Line);
+            static bool Blank(Cell c) => c.Ch == 0 || c.Ch == ' ';
+            if (cell.Col >= row.Length || Blank(row[cell.Col]))
+            {
+                return;
+            }
+            int a = cell.Col, b = cell.Col;
+            while (a > 0 && !Blank(row[a - 1]))
+            {
+                a--;
+            }
+            while (b < row.Length - 1 && !Blank(row[b + 1]))
+            {
+                b++;
+            }
+            _selAnchor = (cell.Line, a);
+            _selEnd = (cell.Line, b);
+            _hasSelection = true;
+        }
+        InvalidateVisual();
+    }
+
+    /// <summary>선택한 범위를 클립보드에 복사하고 선택을 푼다. 선택이 없으면 false.</summary>
+    private bool CopySelection()
+    {
+        TerminalSession? s = Session;
+        if (s is null || !_hasSelection)
+        {
+            return false;
+        }
+        (int Line, int Col) a = _selAnchor, b = _selEnd;
+        if (b.Line < a.Line || (b.Line == a.Line && b.Col < a.Col))
+        {
+            (a, b) = (b, a);
+        }
+        var sb = new System.Text.StringBuilder();
+        lock (s.Screen.SyncRoot)
+        {
+            for (int line = a.Line; line <= b.Line; line++)
+            {
+                Cell[] row = s.Screen.GetLine(line);
+                int from = line == a.Line ? a.Col : 0;
+                int to = Math.Min(line == b.Line ? b.Col : row.Length - 1, row.Length - 1);
+                var text = new System.Text.StringBuilder();
+                for (int x = from; x <= to; x++)
+                {
+                    Cell c = row[x];
+                    if ((c.Attr & CellAttr.WideTrail) != 0)
+                    {
+                        continue;
+                    }
+                    text.Append(c.Ch == 0 ? " " : char.ConvertFromUtf32(c.Ch));
+                }
+                if (line > a.Line)
+                {
+                    sb.Append("\r\n");
+                }
+                sb.Append(text.ToString().TrimEnd());
+            }
+        }
+        try
+        {
+            Clipboard.SetText(sb.ToString());
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            // 다른 프로그램이 클립보드를 쓰는 중: 선택을 유지해 다시 시도할 수 있게 한다.
+            return true;
+        }
+        _hasSelection = false;
+        InvalidateVisual();
+        return true;
     }
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)
@@ -330,6 +509,14 @@ public sealed class TerminalControl : FrameworkElement
         }
         Key key = e.Key == Key.System ? e.SystemKey : e.Key;
         ModifierKeys mods = Keyboard.Modifiers;
+        bool copyChord = key == Key.C && (mods & ModifierKeys.Control) != 0 && (mods & ModifierKeys.Alt) == 0;
+        if (copyChord && (_hasSelection || (mods & ModifierKeys.Shift) != 0))
+        {
+            // 선택이 있으면 Ctrl+C=복사, 선택이 없으면 Ctrl+C는 인터럽트로 전달. Ctrl+Shift+C는 항상 복사(없으면 무시).
+            CopySelection();
+            e.Handled = true;
+            return;
+        }
         string? seq = TranslateKey(key, mods);
         if (seq is null)
         {
