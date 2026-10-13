@@ -15,15 +15,15 @@
 | 상태 표시줄 | 3차 배경 | 동기화 요약, CPU/GPU/메모리 미터 |
 
 ```
-┌ TitleBar: [로고 PathDock ▸ 정보 창]                                  [테마] ─ □ × ┐
-│ ① ② ③ … ⑩ 칩 …………………………………………………………………………………  경로 동기화 [양방향 ▾] │  즐겨찾기 띠
+┌ TitleBar: [로고 PathDock ▸ 정보 창] v1.0 · 빌드 날짜        [시계][계산기][휴지통][설정][테마] ─ □ × ┐
+│ ① ② ③ … ⑩ 칩(한 줄, 좁으면 5칸씩 두 줄) ………………………  경로 동기화 [양방향 ▾] │  즐겨찾기 띠
 ├────────────────────────────────────────────────────────────────────────────┤
 │ [◀][▶][▲][⟳]  │ [ 주소 표시줄 ──────────────────────────────────────────── ]   │
-│ ┌ 드라이브 ──┐ │ ┌ 조부모 ───┐ ┌ 부모 ────┐ ┌ 현재 폴더 ───────────────────┐ │  탐색기 띠
+│ ┌ 드라이브 ──┐ │ ┌ 조부모 ───┐ ┌ 부모 ────┐ ┌ 현재 폴더 ──────── [이름 검색 ⌕] ┐ │  탐색기 띠
 │ │ C: ▭▭▭     │ │ │ 폴더 열    │ │ 폴더 열   │ │ 이름 수정일 크기 하위 항목     │ │
 │ └────────────┘ │ └───────────┘ └──────────┘ └───────────────────────────┘ │
 ├════════════════ 분할 막대 ═══════════════════════════════════════════════════┤
-│ ┌ 터미널 - PowerShell ──────────────────────────────────── 셸 상태 ┐          │  터미널 띠
+│ ┌ 터미널 - PowerShell ──────────── 셸 상태 [?][지우기][저장][접기] ┐          │  터미널 띠
 ├────────────────────────────────────────────────────────────────────────────┤
 │ 경로 동기화: 양방향                                   CPU ▭ GPU ▭ 메모리 ▭      │  상태 표시줄
 └────────────────────────────────────────────────────────────────────────────┘
@@ -36,7 +36,8 @@
 
 ### 모양 규칙
 - **각진 모서리**: 카드/칩/드라이브 카드/주소 표시줄/목록 항목 모두 반경 2px. WPF-UI 컨트롤은 `App.xaml`에서 `ControlCornerRadius`/`OverlayCornerRadius`를 2로 덮어써 같이 각지게 했다. 창 모서리도 `DoNotRound`.
-- **글자 크기**: 본문 12, 보조 11(미터/용량 문구), 주소 표시줄 13. 목록·콤보·머리글은 명시적으로 12로 맞췄다(WPF-UI 기본 14보다 한 단계 작게).
+- **글자 크기**: 기본은 본문 12, 보조는 본문-1(`PdFontSizeSmall`), 주소 표시줄·제목 표시줄의 시계/아이콘은 본문+2(`PdFontSizeLarge`). 설정에서 화면 글자(10~20)를 바꾸면 이 리소스와
+  WPF-UI의 `ControlContentThemeFontSize`가 함께 바뀌어 모든 곳이 따라온다. 글자가 커지면 창/탐색기 최소 크기도 비례해 커진다(작업 영역 상한).
 - **선명한 경계**: 카드 테두리는 `ControlStrongStrokeColorDefault`(강한 선), 카드 머리글은 색이 다른 띠 + 아래 구분선.
 - **주소 표시줄**: 배경/테두리는 바깥 Border 하나만 그린다(안쪽 TextBox는 템플릿을 `ScrollViewer`로 줄여 이중 배경 제거).
 
@@ -59,16 +60,18 @@
 
 | 뷰 | DataContext | 비고 |
 |---|---|---|
-| `FavoritesBarView` | MainViewModel | 칩 줄(빈 칸은 "+ 등록"), 우클릭 메뉴(등록/비우기) |
+| `FavoritesBarView` | MainViewModel | 칩 10칸(빈 칸은 "+ 등록"), 우클릭 메뉴(등록/이름 바꾸기/좌우 이동/비우기). 한 줄에 다 들어가면 한 줄, 아니면 5칸씩 두 줄. Tab은 칸 전체를 한 번에 지나가고 칸 사이는 방향키 |
 | `NavButtonsView` | ExplorerViewModel | 이동 버튼 4개(놓인 열 폭을 채움) |
 | `SyncModeSelectorView` | MainViewModel | 경로 동기화 콤보(즐겨찾기 띠 오른쪽) |
 | `DrivePanelView` | MainViewModel | `DriveCard` 목록 |
 | `AncestorColumnView` | AncestorColumnViewModel | 조부모/부모 열이 **같은 뷰를 재사용**, 선택 항목 왼쪽 강조 막대 |
-| `FileListView` | ExplorerViewModel | 종류별 아이콘/색, 정렬 머리글(▲▼), 요약 줄, 단축키·우클릭 메뉴 |
-| `TerminalPanelView` | TerminalViewModel | 셸 상태를 머리글에 표시 |
+| `FileListView` | ExplorerViewModel | 종류별 아이콘/색, 정렬 머리글(▲▼), 머리글 오른쪽 이름 검색 입력칸, 요약 줄(검색 중이면 일치 개수), 단축키·우클릭 메뉴, 이미지/텍스트 미리보기 툴팁 |
+| `TerminalPanelView` | TerminalViewModel | 셸 상태·도움말(?)·화면 지우기·내용 저장·접기 버튼을 머리글에 표시 |
 | `StatusBarView` | MainViewModel | 동기화 요약 + `UsageMeter` 3개 |
 | `AboutWindow` | (AppInfo) | 정보 창 |
 | `InputDialog` | - | 이름 변경/새 폴더 입력 |
+| `ConfirmDialog` | - | 예/아니요 확인(기본 선택은 "아니요", 앱 글꼴 사용) |
+| `SettingsWindow` | MainViewModel | 설정 창(8절) |
 
 ## 4. 정보 창 (`AboutWindow`)
 
@@ -92,3 +95,33 @@
 
 기존 ID 유지(주소 표시줄 `PathBar`는 안쪽 TextBox가 가짐): `FavoritesBar`, `Favorite_1..10`, `PathBar`, `SyncModeCombo`, `FileList`, `Terminal`, `TerminalStatus`, `FolderSummary`, `Drive_<문자>`, `AncestorColumn_1/2`, `InfoBar`.
 신규: `AboutButton`, `ThemeButton`, `Meter_Cpu/Gpu/Memory`(이름: "CPU 12%" 등), `SyncSummary`, 정보 창(`AboutVersionTextBlock`, `AboutEnvironmentTextBlock`, `AboutCopyButton`, `AboutLogsButton`, `AboutCloseButton`).
+이후 추가: `FilterBox`(이름 검색), `VersionLabel`, `ClockText`, `CalculatorButton`, `EmptyRecycleBinButton`, `SettingsButton`, `TerminalClearButton`/`TerminalSaveButton`/`TerminalCollapseButton`/`TerminalHelp`,
+`BackButton`/`ForwardButton`/`UpButton`/`RefreshButton`, 설정 창(`LanguageCombo`, `UiFontSizeSlider`, `TerminalFontSizeSlider`, `TerminalThemeCombo`, `TerminalForegroundBox`/`TerminalBackgroundBox`(+`...Preview`), `TerminalShellCombo`, `StartAtLastPathCheck`, `ResetFavoritesButton` 등), 대화상자(`ConfirmYes`/`ConfirmNo`/`ConfirmMessage`, `InputBox`/`InputOk`/`InputCancel`/`InputError`), 미리보기(`ImagePreview`, `TextPreview`).
+언어가 영어이면 요소 이름(`AutomationProperties.Name`)도 영어로 나온다(식별자는 그대로).
+
+## 8. 설정 창 (`SettingsWindow`)
+
+제목 표시줄의 톱니 버튼으로 연다(모달). 값은 바꾸는 즉시 화면에 반영되고 설정에 저장된다.
+
+| 카드 | 내용 |
+|---|---|
+| 언어 | 한국어 / English (즉시 전환, doc/01 6절) |
+| 글자 크기 | 화면(10~20), 터미널(10~28) 슬라이더, "기본 크기로" |
+| 시작 | 마지막으로 열었던 폴더에서 시작할지(끄면 사용자 폴더) |
+| 터미널 색상 | 색 테마 5종, 글자색/배경색 `#RRGGBB`(잘못 입력하면 안내, 입력칸 옆에 지금 적용되는 색 미리보기), "기본 색으로" |
+| 터미널 셸 | PowerShell / 명령 프롬프트 — 바꾸면 터미널이 즉시 다시 시작(실행 중인 작업이 있으면 확인) |
+| 초기화 | 즐겨찾기 10칸 모두 비우기(위험 버튼, 확인 창) |
+
+## 9. 알림과 키보드/접근성
+
+- **알림 막대**(`InfoBar`): 탐색기 영역 아래쪽에 겹쳐 표시한다(화면이 밀리지 않고 주소창을 가리지 않음). 성공(초록)은 5초, 경고·오류는 10초 뒤 저절로 닫히며 직접 닫을 수도 있다.
+- **Tab 순서**: 제목 표시줄 → 즐겨찾기(한 번에 통과, 칸 사이는 방향키) → 동기화 모드 → 이동 버튼 → 주소창 → 드라이브 → 상위 열 → 파일 목록 → 터미널.
+  목록 컨테이너와 열 폭 조절 막대(보이지 않는 정지 위치)는 Tab에서 뺐다. 부모 열 항목에는 키보드 초점 테두리가 있다.
+- **고대비 모드**: Windows 고대비가 켜지면 WPF-UI의 고대비 테마와 시스템 색을 따르고, 켜고 끌 때 자동으로 다시 적용한다(미검증: 실제 고대비 환경에서 확인하지 못함).
+- **라이트 테마 글자 대비**: 보조/3차 글자색을 진하게 덮어써 배경 대비 4.5:1 이상으로 맞췄다(`ThemeService`).
+- 스크린 리더는 실제로 확인하지 못했다. 주요 요소에는 이름(`AutomationProperties.Name`)과 식별자를 지정했다.
+
+## 10. 제목 표시줄
+
+왼쪽: 로고 버튼(정보 창) 옆에 `v1.0 · 빌드 2026-10-13`(툴팁은 버전과 빌드 시각, 영어에서는 `Built`). 오른쪽: 현재 날짜/시간(더블클릭하면 Windows 달력),
+계산기, 휴지통 비우기, 설정, 테마 전환 버튼. 시계와 아이콘의 크기는 화면 글자 크기에 연동된다.

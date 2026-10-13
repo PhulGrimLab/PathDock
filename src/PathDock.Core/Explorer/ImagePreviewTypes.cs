@@ -11,6 +11,10 @@ public static class ImagePreviewTypes
         ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".tif", ".tiff", ".webp",
     };
 
+    /// <summary>PDF 파일인지(Windows 내장 PDF 렌더러로 첫 쪽을 그려 같은 모양의 미리보기로 보여준다).</summary>
+    public static bool IsPdf(string? fileName) =>
+        !string.IsNullOrEmpty(fileName) && string.Equals(Path.GetExtension(fileName), ".pdf", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>파일 이름의 확장자가 미리보기 대상 이미지 형식인지.</summary>
     public static bool IsPreviewable(string? fileName)
     {

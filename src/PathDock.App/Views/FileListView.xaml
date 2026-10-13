@@ -64,7 +64,7 @@
                                             <ToolTip FontFamily="{StaticResource PdFontFamily}">
                                                 <StackPanel>
                                                     <Image Source="{Binding Preview.Image}" MaxWidth="240" Stretch="Uniform" StretchDirection="DownOnly"
-                                                           Visibility="{Binding IsImageFile, Converter={StaticResource BoolToVis}}"
+                                                           Visibility="{Binding ShowsImagePreview, Converter={StaticResource BoolToVis}}"
                                                            RenderOptions.BitmapScalingMode="HighQuality"
                                                            AutomationProperties.AutomationId="ImagePreview" />
                                                     <TextBlock Text="{Binding TextPreview.Text}" Width="480" MaxHeight="360" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"

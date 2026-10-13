@@ -128,7 +128,13 @@ public sealed partial class FileItemViewModel : ObservableObject
     /// <summary>마우스를 올리면 앞부분을 보여줄 텍스트/소스 파일인지.</summary>
     public bool IsTextFile => !IsDirectory && TextPreviewer.IsPreviewable(Name);
 
-    public bool IsPreviewable => IsImageFile || IsTextFile;
+    /// <summary>PDF 파일인지(첫 쪽을 이미지 미리보기로 보여준다).</summary>
+    public bool IsPdfFile => !IsDirectory && ImagePreviewTypes.IsPdf(Name);
+
+    /// <summary>툴팁에 그림(이미지 또는 PDF 첫 쪽)을 보여줄 항목인지.</summary>
+    public bool ShowsImagePreview => IsImageFile || IsPdfFile;
+
+    public bool IsPreviewable => ShowsImagePreview || IsTextFile;
 
     /// <summary>툴팁 이미지 미리보기(처음 보여줄 때 읽어 채운다. 읽을 수 없으면 null로 남는다).</summary>
     [ObservableProperty]
@@ -180,6 +186,10 @@ public sealed partial class FileItemViewModel : ObservableObject
         if (IsImageFile)
         {
             Preview = await Services.ImagePreviewService.LoadAsync(FullPath);
+        }
+        else if (IsPdfFile)
+        {
+            Preview = await Services.PdfPreviewService.LoadAsync(FullPath);
         }
         else if (IsTextFile)
         {

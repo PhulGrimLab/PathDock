@@ -395,6 +395,14 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
             NavigateTo(item.FullPath, ChangeOrigin.User);
             return;
         }
+        string folder = Path.GetDirectoryName(item.FullPath) ?? string.Empty;
+        // 앱은 관리자 권한이라, 문서/이미지 같은 파일을 그대로 열면 일부 연결 프로그램(예: Adobe Reader)이 반응 없이 열리지 않는다 -> 탐색기(일반 권한)에게 맡긴다.
+        if (LaunchPolicy.OpensAsNormalUser(item.Name) && Services.UnelevatedLauncher.IsElevated()
+            && Services.UnelevatedLauncher.TryOpen(item.FullPath, folder))
+        {
+            _log.Info($"파일 열기(일반 권한): {item.FullPath}");
+            return;
+        }
         try
         {
             // 셸 연결(UseShellExecute): exe는 실행, 이미지/문서/영상 등은 Windows가 지정한 대표 프로그램으로 연다.
@@ -402,7 +410,7 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
             Process.Start(new ProcessStartInfo(item.FullPath)
             {
                 UseShellExecute = true,
-                WorkingDirectory = Path.GetDirectoryName(item.FullPath) ?? string.Empty,
+                WorkingDirectory = folder,
             })?.Dispose();
             _log.Info($"파일 열기: {item.FullPath}");
         }
