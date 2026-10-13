@@ -37,7 +37,14 @@ public static class AppInfo
         {
             try
             {
+                // 단일 파일 배포에서는 Location이 빈 문자열이라(IL3000) 실행 파일 경로로 대신한다.
+#pragma warning disable IL3000
                 string path = Assembly.GetExecutingAssembly().Location;
+#pragma warning restore IL3000
+                if (string.IsNullOrEmpty(path))
+                {
+                    path = System.Environment.ProcessPath ?? string.Empty;
+                }
                 return string.IsNullOrEmpty(path) ? null : File.GetLastWriteTime(path).ToString("yyyy-MM-dd HH:mm");
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

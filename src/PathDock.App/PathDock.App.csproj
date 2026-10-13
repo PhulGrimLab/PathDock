@@ -20,6 +20,21 @@
     <Copyright>© PhulgrimLab</Copyright>
     <Description>폴더 즐겨찾기, 파일 탐색기, 내장 터미널을 한 화면에 묶은 개발자용 작업 공간</Description>
   </PropertyGroup>
+  <!-- 단일 파일 배포: Release 빌드가 끝나면 자동으로 publish까지 실행해 저장소 루트 publish\Release\ 에 exe 하나로 만든다.
+       관리 DLL은 exe 안에 압축해 넣고, WPF 네이티브 DLL은 첫 실행 때 임시 폴더로 풀어 쓴다. Debug 빌드는 건너뛴다(느려서).
+       끄려면 -p:PublishOnBuild=false. -->
+  <PropertyGroup>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    <PublishOnBuild Condition="'$(PublishOnBuild)' == ''">true</PublishOnBuild>
+    <SingleFilePublishDir>$(MSBuildProjectDirectory)\..\..\publish\$(Configuration)\</SingleFilePublishDir>
+  </PropertyGroup>
+  <Target Name="PublishSingleFileAfterBuild" AfterTargets="Build"
+          Condition="'$(Configuration)' == 'Release' and '$(PublishOnBuild)' == 'true' and '$(PdInnerPublish)' != 'true'">
+    <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Publish" Properties="NoBuild=true;PdInnerPublish=true;PublishDir=$(SingleFilePublishDir)" />
+  </Target>
   <ItemGroup>
     <PackageReference Include="WPF-UI" Version="4.3.0" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />

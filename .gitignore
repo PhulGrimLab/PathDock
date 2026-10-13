@@ -3,3 +3,6 @@ obj/
 .vs/
 *.user
 TestResults/
+
+# 단일 파일 publish 결과물
+publish/
