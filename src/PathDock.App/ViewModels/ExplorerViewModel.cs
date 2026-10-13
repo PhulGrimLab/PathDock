@@ -42,6 +42,33 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
 
     [ObservableProperty]
     private FileItemViewModel? _selectedItem;
+
+    // ----- 이름 필터(Ctrl+F): 현재 폴더 목록에서 이름에 입력한 글자가 들어간 항목만 보인다. 이동하면 해제된다. -----
+
+    [ObservableProperty]
+    private string _filterText = string.Empty;
+
+    [ObservableProperty]
+    private bool _isFilterVisible;
+
+    partial void OnFilterTextChanged(string value)
+    {
+        string needle = value.Trim();
+        System.ComponentModel.ICollectionView view = System.Windows.Data.CollectionViewSource.GetDefaultView(Items);
+        view.Filter = needle.Length == 0
+            ? null
+            : o => o is FileItemViewModel f && f.Name.Contains(needle, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [RelayCommand]
+    private void ShowFilter() => IsFilterVisible = true;
+
+    [RelayCommand]
+    private void CloseFilter()
+    {
+        FilterText = string.Empty;
+        IsFilterVisible = false;
+    }
     /// <summary>상위 2단계 폴더 열(왼쪽부터 조부모, 부모). 현재 폴더 왼쪽에 Mdir 스타일로 표시한다.</summary>
     public AncestorColumnViewModel GrandParent { get; }
     public AncestorColumnViewModel Parent { get; }
@@ -121,6 +148,10 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
 
     private void ApplyListing(List<FileItem> items)
     {
+        if (FilterText.Length > 0 || IsFilterVisible)
+        {
+            CloseFilter(); // 다른 폴더로 이동하면 필터를 해제한다(새로고침도 포함).
+        }
         Items.Clear();
         foreach (FileItemViewModel vm in SortItems(items.Select(i => new FileItemViewModel(i))))
         {

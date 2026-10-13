@@ -13,14 +13,19 @@ public sealed partial class FavoriteSlotViewModel : ObservableObject
     private readonly Action<FavoriteSlotViewModel> _onClick;
     private readonly Action<FavoriteSlotViewModel> _onRegisterHere;
     private readonly Action<FavoriteSlotViewModel> _onClear;
+    private readonly Action<FavoriteSlotViewModel> _onRename;
+    private readonly Action<FavoriteSlotViewModel, int> _onMove;
 
     public FavoriteSlotViewModel(int index, Action<FavoriteSlotViewModel> onClick,
-        Action<FavoriteSlotViewModel> onRegisterHere, Action<FavoriteSlotViewModel> onClear)
+        Action<FavoriteSlotViewModel> onRegisterHere, Action<FavoriteSlotViewModel> onClear,
+        Action<FavoriteSlotViewModel> onRename, Action<FavoriteSlotViewModel, int> onMove)
     {
         Index = index;
         _onClick = onClick;
         _onRegisterHere = onRegisterHere;
         _onClear = onClear;
+        _onRename = onRename;
+        _onMove = onMove;
     }
 
     /// <summary>1부터 시작하는 슬롯 번호.</summary>
@@ -50,4 +55,13 @@ public sealed partial class FavoriteSlotViewModel : ObservableObject
 
     [RelayCommand]
     private void Clear() => _onClear(this);
+
+    [RelayCommand]
+    private void Rename() => _onRename(this);
+
+    [RelayCommand]
+    private void MoveLeft() => _onMove(this, -1);
+
+    [RelayCommand]
+    private void MoveRight() => _onMove(this, 1);
 }

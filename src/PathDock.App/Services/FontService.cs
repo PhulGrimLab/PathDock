@@ -17,6 +17,7 @@ public static class FontService
         double s = NormalizeUi(size);
         ResourceDictionary r = Application.Current.Resources;
         r["PdFontSize"] = s;
+        r["PdFontSizeSmall"] = s - 1;
         r["ControlContentThemeFontSize"] = s;
     }
 }

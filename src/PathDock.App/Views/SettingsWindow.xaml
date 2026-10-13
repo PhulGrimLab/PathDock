@@ -51,6 +51,12 @@
                 </Grid>
             </ctl:PanelCard>
 
+            <ctl:PanelCard Margin="0,14,0,0" Header="시작" Symbol="Folder24" ContentPadding="14,10">
+                <CheckBox Content="마지막으로 열었던 폴더에서 시작 (끄면 사용자 폴더에서 시작)"
+                          IsChecked="{Binding StartAtLastPath}"
+                          AutomationProperties.AutomationId="StartAtLastPathCheck" />
+            </ctl:PanelCard>
+
             <ctl:PanelCard Margin="0,14,0,0" Header="초기화" Symbol="Delete24" ContentPadding="14,10">
                 <Grid>
                     <Grid.ColumnDefinitions>

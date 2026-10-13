@@ -17,6 +17,7 @@
             <system:Double x:Key="ControlContentThemeFontSize">12</system:Double>
             <!-- 화면 글자 크기(설정 창에서 바꾸면 FontService가 이 값을 갱신) -->
             <system:Double x:Key="PdFontSize">12</system:Double>
+            <system:Double x:Key="PdFontSizeSmall">11</system:Double>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -152,6 +152,20 @@ public sealed partial class AncestorColumnViewModel : ObservableObject
     [ObservableProperty]
     private string _title = string.Empty;
 
+    /// <summary>머리글에 "…\"가 붙은 상태(위에 가려진 폴더가 더 있음). 위로 가는 버튼 표시용.</summary>
+    [ObservableProperty]
+    private bool _hasHiddenAncestors;
+
+    /// <summary>가려진 상위로 한 단계 올라간다(이 열의 폴더의 부모로 이동).</summary>
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private void GoAbove()
+    {
+        if (FullPath.Length > 0 && Core.Explorer.ExplorerService.GetParent(FullPath) is { } parent)
+        {
+            _onUserSelect(parent);
+        }
+    }
+
     /// <summary>이 열 폴더의 전체 경로(머리글 툴팁). 비어 있으면 폴더 없음.</summary>
     [ObservableProperty]
     private string _fullPath = string.Empty;
@@ -181,6 +195,7 @@ public sealed partial class AncestorColumnViewModel : ObservableObject
             string name = folderPath is null ? "—" : (Path.GetFileName(folderPath) is { Length: > 0 } n ? n : folderPath);
             // 이 열의 왼쪽에 더 보여줄 열이 없는데 위에 폴더가 더 있으면 "…\"로 알린다.
             bool hasHiddenAncestors = _marksHiddenAncestors && folderPath is not null && Core.Explorer.ExplorerService.GetParent(folderPath) is not null;
+            HasHiddenAncestors = hasHiddenAncestors;
             Title = hasHiddenAncestors ? $"…\\{name}" : name;
             FullPath = folderPath ?? string.Empty;
             AncestorItemViewModel? sel = null;

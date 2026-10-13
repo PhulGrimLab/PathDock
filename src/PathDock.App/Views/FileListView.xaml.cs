@@ -79,6 +79,21 @@ public partial class FileListView : UserControl
         }
     }
 
+    private void FilterBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && Vm is { } vm)
+        {
+            vm.CloseFilterCommand.Execute(null);
+            FileList.Focus();
+            e.Handled = true;
+        }
+    }
+
+    private void FileList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        Vm?.SetSelection(FileList.SelectedItems.OfType<FileItemViewModel>());
+    }
+
     private void FileList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (Vm is { SelectedItem: { } item } vm)
@@ -91,7 +106,7 @@ public partial class FileListView : UserControl
         }
     }
 
-    /// <summary>목록 단축키: Enter=열기, Backspace=상위, F2=이름 변경, Delete=삭제, F5=새로 고침, Ctrl+Shift+N=새 폴더.</summary>
+    /// <summary>목록 단축키: Ctrl+F=이름 필터, Ctrl+C/X/V=복사/잘라내기/붙여넣기, Enter=열기, Backspace=상위, F2=이름 변경, Delete=삭제, F5=새로 고침, Ctrl+Shift+N=새 폴더.</summary>
     private void FileList_KeyDown(object sender, KeyEventArgs e)
     {
         if (Vm is not { } vm)
@@ -101,6 +116,27 @@ public partial class FileListView : UserControl
         if (e.Key == Key.Enter && vm.SelectedItem is { } item)
         {
             vm.OpenItemCommand.Execute(item);
+        }
+        else if (e.Key == Key.C && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            vm.CopySelectedCommand.Execute(null);
+        }
+        else if (e.Key == Key.X && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            vm.CutSelectedCommand.Execute(null);
+        }
+        else if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            vm.PasteCommand.Execute(null);
+        }
+        else if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            vm.ShowFilterCommand.Execute(null);
+            Dispatcher.BeginInvoke(() =>
+            {
+                FilterBox.Focus();
+                FilterBox.SelectAll();
+            }, System.Windows.Threading.DispatcherPriority.Input);
         }
         else if (e.Key == Key.F2)
         {

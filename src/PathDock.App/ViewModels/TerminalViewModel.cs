@@ -26,6 +26,10 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
     [ObservableProperty]
     private string _statusText = "터미널 시작 중...";
 
+    /// <summary>탐색기에서 온 이동이 터미널 실행 중이라 보류 중인지(상태 문구를 강조 표시).</summary>
+    [ObservableProperty]
+    private bool _isPending;
+
     /// <summary>터미널 글자 크기(DIP). TerminalControl에 바인딩된다.</summary>
     [ObservableProperty]
     private double _fontSize = PathDock.Core.Settings.AppSettings.DefaultTerminalFontSize;
@@ -49,7 +53,14 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
         _log = log;
         Session = new TerminalSession(DefaultCols, DefaultRows, log);
         Session.CwdChanged += (p, fromRequest) => _ui.BeginInvoke(() => CwdChanged?.Invoke(p, fromRequest));
-        Session.IdleChanged += idle => _ui.BeginInvoke(() => StatusText = idle ? "터미널: 대기 중(입력 가능)" : "터미널: 명령 실행 중");
+        Session.IdleChanged += idle => _ui.BeginInvoke(() =>
+        {
+            StatusText = idle ? "터미널: 대기 중(입력 가능)" : "터미널: 명령 실행 중";
+            if (idle)
+            {
+                IsPending = false;
+            }
+        });
         Session.Exited += code => _ui.BeginInvoke(() => StatusText = $"터미널 종료됨 (코드 {code})");
     }
 
@@ -67,6 +78,7 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
         if (!delivered)
         {
             StatusText = $"터미널 실행 중 - 이동 대기: {path}";
+            IsPending = true;
         }
         else
         {

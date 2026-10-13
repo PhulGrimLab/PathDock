@@ -110,6 +110,114 @@ public static class FileOperations
         return name;
     }
 
+    /// <summary>"이름", "이름 - 복사", "이름 - 복사 (2)"처럼 대상 폴더에 아직 없는 이름을 고른다(파일은 확장자 앞에 붙인다).</summary>
+    public static string UniqueTargetPath(string destDir, string name, bool isDirectory)
+    {
+        string target = Path.Combine(destDir, name);
+        if (!File.Exists(target) && !Directory.Exists(target))
+        {
+            return target;
+        }
+        string stem = isDirectory ? name : Path.GetFileNameWithoutExtension(name);
+        string ext = isDirectory ? string.Empty : Path.GetExtension(name);
+        for (int n = 1; ; n++)
+        {
+            string candidate = Path.Combine(destDir, n == 1 ? $"{stem} - 복사{ext}" : $"{stem} - 복사 ({n}){ext}");
+            if (!File.Exists(candidate) && !Directory.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+    }
+
+    private static bool IsSameOrInside(string path, string folder)
+    {
+        string p = Path.GetFullPath(path).TrimEnd('\\', '/');
+        string f = Path.GetFullPath(folder).TrimEnd('\\', '/');
+        return string.Equals(p, f, StringComparison.OrdinalIgnoreCase)
+            || p.StartsWith(f + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>파일/폴더를 대상 폴더로 복사하고 새 경로를 돌려준다. 같은 이름이 있으면 "- 복사" 이름으로 만든다. 폴더는 재분석 지점(링크)을 따라가지 않는다.</summary>
+    public static string CopyInto(string source, string destDir)
+    {
+        bool isDir = Directory.Exists(source);
+        if (!isDir && !File.Exists(source))
+        {
+            throw new FileNotFoundException("대상을 찾을 수 없습니다.", source);
+        }
+        if (isDir && IsSameOrInside(destDir, source))
+        {
+            throw new IOException("폴더를 자기 자신 안으로 복사할 수 없습니다.");
+        }
+        string target = UniqueTargetPath(destDir, Path.GetFileName(source.TrimEnd('\\', '/')), isDir);
+        if (isDir)
+        {
+            CopyDirectory(source, target);
+        }
+        else
+        {
+            File.Copy(source, target);
+        }
+        return target;
+    }
+
+    private static void CopyDirectory(string source, string target)
+    {
+        Directory.CreateDirectory(target);
+        foreach (string file in Directory.EnumerateFiles(source))
+        {
+            File.Copy(file, Path.Combine(target, Path.GetFileName(file)));
+        }
+        foreach (string dir in Directory.EnumerateDirectories(source))
+        {
+            if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0)
+            {
+                continue; // 링크/정션은 따라가지 않는다(순환 방지).
+            }
+            CopyDirectory(dir, Path.Combine(target, Path.GetFileName(dir)));
+        }
+    }
+
+    /// <summary>
+    /// 파일/폴더를 대상 폴더로 옮기고 새 경로를 돌려준다. 이미 그 폴더에 있으면 아무것도 하지 않는다.
+    /// 같은 이름이 있으면 "- 복사" 이름으로 옮긴다. 다른 드라이브면 복사한 뒤 원본을 지운다.
+    /// </summary>
+    public static string MoveInto(string source, string destDir)
+    {
+        bool isDir = Directory.Exists(source);
+        if (!isDir && !File.Exists(source))
+        {
+            throw new FileNotFoundException("대상을 찾을 수 없습니다.", source);
+        }
+        string trimmed = source.TrimEnd('\\', '/');
+        if (string.Equals(Path.GetDirectoryName(trimmed), Path.GetFullPath(destDir).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase))
+        {
+            return source;
+        }
+        if (isDir && IsSameOrInside(destDir, source))
+        {
+            throw new IOException("폴더를 자기 자신 안으로 옮길 수 없습니다.");
+        }
+        bool sameVolume = string.Equals(Path.GetPathRoot(Path.GetFullPath(source)), Path.GetPathRoot(Path.GetFullPath(destDir)), StringComparison.OrdinalIgnoreCase);
+        if (sameVolume)
+        {
+            string target = UniqueTargetPath(destDir, Path.GetFileName(trimmed), isDir);
+            Move(source, target, isDir);
+            return target;
+        }
+        string copied = CopyInto(source, destDir);
+        if (isDir)
+        {
+            Directory.Delete(source, recursive: true);
+        }
+        else
+        {
+            File.Delete(source);
+        }
+        return copied;
+    }
+
     /// <summary>
     /// 이 경로를 지우면 휴지통을 거치는지(고정 디스크만 해당). 네트워크/이동식 드라이브는 휴지통이 없어 바로 영구 삭제된다.
     /// 확인 문구가 실제 동작과 같도록 호출 측이 판단에 쓴다.

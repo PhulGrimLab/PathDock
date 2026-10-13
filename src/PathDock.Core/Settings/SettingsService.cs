@@ -41,6 +41,8 @@ public sealed class AppSettings
     public double UiFontSize { get; set; } = DefaultUiFontSize;
     /// <summary>터미널 글자 크기.</summary>
     public double TerminalFontSize { get; set; } = DefaultTerminalFontSize;
+    /// <summary>시작할 때 마지막으로 열었던 폴더에서 시작할지(false면 사용자 폴더).</summary>
+    public bool StartAtLastPath { get; set; } = true;
     /// <summary>터미널 패널을 접은 상태로 시작할지.</summary>
     public bool TerminalCollapsed { get; set; }
 }

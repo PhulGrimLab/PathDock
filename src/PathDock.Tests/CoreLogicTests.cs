@@ -720,6 +720,41 @@ public class SecurityFixTests
     }
 
     [TestMethod]
+    public void CopyInto_FileAndFolder_AvoidsNameConflict()
+    {
+        using var t = new TempTree();
+        string src = Path.Combine(t.Root, "a.txt");
+        File.WriteAllText(src, "x");
+        string dest = Path.Combine(t.Root, "dest");
+        Directory.CreateDirectory(dest);
+        string first = FileOperations.CopyInto(src, dest);
+        string second = FileOperations.CopyInto(src, dest);
+        Assert.AreEqual(Path.Combine(dest, "a.txt"), first);
+        Assert.AreEqual(Path.Combine(dest, "a - 복사.txt"), second);
+
+        string folder = Path.Combine(t.Root, "f");
+        Directory.CreateDirectory(Path.Combine(folder, "sub"));
+        File.WriteAllText(Path.Combine(folder, "sub", "b.txt"), "y");
+        string copied = FileOperations.CopyInto(folder, dest);
+        Assert.IsTrue(File.Exists(Path.Combine(copied, "sub", "b.txt")));
+        Assert.Throws<IOException>(() => FileOperations.CopyInto(folder, Path.Combine(folder, "sub")));
+    }
+
+    [TestMethod]
+    public void MoveInto_MovesAndIgnoresSameFolder()
+    {
+        using var t = new TempTree();
+        string src = Path.Combine(t.Root, "a.txt");
+        File.WriteAllText(src, "x");
+        Assert.AreEqual(src, FileOperations.MoveInto(src, t.Root));
+        string dest = Path.Combine(t.Root, "dest");
+        Directory.CreateDirectory(dest);
+        string moved = FileOperations.MoveInto(src, dest);
+        Assert.IsTrue(File.Exists(moved));
+        Assert.IsFalse(File.Exists(src));
+    }
+
+    [TestMethod]
     public void UsesRecycleBin_FalseForUnc()
     {
         Assert.IsFalse(FileOperations.UsesRecycleBin(@"\\server\share\x"));

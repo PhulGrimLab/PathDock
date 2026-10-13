@@ -26,6 +26,14 @@ public sealed partial class ExplorerViewModel
     [ObservableProperty]
     private string _sizeHeader = "크기";
 
+    private IReadOnlyList<FileItemViewModel> _selection = Array.Empty<FileItemViewModel>();
+
+    /// <summary>목록의 현재 다중 선택(뷰가 선택이 바뀔 때 알려 준다). 비어 있으면 <see cref="SelectedItem"/>을 대상으로 한다.</summary>
+    public void SetSelection(IEnumerable<FileItemViewModel> items) => _selection = items.ToList();
+
+    private List<FileItemViewModel> Targets() =>
+        _selection.Count > 0 ? _selection.ToList() : (SelectedItem is { } one ? new List<FileItemViewModel> { one } : new List<FileItemViewModel>());
+
     public SortKey CurrentSortKey => _sortKey;
     public bool SortAscending => _sortAscending;
 
@@ -103,29 +111,139 @@ public sealed partial class ExplorerViewModel
         RunFileOperation($"이름을 바꿀 수 없습니다: {item.Name}", item.FullPath, () => FileOperations.Rename(item.FullPath, name));
     }
 
-    /// <summary>선택 항목을 삭제(Delete). 확인 창에서 "예"를 눌러야 실행된다. 고정 디스크는 휴지통으로(복구 가능), 그 밖의 드라이브는 영구 삭제이며 문구로 알린다.</summary>
+    /// <summary>
+    /// 선택 항목(여러 개 가능)을 삭제(Delete). 확인 창에서 "예"를 눌러야 실행된다.
+    /// 고정 디스크는 휴지통으로(복구 가능), 그 밖의 드라이브는 영구 삭제이며 문구로 알린다.
+    /// </summary>
     [RelayCommand]
     private void DeleteSelected()
     {
-        if (SelectedItem is not { } item)
+        List<FileItemViewModel> targets = Targets();
+        if (targets.Count == 0)
         {
             return;
         }
-        string kind = item.IsDirectory ? "폴더(하위 항목 포함)" : "파일";
-        string question = FileOperations.UsesRecycleBin(item.FullPath)
-            ? $"{kind} '{item.Name}'을(를) 휴지통으로 보낼까요?"
-            : $"{kind} '{item.Name}'은(는) 이 드라이브에 휴지통이 없어 영구 삭제됩니다(복구 불가). 삭제할까요?";
+        string what = targets.Count == 1
+            ? $"{(targets[0].IsDirectory ? "폴더(하위 항목 포함)" : "파일")} '{targets[0].Name}'"
+            : $"선택한 {targets.Count}개 항목";
+        string question = targets.All(t => FileOperations.UsesRecycleBin(t.FullPath))
+            ? $"{what}을(를) 휴지통으로 보낼까요?"
+            : $"{what}에 휴지통이 없는 드라이브의 항목이 있어 영구 삭제됩니다(복구 불가). 삭제할까요?";
         if (!_dialogs.Confirm("삭제 확인", question))
         {
             return;
         }
-        RunFileOperation($"삭제할 수 없습니다: {item.Name}", item.FullPath, () =>
+        RunBatch("삭제할 수 없습니다", targets.Select(t => t.FullPath).ToList(), p =>
         {
-            FileOperations.DeleteToRecycleBin(item.FullPath);
-            return null;
+            FileOperations.DeleteToRecycleBin(p);
+            return p;
         });
     }
 
+    /// <summary>선택 항목을 클립보드에 복사한다(Ctrl+C).</summary>
+    [RelayCommand]
+    private void CopySelected() => PutOnClipboard(cut: false);
+
+    /// <summary>선택 항목을 클립보드에 잘라내기한다(Ctrl+X). 붙여넣기 때 원본이 옮겨진다.</summary>
+    [RelayCommand]
+    private void CutSelected() => PutOnClipboard(cut: true);
+
+    private void PutOnClipboard(bool cut)
+    {
+        List<string> paths = Targets().Select(t => t.FullPath).ToList();
+        if (paths.Count == 0)
+        {
+            return;
+        }
+        if (!FileClipboard.TrySet(paths, cut))
+        {
+            ErrorOccurred?.Invoke("클립보드를 사용할 수 없습니다. 잠시 후 다시 시도하세요.");
+        }
+        else
+        {
+            _log.Info($"클립보드 {(cut ? "잘라내기" : "복사")}: {paths.Count}개");
+        }
+    }
+
+    /// <summary>클립보드의 파일을 현재 폴더에 붙여넣는다(Ctrl+V). 복사/이동은 백그라운드에서 실행한다.</summary>
+    [RelayCommand]
+    private async Task PasteAsync()
+    {
+        if (_service.Current is not { } dest || !FileClipboard.TryGet(out List<string> paths, out bool cut))
+        {
+            return;
+        }
+        var errors = new List<string>();
+        var sources = new List<string>();
+        await Task.Run(() =>
+        {
+            foreach (string p in paths)
+            {
+                try
+                {
+                    if (cut)
+                    {
+                        FileOperations.MoveInto(p, dest);
+                    }
+                    else
+                    {
+                        FileOperations.CopyInto(p, dest);
+                    }
+                    sources.Add(p);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+                {
+                    errors.Add($"{Path.GetFileName(p)}: {ex.Message}");
+                }
+            }
+        });
+        _log.Info($"붙여넣기({(cut ? "이동" : "복사")}): 성공 {sources.Count}, 실패 {errors.Count} -> {dest}");
+        _cache.InvalidateWithAncestors(dest);
+        if (cut)
+        {
+            foreach (string p in sources)
+            {
+                _cache.InvalidateWithAncestors(p);
+            }
+            FileClipboard.Clear();
+        }
+        if (errors.Count > 0)
+        {
+            ErrorOccurred?.Invoke($"붙여넣기 실패 {errors.Count}건 - {errors[0]}");
+        }
+        if (_service.Current is { } current)
+        {
+            NavigateTo(current, ChangeOrigin.User);
+        }
+    }
+
+    /// <summary>여러 경로에 같은 조작을 적용한다. 실패는 모아서 한 번에 알리고, 끝나면 캐시를 무효화하고 목록을 새로 읽는다.</summary>
+    private void RunBatch(string failureMessage, IReadOnlyList<string> paths, Func<string, string?> operation)
+    {
+        var errors = new List<string>();
+        foreach (string p in paths)
+        {
+            try
+            {
+                operation(p);
+                _cache.InvalidateWithAncestors(p);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or OperationCanceledException)
+            {
+                _log.Warn($"파일 조작 실패: {p} ({ex.GetType().Name}: {ex.Message})");
+                errors.Add($"{Path.GetFileName(p)}: {ex.Message}");
+            }
+        }
+        _log.Info($"파일 조작 완료: {paths.Count - errors.Count}/{paths.Count}");
+        if (errors.Count > 0)
+        {
+            ErrorOccurred?.Invoke($"{failureMessage} ({errors.Count}건) - {errors[0]}");
+        }
+        if (_service.Current is { } current)
+        {
+            NavigateTo(current, ChangeOrigin.User);
+        }
+    }
     /// <summary>현재 폴더에 새 폴더 만들기(Ctrl+Shift+N).</summary>
     [RelayCommand]
     private void NewFolder()

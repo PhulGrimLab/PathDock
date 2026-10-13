@@ -116,6 +116,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private double _terminalFontSize;
 
+    /// <summary>시작 폴더: true면 마지막으로 열었던 폴더, false면 사용자 폴더.</summary>
+    [ObservableProperty]
+    private bool _startAtLastPath;
+
+    partial void OnStartAtLastPathChanged(bool value) => Settings.StartAtLastPath = value;
+
     partial void OnUiFontSizeChanged(double value)
     {
         Settings.UiFontSize = Services.FontService.NormalizeUi(value);
@@ -181,6 +187,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Explorer = new ExplorerViewModel(log, _sizeCache, _dialogs);
         _isDarkTheme = Services.ThemeService.Normalize(Settings.Theme) == Services.ThemeService.Dark;
         Terminal = new TerminalViewModel(log);
+        _startAtLastPath = Settings.StartAtLastPath;
         _uiFontSize = Services.FontService.NormalizeUi(Settings.UiFontSize);
         _terminalFontSize = Services.FontService.NormalizeTerminal(Settings.TerminalFontSize);
         Terminal.FontSize = _terminalFontSize;
@@ -266,7 +273,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private string ResolveStartPath()
     {
         string? last = PathNormalizer.Normalize(Settings.LastPath);
-        if (last is not null && Directory.Exists(last))
+        if (Settings.StartAtLastPath && last is not null && Directory.Exists(last))
         {
             return last;
         }
@@ -287,7 +294,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         for (int i = 0; i < AppSettings.MaxFavorites; i++)
         {
-            var slot = new FavoriteSlotViewModel(i + 1, OnFavoriteClick, RegisterCurrentFolder, ClearFavorite);
+            var slot = new FavoriteSlotViewModel(i + 1, OnFavoriteClick, RegisterCurrentFolder, ClearFavorite, RenameFavorite, MoveFavorite);
             if (i < Settings.Favorites.Count)
             {
                 slot.Name = Settings.Favorites[i].Name;
@@ -320,6 +327,33 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         slot.Path = current;
         slot.Name = Path.GetFileName(current) is { Length: > 0 } n ? n : current;
         _log.Info($"즐겨찾기 등록 #{slot.Index}: {current}");
+    }
+
+    /// <summary>즐겨찾기 표시 이름을 바꾼다(경로는 그대로). 같은 이름의 폴더를 구분할 때 쓴다.</summary>
+    private void RenameFavorite(FavoriteSlotViewModel slot)
+    {
+        if (slot.IsEmpty)
+        {
+            return;
+        }
+        string? name = _dialogs.Prompt("즐겨찾기 이름 변경", "표시할 이름을 입력하세요.", slot.Name);
+        if (name is not null)
+        {
+            slot.Name = name;
+        }
+    }
+
+    /// <summary>칸의 내용(이름+경로)을 옆 칸과 맞바꿔 순서를 바꾼다. 끝 칸에서는 아무것도 하지 않는다.</summary>
+    private void MoveFavorite(FavoriteSlotViewModel slot, int delta)
+    {
+        int to = slot.Index - 1 + delta;
+        if (to < 0 || to >= Favorites.Count)
+        {
+            return;
+        }
+        FavoriteSlotViewModel other = Favorites[to];
+        (slot.Name, other.Name) = (other.Name, slot.Name);
+        (slot.Path, other.Path) = (other.Path, slot.Path);
     }
 
     private void ClearFavorite(FavoriteSlotViewModel slot)

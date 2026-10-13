@@ -8,9 +8,21 @@
         <ctl:PanelCard.HeaderTrailing>
             <StackPanel Orientation="Horizontal">
                 <TextBlock FontSize="{DynamicResource PdFontSize}" Text="{Binding StatusText}" VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            AutomationProperties.AutomationId="TerminalStatus"
-                           AutomationProperties.Name="{Binding StatusText}" />
+                           AutomationProperties.Name="{Binding StatusText}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <Style.Triggers>
+                                <!-- 이동이 보류 중이면 강조색 + 굵게: 탐색기와 터미널 경로가 다른 이유를 알려 준다 -->
+                                <DataTrigger Binding="{Binding IsPending}" Value="True">
+                                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                    <Setter Property="FontWeight" Value="SemiBold" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
                 <ui:Button Appearance="Transparent" Margin="8,-3,-6,-3" Padding="6,3"
                            Command="{Binding ToggleCollapsedCommand}"
                            ToolTip="{Binding CollapseToolTip}"
