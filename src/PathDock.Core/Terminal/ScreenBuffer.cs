@@ -509,6 +509,24 @@ public sealed class ScreenBuffer
         }
     }
 
+    /// <summary>스크롤백과 현재 화면 전체를 줄 단위 텍스트로 만든다(줄 끝 공백과 끝의 빈 줄은 제거). 파일 저장용.</summary>
+    public string GetAllText()
+    {
+        lock (SyncRoot)
+        {
+            var sb = new StringBuilder();
+            foreach (Cell[] row in _scrollback)
+            {
+                sb.Append(RowToString(row).TrimEnd()).Append('\n');
+            }
+            for (int y = 0; y < Rows; y++)
+            {
+                sb.Append(RowToString(_screen[y]).TrimEnd()).Append('\n');
+            }
+            return sb.ToString().TrimEnd('\n');
+        }
+    }
+
     private static string RowToString(Cell[] row)
     {
         var sb = new StringBuilder(row.Length);

@@ -8,7 +8,7 @@
                        Foreground="{DynamicResource SystemAccentColorPrimaryBrush}" />
         <TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="경로 동기화" FontSize="{DynamicResource PdFontSize}"
                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-        <ComboBox MinWidth="150" Height="28"
+        <ComboBox MinWidth="150" MinHeight="28"
                   ItemsSource="{Binding SyncModes}"
                   SelectedItem="{Binding SelectedSyncMode}"
                   AutomationProperties.AutomationId="SyncModeCombo"

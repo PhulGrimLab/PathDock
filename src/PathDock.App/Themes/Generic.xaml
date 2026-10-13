@@ -197,10 +197,10 @@
 
     <!-- ============ AddressBar: 아이콘 + 경로 입력. 배경/테두리는 바깥 Border 하나만 쓴다(이중 배경 방지). ============ -->
     <Style TargetType="{x:Type local:AddressBar}">
-        <Setter Property="Background" Value="{DynamicResource ControlFillColorInputActiveBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrongStrokeColorDefaultBrush}" />
+        <Setter Property="Background" Value="{DynamicResource PdAddressBarBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource PdAddressBarBorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontSize" Value="{DynamicResource PdFontSizeLarge}" />
         <Setter Property="Focusable" Value="False" />
         <Setter Property="Template">
             <Setter.Value>

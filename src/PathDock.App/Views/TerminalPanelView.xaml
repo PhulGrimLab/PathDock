@@ -23,7 +23,14 @@
                         </Style>
                     </TextBlock.Style>
                 </TextBlock>
-                <ui:Button Appearance="Transparent" Margin="8,-3,-6,-3" Padding="6,3"
+                <ui:Button Appearance="Transparent" Margin="8,-3,0,-3" Padding="6,3"
+                           Command="{Binding SaveOutputCommand}"
+                           ToolTip="터미널 내용을 파일로 저장"
+                           AutomationProperties.AutomationId="TerminalSaveButton"
+                           AutomationProperties.Name="터미널 내용 저장">
+                    <ui:SymbolIcon Symbol="Save24" FontSize="14" />
+                </ui:Button>
+                <ui:Button Appearance="Transparent" Margin="2,-3,-6,-3" Padding="6,3"
                            Command="{Binding ToggleCollapsedCommand}"
                            ToolTip="{Binding CollapseToolTip}"
                            AutomationProperties.AutomationId="TerminalCollapseButton"

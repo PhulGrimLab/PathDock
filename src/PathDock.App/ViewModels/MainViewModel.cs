@@ -232,7 +232,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _sizeCache.Load();
         Explorer = new ExplorerViewModel(log, _sizeCache, _dialogs);
         _isDarkTheme = Services.ThemeService.Normalize(Settings.Theme) == Services.ThemeService.Dark;
-        Terminal = new TerminalViewModel(log);
+        Terminal = new TerminalViewModel(log, _dialogs);
         _startAtLastPath = Settings.StartAtLastPath;
         _terminalThemeIndex = Math.Max(0, TerminalThemes.All.ToList().FindIndex(t => t.Key == TerminalThemes.Find(Settings.TerminalTheme).Key));
         _terminalForeground = Settings.TerminalForeground ?? string.Empty;
@@ -256,6 +256,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _ = RefreshDrivesAsync();
         };
         Explorer.ErrorOccurred += msg => InfoMessage = msg;
+        Terminal.Notice += msg => InfoMessage = msg;
         Terminal.CwdChanged += (path, fromRequest) =>
             _sync.OnTerminalCwdChanged(path, fromRequest ? ChangeOrigin.Sync : ChangeOrigin.User);
         _sync.Warning += w => InfoMessage = w.Message;

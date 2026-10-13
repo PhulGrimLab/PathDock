@@ -19,6 +19,7 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
 
     private readonly Dispatcher _ui;
     private readonly ILog _log;
+    private readonly Services.IDialogService _dialogs;
 
     public TerminalSession Session { get; }
 
@@ -45,14 +46,40 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
 
     public string CollapseToolTip => IsCollapsed ? "터미널 펼치기" : "터미널 접기";
 
+    /// <summary>사용자에게 알릴 결과 메시지(저장 성공/실패). MainViewModel이 하단 안내줄에 표시한다.</summary>
+    public event Action<string>? Notice;
+
+    /// <summary>터미널 전체 내용(스크롤백 포함)을 사용자가 고른 파일에 저장한다.</summary>
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private void SaveOutput()
+    {
+        string? path = _dialogs.PickSaveFile("터미널 내용 저장", $"terminal-{DateTime.Now:yyyyMMdd-HHmmss}.txt");
+        if (path is null)
+        {
+            return;
+        }
+        try
+        {
+            System.IO.File.WriteAllText(path, Session.Screen.GetAllText() + "\r\n", new System.Text.UTF8Encoding(true));
+            _log.Info($"터미널 내용 저장: {path}");
+            Notice?.Invoke($"터미널 내용을 저장했습니다: {path}");
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+            _log.Warn($"터미널 내용 저장 실패: {path} - {ex.Message}");
+            Notice?.Invoke($"저장하지 못했습니다: {ex.Message}");
+        }
+    }
+
     [CommunityToolkit.Mvvm.Input.RelayCommand]
     private void ToggleCollapsed() => IsCollapsed = !IsCollapsed;
 
     /// <summary>경로 변경 보고(UI 스레드). 두 번째 인자: 앱이 주입한 cd로 인한 변경이면 true.</summary>
     public event Action<string, bool>? CwdChanged;
 
-    public TerminalViewModel(ILog log)
+    public TerminalViewModel(ILog log, Services.IDialogService dialogs)
     {
+        _dialogs = dialogs;
         _ui = Application.Current.Dispatcher;
         _log = log;
         Session = new TerminalSession(DefaultCols, DefaultRows, log);

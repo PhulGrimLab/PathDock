@@ -12,6 +12,9 @@ public interface IDialogService
     /// <summary>한 줄 입력. 취소하면 null.</summary>
     string? Prompt(string title, string label, string initialValue);
 
+    /// <summary>파일 저장 위치 선택(경로·파일명·확장자). 취소하면 null.</summary>
+    string? PickSaveFile(string title, string defaultFileName);
+
     /// <summary>프로그램 정보 창(모달)을 연다.</summary>
     void ShowAbout();
 
@@ -39,6 +42,23 @@ public sealed class WpfDialogService : IDialogService
     public void ShowSettings(object dataContext)
     {
         new SettingsWindow { Owner = Application.Current?.MainWindow, DataContext = dataContext }.ShowDialog();
+    }
+
+    public string? PickSaveFile(string title, string defaultFileName)
+    {
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = title,
+            FileName = defaultFileName,
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            Filter = "텍스트 파일 (*.txt)|*.txt|로그 파일 (*.log)|*.log|모든 파일 (*.*)|*.*",
+            DefaultExt = ".txt",
+            AddExtension = true,
+            OverwritePrompt = true,
+        };
+        Window? owner = Application.Current?.MainWindow;
+        bool? ok = owner is null ? dlg.ShowDialog() : dlg.ShowDialog(owner);
+        return ok == true ? dlg.FileName : null;
     }
 
     public string? Prompt(string title, string label, string initialValue)

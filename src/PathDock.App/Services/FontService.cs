@@ -18,6 +18,7 @@ public static class FontService
         ResourceDictionary r = Application.Current.Resources;
         r["PdFontSize"] = s;
         r["PdFontSizeSmall"] = s - 1;
+        r["PdFontSizeLarge"] = s + 2;
         r["ControlContentThemeFontSize"] = s;
     }
 }

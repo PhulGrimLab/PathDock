@@ -17,5 +17,21 @@ public static class ThemeService
     {
         ApplicationTheme t = Normalize(theme) == Light ? ApplicationTheme.Light : ApplicationTheme.Dark;
         ApplicationThemeManager.Apply(t, WindowBackdropType.Mica, updateAccent: true);
+        ApplyAddressBarColors(t == ApplicationTheme.Light);
+    }
+
+    /// <summary>주소 표시줄을 주변 카드와 구분되는 슬레이트 블루로 칠한다(테마별 값).</summary>
+    private static void ApplyAddressBarColors(bool light)
+    {
+        System.Windows.ResourceDictionary res = System.Windows.Application.Current.Resources;
+        res["PdAddressBarBackgroundBrush"] = Frozen(light ? "#E6EFFA" : "#1E2F45");
+        res["PdAddressBarBorderBrush"] = Frozen(light ? "#9DB8D9" : "#3B5A80");
+    }
+
+    private static System.Windows.Media.SolidColorBrush Frozen(string hex)
+    {
+        var brush = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex));
+        brush.Freeze();
+        return brush;
     }
 }

@@ -35,3 +35,26 @@ public class TerminalThemeTests
         Assert.AreEqual(Palette.Get(1), TerminalThemes.All[0].Ansi[1]);
     }
 }
+
+[TestClass]
+public class ScreenBufferTextTests
+{
+    [TestMethod]
+    public void GetAllText_IncludesScrollback_AndTrimsTrailingBlankLines()
+    {
+        var b = new ScreenBuffer(10, 3);
+        foreach (char ch in "ab")
+        {
+            b.Put(ch);
+        }
+        for (int i = 0; i < 5; i++)
+        {
+            b.CarriageReturn();
+            b.LineFeed();
+            b.Put('0' + i);
+        }
+        string text = b.GetAllText();
+        StringAssert.StartsWith(text, "ab\n0\n1");
+        Assert.IsTrue(text.EndsWith("4"));
+    }
+}
