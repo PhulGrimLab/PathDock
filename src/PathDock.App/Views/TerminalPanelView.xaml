@@ -23,7 +23,11 @@
                         </Style>
                     </TextBlock.Style>
                 </TextBlock>
-                <ui:Button Appearance="Transparent" Margin="8,-3,0,-3" Padding="6,3"
+                <ui:SymbolIcon Symbol="QuestionCircle24" FontSize="14" Margin="10,0,2,0" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               ToolTip="마우스 드래그: 글자 선택 (더블클릭: 단어)&#x0A;Ctrl+C: 선택이 있으면 복사, 없으면 실행 중단&#x0A;Ctrl+Shift+C: 복사&#x0A;Ctrl+V: 붙여넣기&#x0A;우클릭: 선택이 있으면 복사, 없으면 붙여넣기&#x0A;휠: 지난 출력 보기"
+                               AutomationProperties.AutomationId="TerminalHelp" AutomationProperties.Name="터미널 사용법" />
+                <ui:Button Appearance="Transparent" Margin="4,-3,0,-3" Padding="6,3"
                            Command="{Binding SaveOutputCommand}"
                            ToolTip="터미널 내용을 파일로 저장"
                            AutomationProperties.AutomationId="TerminalSaveButton"

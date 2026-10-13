@@ -57,4 +57,17 @@ public class ScreenBufferTextTests
         StringAssert.StartsWith(text, "ab\n0\n1");
         Assert.IsTrue(text.EndsWith("4"));
     }
+
+    [TestMethod]
+    public void ScrolledLines_CountsLinesPushedToScrollback()
+    {
+        var b = new ScreenBuffer(10, 3);
+        for (int i = 0; i < 5; i++)
+        {
+            b.CarriageReturn();
+            b.LineFeed();
+        }
+        Assert.AreEqual(b.ScrollbackCount, (int)b.ScrolledLines);
+        Assert.IsTrue(b.ScrolledLines >= 3);
+    }
 }

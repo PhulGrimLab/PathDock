@@ -54,6 +54,7 @@ public sealed class TerminalControl : FrameworkElement
     // 마우스 선택 범위: 버퍼 줄 번호(음수=스크롤백)와 열. 새 출력이 오면(Version 변화) 해제한다.
     private bool _hasSelection;
     private bool _dragging;
+    private long _selScrolled;
     private (int Line, int Col) _selAnchor;
     private (int Line, int Col) _selEnd;
 
@@ -193,10 +194,23 @@ public sealed class TerminalControl : FrameworkElement
         ScreenBuffer b = s.Screen;
         lock (b.SyncRoot)
         {
-            if (_hasSelection && _renderedVersion != -1 && b.Version != _renderedVersion)
+            if (_hasSelection && b.ScrolledLines != _selScrolled)
             {
-                _hasSelection = false; // 줄 번호가 밀릴 수 있으므로 새 출력이 오면 선택을 푼다.
-                _dragging = false;
+                // 새 출력으로 줄이 위로 밀렸으면 선택도 같은 만큼 따라간다. 스크롤백 밖으로 밀려나면 선택을 푼다.
+                int shift = (int)Math.Min(b.ScrolledLines - _selScrolled, int.MaxValue / 2);
+                _selAnchor.Line -= shift;
+                _selEnd.Line -= shift;
+                _selScrolled = b.ScrolledLines;
+                if (Math.Max(_selAnchor.Line, _selEnd.Line) < -b.ScrollbackCount)
+                {
+                    _hasSelection = false;
+                    _dragging = false;
+                }
+                else
+                {
+                    _selAnchor.Line = Math.Max(_selAnchor.Line, -b.ScrollbackCount);
+                    _selEnd.Line = Math.Max(_selEnd.Line, -b.ScrollbackCount);
+                }
             }
             _renderedVersion = b.Version;
             _scrollOffset = Math.Min(_scrollOffset, b.ScrollbackCount);
@@ -352,7 +366,7 @@ public sealed class TerminalControl : FrameworkElement
             if (!CopySelection())
             {
                 _scrollOffset = 0;
-                PasteFromClipboard(Session);
+                PasteFromClipboard(Session!);
             }
             e.Handled = true;
         }
@@ -365,6 +379,7 @@ public sealed class TerminalControl : FrameworkElement
                 return;
             }
             _selAnchor = _selEnd = cell;
+            _selScrolled = ScrolledNow();
             _hasSelection = false;
             _dragging = true;
             CaptureMouse();
@@ -416,6 +431,19 @@ public sealed class TerminalControl : FrameworkElement
         return (row - _scrollOffset, col);
     }
 
+    private long ScrolledNow()
+    {
+        TerminalSession? s = Session;
+        if (s is null)
+        {
+            return 0;
+        }
+        lock (s.Screen.SyncRoot)
+        {
+            return s.Screen.ScrolledLines;
+        }
+    }
+
     /// <summary>더블클릭: 공백이 아닌 연속 글자를 단어로 선택한다.</summary>
     private void SelectWord((int Line, int Col) cell)
     {
@@ -443,6 +471,7 @@ public sealed class TerminalControl : FrameworkElement
             }
             _selAnchor = (cell.Line, a);
             _selEnd = (cell.Line, b);
+            _selScrolled = s.Screen.ScrolledLines;
             _hasSelection = true;
         }
         InvalidateVisual();
@@ -623,12 +652,25 @@ public sealed class TerminalControl : FrameworkElement
         e.Handled = true;
     }
 
-    private static void PasteFromClipboard(TerminalSession s)
+    private void PasteFromClipboard(TerminalSession s)
     {
         if (Clipboard.ContainsText())
         {
             // 줄바꿈은 Enter(\r)로 통일한다.
-            s.SendInput(Clipboard.GetText().Replace("\r\n", "\r").Replace('\n', '\r'));
+            string text = Clipboard.GetText().Replace("\r\n", "\r").Replace('\n', '\r');
+            int lines = text.TrimEnd('\r').Count(ch => ch == '\r') + 1;
+            if (lines > 1)
+            {
+                // 여러 줄은 줄마다 명령으로 실행되므로 한 번 확인한다(우클릭 실수 방지).
+                string first = text.Split('\r')[0];
+                string preview = first.Length > 60 ? first[..60] + "…" : first;
+                string message = $"{lines}줄을 터미널에 붙여넣습니다. 줄바꿈마다 명령이 바로 실행됩니다.\n\n첫 줄: {preview}\n\n계속할까요?";
+                if (!PathDock.App.Views.ConfirmDialog.Ask(Window.GetWindow(this), "여러 줄 붙여넣기", message))
+                {
+                    return;
+                }
+            }
+            s.SendInput(text);
         }
         else
         {

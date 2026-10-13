@@ -12,7 +12,7 @@
                  Title="PathDock"
                  FontFamily="{StaticResource PdFontFamily}"
                  Icon="pack://application:,,,/Assets/PathDock.ico"
-                 MinWidth="760" MinHeight="480"
+                 MinWidth="760" MinHeight="600"
                  ExtendsContentIntoTitleBar="True"
                  WindowBackdropType="Mica"
                  WindowCornerPreference="DoNotRound">
@@ -20,14 +20,18 @@
         화면은 색이 다른 세 개의 띠(즐겨찾기 / 탐색기 / 터미널)와 상태 표시줄로 구분한다.
         탐색기 띠는 한 개의 격자를 공유해, 이동 버튼은 드라이브 열 폭에, 주소 표시줄은 폴더 열 시작점에 정렬된다.
     -->
+    <Window.InputBindings>
+        <KeyBinding Key="C" Modifiers="Ctrl+Alt" Command="{Binding OpenCalculatorCommand}" />
+        <KeyBinding Key="E" Modifiers="Ctrl+Alt" Command="{Binding EmptyRecycleBinCommand}" />
+    </Window.InputBindings>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />   <!-- 제목 표시줄 -->
             <RowDefinition Height="Auto" />   <!-- 즐겨찾기 띠 -->
             <RowDefinition Height="Auto" />   <!-- 알림 -->
-            <RowDefinition x:Name="ExplorerRow" Height="*" MinHeight="140" />   <!-- 탐색기 띠 -->
+            <RowDefinition x:Name="ExplorerRow" Height="*" MinHeight="260" />   <!-- 탐색기 띠: 폴더 열의 머리글과 여러 줄이 보이는 최소 높이 -->
             <RowDefinition Height="Auto" />   <!-- 분할 -->
-            <RowDefinition x:Name="TerminalRow" Height="*" MinHeight="120" />   <!-- 터미널 띠 -->
+            <RowDefinition x:Name="TerminalRow" Height="*" MinHeight="110" />   <!-- 터미널 띠 -->
             <RowDefinition Height="Auto" />   <!-- 상태 표시줄 -->
         </Grid.RowDefinitions>
 
@@ -59,6 +63,20 @@
                                PreviewMouseLeftButtonDown="OnClockMouseDown"
                                AutomationProperties.AutomationId="ClockText"
                                AutomationProperties.Name="현재 날짜와 시간" />
+                    <ui:Button Appearance="Transparent" Margin="0,0,4,0" Padding="10,4"
+                               Command="{Binding OpenCalculatorCommand}"
+                               ToolTip="계산기 (Ctrl+Alt+C)"
+                               AutomationProperties.AutomationId="CalculatorButton"
+                               AutomationProperties.Name="계산기">
+                        <ui:SymbolIcon Symbol="Calculator24" FontSize="14" />
+                    </ui:Button>
+                    <ui:Button Appearance="Transparent" Margin="0,0,4,0" Padding="10,4"
+                               Command="{Binding EmptyRecycleBinCommand}"
+                               ToolTip="휴지통 비우기 (Ctrl+Alt+E)"
+                               AutomationProperties.AutomationId="EmptyRecycleBinButton"
+                               AutomationProperties.Name="휴지통 비우기">
+                        <ui:SymbolIcon Symbol="Delete24" FontSize="14" />
+                    </ui:Button>
                     <ui:Button Appearance="Transparent" Margin="0,0,4,0" Padding="10,4"
                                Command="{Binding ShowSettingsCommand}"
                                ToolTip="설정"
@@ -107,7 +125,7 @@
         </Border>
 
         <ui:InfoBar Grid.Row="2" Margin="12,6,12,0"
-                    Title="알림" Severity="Warning" IsClosable="True"
+                    Title="{Binding InfoTitle}" Severity="{Binding InfoSeverity}" IsClosable="True"
                     Message="{Binding InfoMessage}"
                     IsOpen="{Binding HasInfo, Mode=OneWay}"
                     AutomationProperties.AutomationId="InfoBar" />

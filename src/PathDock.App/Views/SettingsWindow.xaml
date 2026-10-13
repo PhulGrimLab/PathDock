@@ -8,6 +8,9 @@
                  ResizeMode="NoResize" ShowInTaskbar="False"
                  WindowStartupLocation="CenterOwner"
                  ExtendsContentIntoTitleBar="True" WindowBackdropType="Mica">
+    <ui:FluentWindow.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </ui:FluentWindow.Resources>
     <!-- 설정 창. DataContext: MainViewModel. 글자 크기는 움직이는 즉시 화면에 반영된다. -->
     <Grid>
         <Grid.RowDefinitions>
@@ -69,6 +72,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <TextBlock Text="테마" VerticalAlignment="Center" Margin="0,4" />
                     <ComboBox Grid.Column="1" Margin="0,4" ItemsSource="{Binding TerminalThemeNames}" SelectedIndex="{Binding TerminalThemeIndex}"
@@ -81,7 +85,11 @@
                     <ui:TextBox Grid.Row="2" Grid.Column="1" Margin="0,4" MaxLength="7" PlaceholderText="#RRGGBB (비우면 테마 기본값)"
                                 Text="{Binding TerminalBackground, UpdateSourceTrigger=PropertyChanged}"
                                 AutomationProperties.AutomationId="TerminalBackgroundBox" AutomationProperties.Name="터미널 배경색" />
-                    <ui:Button Grid.Row="3" Grid.ColumnSpan="2" Content="기본 색으로" Icon="{ui:SymbolIcon ArrowReset24}"
+                    <TextBlock Grid.Row="3" Grid.ColumnSpan="2" Margin="0,4,0,0" TextWrapping="Wrap" Foreground="#E5484D"
+                               Text="{Binding ColorErrorText}"
+                               Visibility="{Binding HasColorError, Converter={StaticResource BoolToVis}}"
+                               AutomationProperties.AutomationId="TerminalColorError" />
+                    <ui:Button Grid.Row="4" Grid.ColumnSpan="2" Content="기본 색으로" Icon="{ui:SymbolIcon ArrowReset24}"
                                HorizontalAlignment="Right" Margin="0,8,0,0"
                                Command="{Binding ResetTerminalColorsCommand}"
                                AutomationProperties.AutomationId="ResetTerminalColorsButton" />
@@ -95,7 +103,7 @@
                         <ComboBoxItem Content="PowerShell" />
                         <ComboBoxItem Content="명령 프롬프트 (cmd)" />
                     </ComboBox>
-                    <TextBlock Text="바꾼 셸은 PathDock을 다시 시작하면 적용됩니다." Margin="0,6,0,0"
+                    <TextBlock Text="바꾸면 터미널이 새 셸로 바로 다시 시작됩니다(같은 폴더에서)." Margin="0,6,0,0"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
             </ctl:PanelCard>

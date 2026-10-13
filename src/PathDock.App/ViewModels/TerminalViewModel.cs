@@ -21,7 +21,9 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
     private readonly ILog _log;
     private readonly Services.IDialogService _dialogs;
 
-    public TerminalSession Session { get; }
+    /// <summary>현재 셸 세션. 셸 종류를 바꾸면 새 세션으로 교체된다(TerminalControl이 바인딩).</summary>
+    [ObservableProperty]
+    private TerminalSession _session;
 
     /// <summary>하단 상태 문구(실행 중/대기 중/종료 등).</summary>
     [ObservableProperty]
@@ -47,7 +49,7 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
     public string CollapseToolTip => IsCollapsed ? "터미널 펼치기" : "터미널 접기";
 
     /// <summary>사용자에게 알릴 결과 메시지(저장 성공/실패). MainViewModel이 하단 안내줄에 표시한다.</summary>
-    public event Action<string>? Notice;
+    public event Action<string, bool>? Notice;
 
     /// <summary>터미널 전체 내용(스크롤백 포함)을 사용자가 고른 파일에 저장한다.</summary>
     [CommunityToolkit.Mvvm.Input.RelayCommand]
@@ -62,12 +64,12 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
         {
             System.IO.File.WriteAllText(path, Session.Screen.GetAllText() + "\r\n", new System.Text.UTF8Encoding(true));
             _log.Info($"터미널 내용 저장: {path}");
-            Notice?.Invoke($"터미널 내용을 저장했습니다: {path}");
+            Notice?.Invoke($"터미널 내용을 저장했습니다: {path}", true);
         }
         catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
         {
             _log.Warn($"터미널 내용 저장 실패: {path} - {ex.Message}");
-            Notice?.Invoke($"저장하지 못했습니다: {ex.Message}");
+            Notice?.Invoke($"저장하지 못했습니다: {ex.Message}", false);
         }
     }
 
@@ -82,17 +84,51 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
         _dialogs = dialogs;
         _ui = Application.Current.Dispatcher;
         _log = log;
-        Session = new TerminalSession(DefaultCols, DefaultRows, log);
-        Session.CwdChanged += (p, fromRequest) => _ui.BeginInvoke(() => CwdChanged?.Invoke(p, fromRequest));
-        Session.IdleChanged += idle => _ui.BeginInvoke(() =>
+        _session = CreateSession();
+    }
+
+    /// <summary>세션을 만들고 이벤트를 연결한다. 교체되어 버려진 세션의 이벤트는 무시한다.</summary>
+    private TerminalSession CreateSession()
+    {
+        var s = new TerminalSession(DefaultCols, DefaultRows, _log);
+        s.CwdChanged += (p, fromRequest) => _ui.BeginInvoke(() =>
         {
+            if (ReferenceEquals(s, Session))
+            {
+                CwdChanged?.Invoke(p, fromRequest);
+            }
+        });
+        s.IdleChanged += idle => _ui.BeginInvoke(() =>
+        {
+            if (!ReferenceEquals(s, Session))
+            {
+                return;
+            }
             StatusText = idle ? "터미널: 대기 중(입력 가능)" : "터미널: 명령 실행 중";
             if (idle)
             {
                 IsPending = false;
             }
         });
-        Session.Exited += code => _ui.BeginInvoke(() => StatusText = $"터미널 종료됨 (코드 {code})");
+        s.Exited += code => _ui.BeginInvoke(() =>
+        {
+            if (ReferenceEquals(s, Session))
+            {
+                StatusText = $"터미널 종료됨 (코드 {code})";
+            }
+        });
+        return s;
+    }
+
+    /// <summary>현재 터미널을 닫고 다른 셸을 같은 폴더에서 새로 시작한다.</summary>
+    public void RestartShell(string? workingDirectory, TerminalShell shell)
+    {
+        TerminalSession old = Session;
+        Session = CreateSession();
+        StatusText = "터미널 시작 중...";
+        IsPending = false;
+        Start(workingDirectory, shell);
+        old.Dispose();
     }
 
     /// <summary>패널 머리글에 표시할 셸 이름(Start에서 정해진다).</summary>

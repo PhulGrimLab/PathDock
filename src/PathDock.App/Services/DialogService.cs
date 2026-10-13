@@ -27,11 +27,7 @@ public sealed class WpfDialogService : IDialogService
 {
     public bool Confirm(string title, string message)
     {
-        Window? owner = Application.Current?.MainWindow;
-        MessageBoxResult r = owner is null
-            ? MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No)
-            : MessageBox.Show(owner, message, title, MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
-        return r == MessageBoxResult.Yes;
+        return ConfirmDialog.Ask(Application.Current?.MainWindow, title, message);
     }
 
     public void ShowAbout()

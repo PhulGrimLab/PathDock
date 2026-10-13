@@ -53,6 +53,8 @@ public sealed class ScreenBuffer
     public bool IsAlternate => _savedMain is not null;
     public long Version { get; private set; }
     public int ScrollbackCount => _scrollback.Count;
+    /// <summary>스크롤백으로 밀려난(또는 지워진) 줄의 누적 수. 선택 영역이 줄 번호 이동을 따라가는 데 쓴다.</summary>
+    public long ScrolledLines { get; private set; }
 
     // 현재 쓰기 속성(SGR 상태).
     public uint CurFg { get; set; }
@@ -202,6 +204,7 @@ public sealed class ScreenBuffer
             if (_top == 0 && _bottom == Rows - 1 && !IsAlternate)
             {
                 _scrollback.Add(removed);
+                ScrolledLines++;
                 if (_scrollback.Count > MaxScrollback)
                 {
                     _scrollback.RemoveAt(0);
@@ -310,6 +313,7 @@ public sealed class ScreenBuffer
                 }
                 if (mode == 3)
                 {
+                    ScrolledLines += _scrollback.Count;
                     _scrollback.Clear();
                 }
                 break;
@@ -446,6 +450,7 @@ public sealed class ScreenBuffer
             while (CursorY >= rows)
             {
                 _scrollback.Add(_screen[0]);
+                ScrolledLines++;
                 _screen = _screen[1..];
                 CursorY--;
                 Rows--;

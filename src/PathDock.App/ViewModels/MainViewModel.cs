@@ -58,7 +58,55 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(HasInfo))]
     private string _infoMessage = string.Empty;
 
+    /// <summary>InfoBar 종류(성공은 초록, 그 밖의 알림/오류는 경고색).</summary>
+    [ObservableProperty]
+    private Wpf.Ui.Controls.InfoBarSeverity _infoSeverity = Wpf.Ui.Controls.InfoBarSeverity.Warning;
+
+    [ObservableProperty]
+    private string _infoTitle = "알림";
+
+    private bool _nextInfoIsSuccess;
+    private System.Windows.Threading.DispatcherTimer? _infoTimer;
+
     public bool HasInfo => !string.IsNullOrEmpty(InfoMessage);
+
+    /// <summary>작업이 잘 끝났음을 알린다. 초록 InfoBar로 보였다가 몇 초 뒤 저절로 사라진다.</summary>
+    private void NotifySuccess(string message)
+    {
+        InfoMessage = string.Empty; // 같은 문구도 다시 보이게 한다.
+        _nextInfoIsSuccess = true;
+        InfoMessage = message;
+    }
+
+    partial void OnInfoMessageChanged(string value)
+    {
+        _infoTimer?.Stop();
+        if (string.IsNullOrEmpty(value))
+        {
+            _nextInfoIsSuccess = false;
+            return;
+        }
+        bool success = _nextInfoIsSuccess;
+        _nextInfoIsSuccess = false;
+        InfoSeverity = success ? Wpf.Ui.Controls.InfoBarSeverity.Success : Wpf.Ui.Controls.InfoBarSeverity.Warning;
+        InfoTitle = success ? "완료" : "알림";
+        if (success)
+        {
+            if (_infoTimer is null)
+            {
+                _infoTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+                _infoTimer.Tick += (_, _) =>
+                {
+                    _infoTimer.Stop();
+                    if (InfoSeverity == Wpf.Ui.Controls.InfoBarSeverity.Success)
+                    {
+                        InfoMessage = string.Empty;
+                    }
+                };
+            }
+            _infoTimer.Start();
+        }
+    }
 
     private const int MonitorIntervalMs = 2000;
 
@@ -127,8 +175,34 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private int _terminalShellIndex;
 
-    partial void OnTerminalShellIndexChanged(int value) =>
-        Settings.TerminalShell = value == 1 ? TerminalShell.CommandPrompt : TerminalShell.PowerShell;
+    private bool _terminalStarted;
+    private bool _revertingShell;
+
+    partial void OnTerminalShellIndexChanged(int oldValue, int newValue)
+    {
+        if (_revertingShell)
+        {
+            return;
+        }
+        TerminalShell shell = newValue == 1 ? TerminalShell.CommandPrompt : TerminalShell.PowerShell;
+        if (_terminalStarted)
+        {
+            if (!Terminal.Session.IsIdle
+                && !_dialogs.Confirm("터미널 셸 변경", "실행 중인 작업이 있습니다. 터미널을 새 셸로 다시 시작하면 종료됩니다. 계속할까요?"))
+            {
+                // 콤보박스 갱신이 끝난 뒤 이전 값으로 되돌린다.
+                Application.Current.Dispatcher.BeginInvoke(() =>
+                {
+                    _revertingShell = true;
+                    TerminalShellIndex = oldValue;
+                    _revertingShell = false;
+                });
+                return;
+            }
+            Terminal.RestartShell(Terminal.CurrentPath ?? Explorer.CurrentPath, shell);
+        }
+        Settings.TerminalShell = shell;
+    }
 
     /// <summary>설정 창 콤보박스에 보여줄 터미널 테마 이름(TerminalThemes.All과 같은 순서).</summary>
     public IReadOnlyList<string> TerminalThemeNames { get; } = TerminalThemes.All.Select(t => t.DisplayName).ToList();
@@ -146,9 +220,39 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     partial void OnTerminalThemeIndexChanged(int value) => ApplyTerminalColors();
 
-    partial void OnTerminalForegroundChanged(string value) => ApplyTerminalColors();
+    partial void OnTerminalForegroundChanged(string value)
+    {
+        ApplyTerminalColors();
+        OnPropertyChanged(nameof(ColorErrorText));
+        OnPropertyChanged(nameof(HasColorError));
+    }
 
-    partial void OnTerminalBackgroundChanged(string value) => ApplyTerminalColors();
+    partial void OnTerminalBackgroundChanged(string value)
+    {
+        ApplyTerminalColors();
+        OnPropertyChanged(nameof(ColorErrorText));
+        OnPropertyChanged(nameof(HasColorError));
+    }
+
+    /// <summary>글자색/배경색 입력이 #RRGGBB 형식이 아닐 때의 안내(올바르면 빈 문자열).</summary>
+    public string ColorErrorText
+    {
+        get
+        {
+            var bad = new List<string>();
+            if (!string.IsNullOrWhiteSpace(TerminalForeground) && TerminalThemes.TryParseColor(TerminalForeground) is null)
+            {
+                bad.Add("글자색");
+            }
+            if (!string.IsNullOrWhiteSpace(TerminalBackground) && TerminalThemes.TryParseColor(TerminalBackground) is null)
+            {
+                bad.Add("배경색");
+            }
+            return bad.Count == 0 ? string.Empty : $"{string.Join("·", bad)} 형식이 올바르지 않습니다. #RRGGBB 형식(예: #FFD700)으로 입력하세요. 그 전까지는 테마 색을 씁니다.";
+        }
+    }
+
+    public bool HasColorError => ColorErrorText.Length > 0;
 
     private void ApplyTerminalColors()
     {
@@ -178,6 +282,48 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         Settings.TerminalFontSize = Services.FontService.NormalizeTerminal(value);
         Terminal.FontSize = Settings.TerminalFontSize;
+    }
+
+    /// <summary>제목 표시줄 계산기 버튼: Windows 계산기를 연다.</summary>
+    [RelayCommand]
+    private void OpenCalculator()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("calc.exe") { UseShellExecute = true })?.Dispose();
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            InfoMessage = $"계산기를 열 수 없습니다: {ex.Message}";
+        }
+    }
+
+    /// <summary>제목 표시줄 휴지통 버튼: 확인 후 모든 드라이브의 휴지통을 비운다.</summary>
+    [RelayCommand]
+    private async Task EmptyRecycleBinAsync()
+    {
+        (long Items, long Bytes)? content = await Task.Run(Services.RecycleBinService.Query);
+        if (content is { Items: 0 })
+        {
+            NotifySuccess("휴지통이 이미 비어 있습니다.");
+            return;
+        }
+        string what = content is { } c ? $"{c.Items:N0}개 항목({SizeFormatter.Format(c.Bytes)})을 " : "모든 항목을 ";
+        if (!_dialogs.Confirm("휴지통 비우기", $"휴지통의 {what}영구 삭제합니다. 되돌릴 수 없습니다. 계속할까요?"))
+        {
+            return;
+        }
+        try
+        {
+            await Task.Run(Services.RecycleBinService.Empty);
+            NotifySuccess("휴지통을 비웠습니다.");
+            _log.Info("휴지통 비움");
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or System.ComponentModel.Win32Exception)
+        {
+            _log.Warn($"휴지통 비우기 실패: {ex.Message}");
+            InfoMessage = $"휴지통을 비우지 못했습니다: {ex.Message}";
+        }
     }
 
     /// <summary>제목 표시줄 톱니 버튼: 설정 창.</summary>
@@ -256,7 +402,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _ = RefreshDrivesAsync();
         };
         Explorer.ErrorOccurred += msg => InfoMessage = msg;
-        Terminal.Notice += msg => InfoMessage = msg;
+        Terminal.Notice += (msg, success) =>
+        {
+            if (success)
+            {
+                NotifySuccess(msg);
+            }
+            else
+            {
+                InfoMessage = msg;
+            }
+        };
         Terminal.CwdChanged += (path, fromRequest) =>
             _sync.OnTerminalCwdChanged(path, fromRequest ? ChangeOrigin.Sync : ChangeOrigin.User);
         _sync.Warning += w => InfoMessage = w.Message;
@@ -272,6 +428,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         string start = ResolveStartPath();
         Explorer.NavigateTo(start, ChangeOrigin.Sync);
         Terminal.Start(Explorer.CurrentPath ?? start, Settings.TerminalShell);
+        _terminalStarted = true;
         _ = RefreshDrivesAsync();
         _log.Info($"앱 시작: start={start}, mode={Settings.SyncMode}");
     }
