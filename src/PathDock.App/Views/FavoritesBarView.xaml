@@ -16,9 +16,11 @@
                                   Title="{Binding DisplayName}"
                                   IsEmpty="{Binding IsEmpty}"
                                   Command="{Binding ClickCommand}"
-                                  ToolTip="{Binding ToolTipText}"
                                   AutomationProperties.AutomationId="{Binding AutomationId}"
                                   AutomationProperties.Name="{Binding Caption}">
+                    <ctl:FavoriteChip.ToolTip>
+                        <ToolTip FontFamily="{StaticResource PdFontFamily}" Content="{Binding ToolTipText}" />
+                    </ctl:FavoriteChip.ToolTip>
                     <ctl:FavoriteChip.ContextMenu>
                         <ContextMenu>
                             <MenuItem Header="현재 폴더를 이 칸에 등록" Command="{Binding RegisterHereCommand}" />

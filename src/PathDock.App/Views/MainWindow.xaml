@@ -10,6 +10,7 @@
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=vm:MainViewModel}"
                  Title="PathDock"
+                 FontFamily="{StaticResource PdFontFamily}"
                  Icon="pack://application:,,,/Assets/PathDock.ico"
                  MinWidth="760" MinHeight="480"
                  ExtendsContentIntoTitleBar="True"

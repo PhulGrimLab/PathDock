@@ -15,6 +15,8 @@
             <CornerRadius x:Key="ControlCornerRadius">2</CornerRadius>
             <CornerRadius x:Key="OverlayCornerRadius">2</CornerRadius>
             <system:Double x:Key="ControlContentThemeFontSize">12</system:Double>
+            <!-- 기본 글꼴: 한국어 Windows의 시스템 글꼴(맑은 고딕)은 역슬래시(\)를 원화(₩)로 그린다. 영문/기호는 Segoe UI, 한글은 맑은 고딕으로 대체해 터미널과 같은 \ 모양으로 통일한다. -->
+            <FontFamily x:Key="PdFontFamily">Segoe UI, Malgun Gothic</FontFamily>
             <!-- 화면 글자 크기(설정 창에서 바꾸면 FontService가 이 값을 갱신) -->
             <system:Double x:Key="PdFontSize">12</system:Double>
             <system:Double x:Key="PdFontSizeSmall">11</system:Double>

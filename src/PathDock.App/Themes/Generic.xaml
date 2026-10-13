@@ -222,6 +222,7 @@
                                      VerticalContentAlignment="Center"
                                      Background="Transparent" BorderThickness="0" Padding="0"
                                      FontSize="{TemplateBinding FontSize}"
+                                     FontFamily="{DynamicResource PdFontFamily}"
                                      Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                      CaretBrush="{DynamicResource TextFillColorPrimaryBrush}"
                                      SelectionBrush="{DynamicResource SystemAccentColorPrimaryBrush}"
