@@ -4,6 +4,7 @@ using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PathDock.Core.Explorer;
+using PathDock.Core.Localization;
 using PathDock.Core.Logging;
 using PathDock.Core.Sync;
 
@@ -33,7 +34,7 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
             string p = _service.Current ?? PathText;
             if (string.IsNullOrEmpty(p))
             {
-                return "폴더";
+                return Loc.T("폴더", "Folder");
             }
             string leaf = Path.GetFileName(p.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
             return leaf.Length > 0 ? leaf : p;
@@ -69,7 +70,7 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
                 return SummaryText;
             }
             int matches = System.Windows.Data.CollectionViewSource.GetDefaultView(Items).Cast<object>().Count();
-            return $"'{needle}' 검색: {matches:N0}개 일치 · {SummaryText}";
+            return Loc.T($"'{needle}' 검색: {matches:N0}개 일치 · {SummaryText}", $"Search '{needle}': {Loc.Plural(matches, "match", "matches")} · {SummaryText}");
         }
     }
 
@@ -158,8 +159,8 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
             PathText = _service.Current ?? string.Empty;
         }
         ErrorOccurred?.Invoke(ex is UnauthorizedAccessException
-            ? $"접근 권한이 없습니다: {path}"
-            : $"폴더를 열 수 없습니다: {path}");
+            ? Loc.T($"접근 권한이 없습니다: {path}", $"Access denied: {path}")
+            : Loc.T($"폴더를 열 수 없습니다: {path}", $"Could not open the folder: {path}"));
     }
 
     private void ApplyListing(List<FileItem> items)
@@ -317,18 +318,18 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
         int dirCount = snapshot.Count(i => i.IsDirectory);
         var files = snapshot.Where(i => !i.IsDirectory).ToList();
         long fileBytes = files.Sum(f => f.Item.Size);
-        string text = $"폴더 {dirCount:N0}개 · 파일 {files.Count:N0}개 ({SizeFormatter.Format(fileBytes)})";
+        string text = Loc.T($"폴더 {dirCount:N0}개 · 파일 {files.Count:N0}개 ({SizeFormatter.Format(fileBytes)})", $"{Loc.Plural(dirCount, "folder", "folders")} · {Loc.Plural(files.Count, "file", "files")} ({SizeFormatter.Format(fileBytes)})");
         if (dirCount > 0)
         {
             if (dirsDone < dirCount)
             {
-                text += $" · 폴더 크기 계산 중 {dirsDone}/{dirCount}";
+                text += Loc.T($" · 폴더 크기 계산 중 {dirsDone}/{dirCount}", $" · calculating folder sizes {dirsDone}/{dirCount}");
             }
             else
             {
                 long dirBytes = snapshot.Where(i => i.IsDirectory && i.Stats is not null).Sum(i => i.Stats!.TotalSize);
                 bool capped = snapshot.Any(i => i.IsDirectory && i.OverLimit);
-                text += $" · 전체 {SizeFormatter.Format(fileBytes + dirBytes)}{(capped ? " 이상" : string.Empty)}";
+                text += Loc.T($" · 전체 {SizeFormatter.Format(fileBytes + dirBytes)}{(capped ? " 이상" : string.Empty)}", $" · total {SizeFormatter.Format(fileBytes + dirBytes)}{(capped ? " or more" : string.Empty)}");
             }
         }
         SummaryText = text;
@@ -414,7 +415,7 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
         {
             // 연결 프로그램이 없는 형식(ERROR_NO_ASSOCIATION 등)도 여기로 온다.
             _log.Warn($"파일 열기 실패: {item.FullPath} ({ex.Message})");
-            ErrorOccurred?.Invoke($"파일을 열 수 없습니다: {item.Name} (연결된 프로그램이 없거나 실행할 수 없습니다)");
+            ErrorOccurred?.Invoke(Loc.T($"파일을 열 수 없습니다: {item.Name} (연결된 프로그램이 없거나 실행할 수 없습니다)", $"Could not open the file: {item.Name} (no associated program, or it cannot be run)"));
         }
     }
 
@@ -432,7 +433,7 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
         catch (Exception ex) when (ex is DirectoryNotFoundException or UnauthorizedAccessException or IOException)
         {
             _log.Warn($"이력 이동 실패: {target} ({ex.GetType().Name})");
-            ErrorOccurred?.Invoke($"폴더를 열 수 없습니다: {target}");
+            ErrorOccurred?.Invoke(Loc.T($"폴더를 열 수 없습니다: {target}", $"Could not open the folder: {target}"));
             return;
         }
         _log.Info($"탐색기 이력 이동: {target}");

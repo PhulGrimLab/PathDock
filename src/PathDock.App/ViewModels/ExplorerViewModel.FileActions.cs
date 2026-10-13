@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PathDock.App.Services;
 using PathDock.Core.Explorer;
+using PathDock.Core.Localization;
 using PathDock.Core.Sync;
 
 namespace PathDock.App.ViewModels;
@@ -18,13 +19,13 @@ public sealed partial class ExplorerViewModel
     private bool _sortAscending = true;
 
     [ObservableProperty]
-    private string _nameHeader = "이름";
+    private string _nameHeader = string.Empty;
 
     [ObservableProperty]
-    private string _modifiedHeader = "수정한 날짜";
+    private string _modifiedHeader = string.Empty;
 
     [ObservableProperty]
-    private string _sizeHeader = "크기";
+    private string _sizeHeader = string.Empty;
 
     private IReadOnlyList<FileItemViewModel> _selection = Array.Empty<FileItemViewModel>();
 
@@ -58,9 +59,21 @@ public sealed partial class ExplorerViewModel
     private void UpdateHeaders()
     {
         string Mark(SortKey k, string text) => _sortKey == k ? $"{text} {(_sortAscending ? "▲" : "▼")}" : text;
-        NameHeader = Mark(SortKey.Name, "이름");
-        ModifiedHeader = Mark(SortKey.Modified, "수정한 날짜");
-        SizeHeader = Mark(SortKey.Size, "크기");
+        NameHeader = Mark(SortKey.Name, Loc.T("이름", "Name"));
+        ModifiedHeader = Mark(SortKey.Modified, Loc.T("수정한 날짜", "Date modified"));
+        SizeHeader = Mark(SortKey.Size, Loc.T("크기", "Size"));
+    }
+
+    /// <summary>언어가 바뀌었을 때 코드에서 만든 문구(머리글, 폴더 이름, 요약, 각 줄의 크기·개수)를 새 언어로 다시 만든다.</summary>
+    public void RefreshLanguage()
+    {
+        UpdateHeaders();
+        OnPropertyChanged(nameof(CurrentFolderName));
+        foreach (FileItemViewModel item in Items)
+        {
+            item.RefreshLanguage();
+        }
+        UpdateSummary(Items.ToList(), Items.Count(i => i.IsDirectory && i.Stats is not null && !i.IsStale));
     }
 
     private List<FileItemViewModel> SortItems(IEnumerable<FileItemViewModel> items)
@@ -103,12 +116,12 @@ public sealed partial class ExplorerViewModel
         {
             return;
         }
-        string? name = _dialogs.Prompt("이름 변경", "새 이름을 입력하세요.", item.Name);
+        string? name = _dialogs.Prompt(Loc.T("이름 변경", "Rename"), Loc.T("새 이름을 입력하세요.", "Enter the new name."), item.Name);
         if (name is null || name == item.Name)
         {
             return; // 취소 또는 변화 없음
         }
-        RunFileOperation($"이름을 바꿀 수 없습니다: {item.Name}", item.FullPath, () => FileOperations.Rename(item.FullPath, name));
+        RunFileOperation(Loc.T($"이름을 바꿀 수 없습니다: {item.Name}", $"Could not rename: {item.Name}"), item.FullPath, () => FileOperations.Rename(item.FullPath, name));
     }
 
     /// <summary>
@@ -124,16 +137,16 @@ public sealed partial class ExplorerViewModel
             return;
         }
         string what = targets.Count == 1
-            ? $"{(targets[0].IsDirectory ? "폴더(하위 항목 포함)" : "파일")} '{targets[0].Name}'"
-            : $"선택한 {targets.Count}개 항목";
+            ? Loc.T($"{(targets[0].IsDirectory ? "폴더(하위 항목 포함)" : "파일")} '{targets[0].Name}'", $"{(targets[0].IsDirectory ? "the folder (including its contents)" : "the file")} '{targets[0].Name}'")
+            : Loc.T($"선택한 {targets.Count}개 항목", $"the {targets.Count} selected items");
         string question = targets.All(t => FileOperations.UsesRecycleBin(t.FullPath))
-            ? $"{what}을(를) 휴지통으로 보낼까요?"
-            : $"{what}에 휴지통이 없는 드라이브의 항목이 있어 영구 삭제됩니다(복구 불가). 삭제할까요?";
-        if (!_dialogs.Confirm("삭제 확인", question))
+            ? Loc.T($"{what}을(를) 휴지통으로 보낼까요?", $"Move {what} to the Recycle Bin?")
+            : Loc.T($"{what}에 휴지통이 없는 드라이브의 항목이 있어 영구 삭제됩니다(복구 불가). 삭제할까요?", $"Some of {what} are on a drive without a Recycle Bin and will be permanently deleted (cannot be recovered). Delete?");
+        if (!_dialogs.Confirm(Loc.T("삭제 확인", "Confirm delete"), question))
         {
             return;
         }
-        RunBatch("삭제할 수 없습니다", targets.Select(t => t.FullPath).ToList(), p =>
+        RunBatch(Loc.T("삭제할 수 없습니다", "Could not delete"), targets.Select(t => t.FullPath).ToList(), p =>
         {
             FileOperations.DeleteToRecycleBin(p);
             return p;
@@ -157,7 +170,7 @@ public sealed partial class ExplorerViewModel
         }
         if (!FileClipboard.TrySet(paths, cut))
         {
-            ErrorOccurred?.Invoke("클립보드를 사용할 수 없습니다. 잠시 후 다시 시도하세요.");
+            ErrorOccurred?.Invoke(Loc.T("클립보드를 사용할 수 없습니다. 잠시 후 다시 시도하세요.", "The clipboard is not available. Please try again in a moment."));
         }
         else
         {
@@ -186,7 +199,7 @@ public sealed partial class ExplorerViewModel
         }
         if (errors.Count > 0)
         {
-            ErrorOccurred?.Invoke($"붙여넣기 실패 {errors.Count}건 - {errors[0]}");
+            ErrorOccurred?.Invoke(Loc.T($"붙여넣기 실패 {errors.Count}건 - {errors[0]}", $"Paste failed for {errors.Count} item(s) - {errors[0]}"));
         }
         Reload();
     }
@@ -248,7 +261,7 @@ public sealed partial class ExplorerViewModel
         _log.Info($"파일 조작 완료: {paths.Count - errors.Count}/{paths.Count}");
         if (errors.Count > 0)
         {
-            ErrorOccurred?.Invoke($"{failureMessage} ({errors.Count}건) - {errors[0]}");
+            ErrorOccurred?.Invoke(Loc.T($"{failureMessage} ({errors.Count}건) - {errors[0]}", $"{failureMessage} ({errors.Count} item(s)) - {errors[0]}"));
         }
         Reload();
     }
@@ -262,12 +275,12 @@ public sealed partial class ExplorerViewModel
         {
             return;
         }
-        string? name = _dialogs.Prompt("새 폴더", "새 폴더 이름을 입력하세요.", FileOperations.SuggestNewFolderName(current));
+        string? name = _dialogs.Prompt(Loc.T("새 폴더", "New folder"), Loc.T("새 폴더 이름을 입력하세요.", "Enter the new folder name."), FileOperations.SuggestNewFolderName(current));
         if (name is null)
         {
             return;
         }
-        RunFileOperation($"폴더를 만들 수 없습니다: {name}", current, () => FileOperations.CreateFolder(current, name));
+        RunFileOperation(Loc.T($"폴더를 만들 수 없습니다: {name}", $"Could not create the folder: {name}"), current, () => FileOperations.CreateFolder(current, name));
     }
 
     /// <summary>

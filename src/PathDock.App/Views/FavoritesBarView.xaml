@@ -1,6 +1,7 @@
 <UserControl x:Class="PathDock.App.Views.FavoritesBarView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:PathDock.App.Localization"
              xmlns:ctl="clr-namespace:PathDock.App.Controls"
              xmlns:vm="clr-namespace:PathDock.App.ViewModels">
     <!-- 즐겨찾기 10칸. 클릭=이동(빈 칸이면 현재 폴더 등록), 우클릭=등록/비우기. DataContext: MainViewModel -->
@@ -26,12 +27,12 @@
                     </ctl:FavoriteChip.ToolTip>
                     <ctl:FavoriteChip.ContextMenu>
                         <ContextMenu>
-                            <MenuItem Header="현재 폴더를 이 칸에 등록" Command="{Binding RegisterHereCommand}" />
-                            <MenuItem Header="이름 바꾸기..." Command="{Binding RenameCommand}" />
-                            <MenuItem Header="왼쪽으로 이동" Command="{Binding MoveLeftCommand}" />
-                            <MenuItem Header="오른쪽으로 이동" Command="{Binding MoveRightCommand}" />
+                            <MenuItem Header="{loc:T '현재 폴더를 이 칸에 등록', 'Register current folder in this slot'}" Command="{Binding RegisterHereCommand}" />
+                            <MenuItem Header="{loc:T '이름 바꾸기...', 'Rename...'}" Command="{Binding RenameCommand}" />
+                            <MenuItem Header="{loc:T '왼쪽으로 이동', 'Move left'}" Command="{Binding MoveLeftCommand}" />
+                            <MenuItem Header="{loc:T '오른쪽으로 이동', 'Move right'}" Command="{Binding MoveRightCommand}" />
                             <Separator />
-                            <MenuItem Header="이 칸 비우기" Command="{Binding ClearCommand}" />
+                            <MenuItem Header="{loc:T '이 칸 비우기', 'Clear this slot'}" Command="{Binding ClearCommand}" />
                         </ContextMenu>
                     </ctl:FavoriteChip.ContextMenu>
                 </ctl:FavoriteChip>

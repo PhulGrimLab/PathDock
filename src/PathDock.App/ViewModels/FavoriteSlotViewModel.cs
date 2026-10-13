@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using PathDock.Core.Localization;
 using PathDock.Core.Settings;
 
 namespace PathDock.App.ViewModels;
@@ -41,11 +42,14 @@ public sealed partial class FavoriteSlotViewModel : ObservableObject
     private string _path = string.Empty;
 
     public bool IsEmpty => string.IsNullOrEmpty(Path);
-    public string Caption => IsEmpty ? $"{Index}. (비어 있음)" : $"{Index}. {Name}";
+    public string Caption => IsEmpty ? $"{Index}. {Loc.T("(비어 있음)", "(empty)")}" : $"{Index}. {Name}";
 
     /// <summary>칩에 보이는 이름(번호 배지는 별도). 빈 칸은 "등록"(클릭하면 현재 폴더 등록).</summary>
-    public string DisplayName => IsEmpty ? "등록" : Name;
-    public string ToolTipText => IsEmpty ? "클릭하면 현재 폴더를 이 칸에 등록합니다" : Path;
+    public string DisplayName => IsEmpty ? Loc.T("등록", "Add") : Name;
+    public string ToolTipText => IsEmpty ? Loc.T("클릭하면 현재 폴더를 이 칸에 등록합니다", "Click to register the current folder in this slot") : Path;
+
+    /// <summary>언어가 바뀌었을 때 코드에서 만든 문구를 다시 읽게 한다.</summary>
+    public void RefreshLanguage() => OnPropertyChanged(string.Empty);
 
     [RelayCommand]
     private void Click() => _onClick(this);

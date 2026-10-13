@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using PathDock.App.Services;
+using PathDock.Core.Localization;
 using Wpf.Ui.Controls;
 
 namespace PathDock.App.Views;
@@ -17,14 +18,14 @@ public partial class AboutWindow : FluentWindow
     public AboutWindow()
     {
         InitializeComponent();
-        VersionText.Text = $"버전 {AppInfo.Version}";
+        VersionText.Text = Loc.T($"버전 {AppInfo.Version}", $"Version {AppInfo.Version}");
         TaglineText.Text = AppInfo.Tagline;
         AuthorText.Text = AppInfo.Author;
         MailLink.Inlines.Add(AppInfo.ContactEmail);
         TechText.Text = AppInfo.Technologies;
         DataDirText.Text = AppInfo.DataDirectory;
         LogDirText.Text = AppInfo.LogDirectory;
-        string build = AppInfo.BuildTime is { } t ? $"빌드 {t} · " : string.Empty;
+        string build = AppInfo.BuildTime is { } t ? $"{Loc.T("빌드", "Built")} {t} · " : string.Empty;
         EnvironmentText.Text = build + AppInfo.EnvironmentText;
         CopyrightText.Text = $"© {DateTime.Now.Year} {AppInfo.Author}. All rights reserved.";
     }
@@ -34,12 +35,12 @@ public partial class AboutWindow : FluentWindow
         try
         {
             Clipboard.SetText(AppInfo.PlainText());
-            CopiedText.Text = "복사했습니다";
+            CopiedText.Text = Loc.T("복사했습니다", "Copied");
         }
         catch (System.Runtime.InteropServices.COMException)
         {
             // 다른 프로그램이 클립보드를 잡고 있는 순간: 실패 문구만 보여준다.
-            CopiedText.Text = "클립보드를 사용할 수 없습니다";
+            CopiedText.Text = Loc.T("클립보드를 사용할 수 없습니다", "The clipboard is not available");
         }
         var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(CopiedMessageMs) };
         timer.Tick += (_, _) =>

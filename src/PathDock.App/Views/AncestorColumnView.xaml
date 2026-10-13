@@ -1,6 +1,7 @@
 <UserControl x:Class="PathDock.App.Views.AncestorColumnView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:PathDock.App.Localization"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:ctl="clr-namespace:PathDock.App.Controls"
              xmlns:vm="clr-namespace:PathDock.App.ViewModels">
@@ -49,9 +50,9 @@
         <ctl:PanelCard.HeaderTrailing>
             <ui:Button Appearance="Transparent" Margin="4,-3,-6,-3" Padding="5,2"
                        Command="{Binding GoAboveCommand}"
-                       ToolTip="가려진 위쪽 폴더로 올라가기"
+                       ToolTip="{loc:T '가려진 위쪽 폴더로 올라가기', 'Go up to the hidden parent folder'}"
                        Visibility="{Binding HasHiddenAncestors, Converter={StaticResource BoolToVis}}"
-                       AutomationProperties.Name="위쪽 폴더로 올라가기">
+                       AutomationProperties.Name="{loc:T '위쪽 폴더로 올라가기', 'Go up'}">
                 <ui:SymbolIcon Symbol="ArrowUp24" FontSize="14" />
            </ui:Button>
         </ctl:PanelCard.HeaderTrailing>
@@ -62,11 +63,11 @@
                    AutomationProperties.AutomationId="{Binding AutomationId, StringFormat={}{0}_Empty}">
             <TextBlock.Style>
                 <Style TargetType="TextBlock">
-                    <Setter Property="Text" Value="하위 폴더 없음" />
+                    <Setter Property="Text" Value="{loc:T '하위 폴더 없음', 'No subfolders'}" />
                     <Setter Property="Visibility" Value="Collapsed" />
                     <Style.Triggers>
                         <DataTrigger Binding="{Binding FullPath}" Value="">
-                            <Setter Property="Text" Value="더 위 폴더 없음(최상위)" />
+                            <Setter Property="Text" Value="{loc:T '더 위 폴더 없음(최상위)', 'No higher folder (top level)'}" />
                         </DataTrigger>
                         <DataTrigger Binding="{Binding HasItems, ElementName=FolderList}" Value="False">
                             <Setter Property="Visibility" Value="Visible" />

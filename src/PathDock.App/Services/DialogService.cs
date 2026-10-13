@@ -1,5 +1,6 @@
 using System.Windows;
 using PathDock.App.Views;
+using PathDock.Core.Localization;
 
 namespace PathDock.App.Services;
 
@@ -47,7 +48,7 @@ public sealed class WpfDialogService : IDialogService
             Title = title,
             FileName = defaultFileName,
             InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            Filter = "텍스트 파일 (*.txt)|*.txt|로그 파일 (*.log)|*.log|모든 파일 (*.*)|*.*",
+            Filter = Loc.T("텍스트 파일 (*.txt)|*.txt|로그 파일 (*.log)|*.log|모든 파일 (*.*)|*.*", "Text files (*.txt)|*.txt|Log files (*.log)|*.log|All files (*.*)|*.*"),
             DefaultExt = ".txt",
             AddExtension = true,
             OverwritePrompt = true,

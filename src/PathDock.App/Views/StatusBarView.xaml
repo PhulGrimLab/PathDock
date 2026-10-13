@@ -1,6 +1,7 @@
 <UserControl x:Class="PathDock.App.Views.StatusBarView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:PathDock.App.Localization"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:ctl="clr-namespace:PathDock.App.Controls">
     <!-- 상태 표시줄: 왼쪽 동기화 요약, 오른쪽 CPU/GPU/메모리 미터. DataContext: MainViewModel -->
@@ -32,9 +33,9 @@
                             IsAvailable="{Binding GpuAvailable}"
                             AutomationProperties.AutomationId="Meter_Gpu"
                             AutomationProperties.Name="{Binding GpuText, StringFormat=GPU {0}}" />
-            <ctl:UsageMeter Label="메모리" Value="{Binding MemoryPercent}" ValueText="{Binding MemoryText}"
+            <ctl:UsageMeter Label="{loc:T '메모리', 'Memory'}" Value="{Binding MemoryPercent}" ValueText="{Binding MemoryText}"
                             AutomationProperties.AutomationId="Meter_Memory"
-                            AutomationProperties.Name="{Binding MemoryText, StringFormat=메모리 {0}}" />
+                            AutomationProperties.Name="{Binding MemoryAutomationName}" />
         </StackPanel>
     </Grid>
 </UserControl>

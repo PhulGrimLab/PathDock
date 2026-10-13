@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Windows;
 using PathDock.Core.Explorer;
+using PathDock.Core.Localization;
 using PathDock.Core.Logging;
 using PathDock.Core.Monitoring;
 using PathDock.Core.Paths;
@@ -13,11 +14,44 @@ using PathDock.Core.Terminal;
 
 namespace PathDock.App.ViewModels;
 
-/// <summary>동기화 모드 콤보박스 항목.</summary>
-public sealed record SyncModeOption(SyncMode Mode, string Label)
+/// <summary>동기화 모드 콤보박스 항목. 언어가 바뀌면 <see cref="RefreshLabel"/>로 이름을 다시 읽는다.</summary>
+public sealed class SyncModeOption : ObservableObject
 {
+    private readonly string _korean;
+    private readonly string _english;
+
+    public SyncModeOption(SyncMode mode, string korean, string english)
+    {
+        Mode = mode;
+        _korean = korean;
+        _english = english;
+    }
+
+    public SyncMode Mode { get; }
+
+    public string Label => Loc.T(_korean, _english);
+
+    public void RefreshLabel() => OnPropertyChanged(nameof(Label));
+
     /// <summary>UI Automation/접근성에서 항목 이름으로 쓰이도록 레이블만 반환한다.</summary>
     public override string ToString() => Label;
+}
+
+/// <summary>설정 창의 터미널 테마 콤보박스 항목. 이름은 언어를 따른다(항목 객체를 바꾸지 않아 선택이 유지된다).</summary>
+public sealed class TerminalThemeOption : ObservableObject
+{
+    private readonly TerminalColorScheme _scheme;
+
+    public TerminalThemeOption(TerminalColorScheme scheme) => _scheme = scheme;
+
+    public string Name => _scheme.Key switch
+    {
+        _ when _scheme.Key == TerminalColorScheme.DefaultKey => Loc.T("기본 (어두움)", "Default (dark)"),
+        "Light" => Loc.T("밝음", "Light"),
+        _ => _scheme.DisplayName,
+    };
+
+    public void RefreshName() => OnPropertyChanged(nameof(Name));
 }
 
 /// <summary>
@@ -43,10 +77,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public IReadOnlyList<SyncModeOption> SyncModes { get; } = new[]
     {
-        new SyncModeOption(SyncMode.Bidirectional, "양방향"),
-        new SyncModeOption(SyncMode.ExplorerToTerminal, "탐색기 → 터미널"),
-        new SyncModeOption(SyncMode.TerminalToExplorer, "터미널 → 탐색기"),
-        new SyncModeOption(SyncMode.Off, "동기화 끄기"),
+        new SyncModeOption(SyncMode.Bidirectional, "양방향", "Both ways"),
+        new SyncModeOption(SyncMode.ExplorerToTerminal, "탐색기 → 터미널", "Explorer → Terminal"),
+        new SyncModeOption(SyncMode.TerminalToExplorer, "터미널 → 탐색기", "Terminal → Explorer"),
+        new SyncModeOption(SyncMode.Off, "동기화 끄기", "Sync off"),
     };
 
     [ObservableProperty]
@@ -60,10 +94,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>InfoBar 종류(성공은 초록, 그 밖의 알림/오류는 경고색).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(InfoTitle))]
     private Wpf.Ui.Controls.InfoBarSeverity _infoSeverity = Wpf.Ui.Controls.InfoBarSeverity.Warning;
 
-    [ObservableProperty]
-    private string _infoTitle = "알림";
+    /// <summary>InfoBar 제목(성공이면 "완료", 그 밖에는 "알림").</summary>
+    public string InfoTitle => InfoSeverity == Wpf.Ui.Controls.InfoBarSeverity.Success ? Loc.T("완료", "Done") : Loc.T("알림", "Notice");
 
     private bool _nextInfoIsSuccess;
     private System.Windows.Threading.DispatcherTimer? _infoTimer;
@@ -89,7 +124,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         bool success = _nextInfoIsSuccess;
         _nextInfoIsSuccess = false;
         InfoSeverity = success ? Wpf.Ui.Controls.InfoBarSeverity.Success : Wpf.Ui.Controls.InfoBarSeverity.Warning;
-        InfoTitle = success ? "완료" : "알림";
         // 성공은 5초, 경고/오류는 읽을 시간을 더 주고 10초 뒤 저절로 닫는다(직접 닫기도 가능).
         if (_infoTimer is null)
         {
@@ -108,7 +142,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>하단 오른쪽 시스템 사용량 문구. 예: "CPU 12% | GPU 3% | 메모리 8.1/15.7 GB (52%)".</summary>
     [ObservableProperty]
-    private string _usageText = "CPU - | GPU - | 메모리 -";
+    private string _usageText = $"CPU - | GPU - | {Loc.T("메모리", "Memory")} -";
 
     // 상태 표시줄 미터(UsageMeter)용 값. 각 미터의 이름은 "CPU 12%"처럼 라벨+값 문구로 접근성에 노출된다.
     [ObservableProperty] private double _cpuPercent;
@@ -117,7 +151,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _gpuText = "-";
     [ObservableProperty] private bool _gpuAvailable = true;
     [ObservableProperty] private double _memoryPercent;
-    [ObservableProperty] private string _memoryText = "-";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MemoryAutomationName))]
+    private string _memoryText = "-";
+
+    /// <summary>메모리 미터의 접근성 이름. 예: "메모리 8.1 GB / 15.7 GB (52%)".</summary>
+    public string MemoryAutomationName => $"{Loc.T("메모리", "Memory")} {MemoryText}";
 
     /// <summary>측정값을 미터/문구 속성에 반영한다(UI 스레드).</summary>
     private void ApplyUsage(SystemUsage u)
@@ -139,7 +178,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(ThemeToolTip))]
     private bool _isDarkTheme;
 
-    public string ThemeToolTip => IsDarkTheme ? "라이트 테마로 전환" : "다크 테마로 전환";
+    public string ThemeToolTip => IsDarkTheme ? Loc.T("라이트 테마로 전환", "Switch to light theme") : Loc.T("다크 테마로 전환", "Switch to dark theme");
 
     /// <summary>테마 전환(다크 ↔ 라이트). 선택은 설정에 저장되어 다음 실행에도 유지된다.</summary>
     [RelayCommand]
@@ -184,7 +223,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (_terminalStarted)
         {
             if (!Terminal.Session.IsIdle
-                && !_dialogs.Confirm("터미널 셸 변경", "실행 중인 작업이 있습니다. 터미널을 새 셸로 다시 시작하면 종료됩니다. 계속할까요?"))
+                && !_dialogs.Confirm(Loc.T("터미널 셸 변경", "Change terminal shell"), Loc.T("실행 중인 작업이 있습니다. 터미널을 새 셸로 다시 시작하면 종료됩니다. 계속할까요?", "A task is still running. Restarting the terminal with the new shell will end it. Continue?")))
             {
                 // 콤보박스 갱신이 끝난 뒤 이전 값으로 되돌린다.
                 Application.Current.Dispatcher.BeginInvoke(() =>
@@ -200,8 +239,46 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Settings.TerminalShell = shell;
     }
 
-    /// <summary>설정 창 콤보박스에 보여줄 터미널 테마 이름(TerminalThemes.All과 같은 순서).</summary>
-    public IReadOnlyList<string> TerminalThemeNames { get; } = TerminalThemes.All.Select(t => t.DisplayName).ToList();
+    /// <summary>설정 창 콤보박스에 보여줄 터미널 테마(TerminalThemes.All과 같은 순서).</summary>
+    public IReadOnlyList<TerminalThemeOption> TerminalThemeOptions { get; } = TerminalThemes.All.Select(t => new TerminalThemeOption(t)).ToList();
+
+    // ----- 언어 -----
+
+    /// <summary>설정 창의 언어 선택(0=한국어, 1=English). 바꾸면 화면 전체가 즉시 바뀌고 설정에 저장된다.</summary>
+    [ObservableProperty]
+    private int _languageIndex;
+
+    partial void OnLanguageIndexChanged(int value)
+    {
+        AppLanguage language = value == 1 ? AppLanguage.English : AppLanguage.Korean;
+        Settings.Language = Loc.ToCode(language);
+        Loc.SetLanguage(language);
+    }
+
+    /// <summary>언어가 바뀌면 코드에서 만든 문구(속성, 목록 항목)를 새 언어로 다시 읽게 한다. XAML 문구는 LocSource가 따로 갱신한다.</summary>
+    private void OnLanguageChanged()
+    {
+        LanguageIndex = Loc.Current == AppLanguage.English ? 1 : 0; // 코드에서 언어를 바꾼 경우에도 설정 창 선택을 맞춘다.
+        foreach (SyncModeOption option in SyncModes)
+        {
+            option.RefreshLabel();
+        }
+        foreach (TerminalThemeOption option in TerminalThemeOptions)
+        {
+            option.RefreshName();
+        }
+        OnPropertyChanged(string.Empty); // 이 ViewModel의 모든 바인딩(SyncSummary, 테마 툴팁 등)을 다시 읽는다.
+        Explorer.RefreshLanguage();
+        Terminal.RefreshLanguage();
+        foreach (DriveItemViewModel drive in Drives)
+        {
+            drive.RefreshLanguage();
+        }
+        foreach (FavoriteSlotViewModel slot in Favorites)
+        {
+            slot.RefreshLanguage();
+        }
+    }
 
     [ObservableProperty]
     private int _terminalThemeIndex;
@@ -238,13 +315,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             var bad = new List<string>();
             if (!string.IsNullOrWhiteSpace(TerminalForeground) && TerminalThemes.TryParseColor(TerminalForeground) is null)
             {
-                bad.Add("글자색");
+                bad.Add(Loc.T("글자색", "Text color"));
             }
             if (!string.IsNullOrWhiteSpace(TerminalBackground) && TerminalThemes.TryParseColor(TerminalBackground) is null)
             {
-                bad.Add("배경색");
+                bad.Add(Loc.T("배경색", "Background color"));
             }
-            return bad.Count == 0 ? string.Empty : $"{string.Join("·", bad)} 형식이 올바르지 않습니다. #RRGGBB 형식(예: #FFD700)으로 입력하세요. 그 전까지는 테마 색을 씁니다.";
+            return bad.Count == 0 ? string.Empty : Loc.T(
+                $"{string.Join("·", bad)} 형식이 올바르지 않습니다. #RRGGBB 형식(예: #FFD700)으로 입력하세요. 그 전까지는 테마 색을 씁니다.",
+                $"{string.Join(", ", bad)}: invalid format. Enter it as #RRGGBB (for example #FFD700). Until then the theme color is used.");
         }
     }
 
@@ -308,7 +387,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
-            InfoMessage = $"계산기를 열 수 없습니다: {ex.Message}";
+            InfoMessage = Loc.T($"계산기를 열 수 없습니다: {ex.Message}", $"Could not open Calculator: {ex.Message}");
         }
     }
 
@@ -319,24 +398,27 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         (long Items, long Bytes)? content = await Task.Run(Services.RecycleBinService.Query);
         if (content is { Items: 0 })
         {
-            NotifySuccess("휴지통이 이미 비어 있습니다.");
+            NotifySuccess(Loc.T("휴지통이 이미 비어 있습니다.", "The Recycle Bin is already empty."));
             return;
         }
-        string what = content is { } c ? $"{c.Items:N0}개 항목({SizeFormatter.Format(c.Bytes)})을 " : "모든 항목을 ";
-        if (!_dialogs.Confirm("휴지통 비우기", $"휴지통의 {what}영구 삭제합니다. 되돌릴 수 없습니다. 계속할까요?"))
+        string what = content is { } c
+            ? Loc.T($"{c.Items:N0}개 항목({SizeFormatter.Format(c.Bytes)})을 ", $"{c.Items:N0} items ({SizeFormatter.Format(c.Bytes)})")
+            : Loc.T("모든 항목을 ", "all items");
+        if (!_dialogs.Confirm(Loc.T("휴지통 비우기", "Empty Recycle Bin"),
+                Loc.T($"휴지통의 {what}영구 삭제합니다. 되돌릴 수 없습니다. 계속할까요?", $"This permanently deletes {what} from the Recycle Bin. This cannot be undone. Continue?")))
         {
             return;
         }
         try
         {
             await Task.Run(Services.RecycleBinService.Empty);
-            NotifySuccess("휴지통을 비웠습니다.");
+            NotifySuccess(Loc.T("휴지통을 비웠습니다.", "The Recycle Bin has been emptied."));
             _log.Info("휴지통 비움");
         }
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or System.ComponentModel.Win32Exception)
         {
             _log.Warn($"휴지통 비우기 실패: {ex.Message}");
-            InfoMessage = $"휴지통을 비우지 못했습니다: {ex.Message}";
+            InfoMessage = Loc.T($"휴지통을 비우지 못했습니다: {ex.Message}", $"Could not empty the Recycle Bin: {ex.Message}");
         }
     }
 
@@ -356,7 +438,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void ResetFavorites()
     {
-        if (!_dialogs.Confirm("즐겨찾기 초기화", "등록된 즐겨찾기를 모두 비웁니다. 계속할까요?"))
+        if (!_dialogs.Confirm(Loc.T("즐겨찾기 초기화", "Reset favorites"), Loc.T("등록된 즐겨찾기를 모두 비웁니다. 계속할까요?", "This clears all registered favorites. Continue?")))
         {
             return;
         }
@@ -373,14 +455,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private void ShowAbout() => _dialogs.ShowAbout();
 
     /// <summary>상태 표시줄 왼쪽에 보이는 동기화 요약. 예: "경로 동기화: 양방향".</summary>
-    public string SyncSummary => $"경로 동기화: {SelectedSyncMode.Label}";
+    public string SyncSummary => $"{Loc.T("경로 동기화", "Path sync")}: {SelectedSyncMode.Label}";
 
     private static string FormatGpu(double? percent) => percent is { } g ? $"{g:0}%" : "N/A";
 
     /// <summary>측정값을 표시 문구로 바꾼다. GPU 카운터가 없는 환경이면 "N/A".</summary>
     public static string FormatUsage(SystemUsage u)
     {
-        return $"CPU {u.CpuPercent:0}% | GPU {FormatGpu(u.GpuPercent)} | 메모리 {SizeFormatter.Format(u.MemoryUsedBytes)} / {SizeFormatter.Format(u.MemoryTotalBytes)} ({u.MemoryPercent:0}%)";
+        return $"CPU {u.CpuPercent:0}% | GPU {FormatGpu(u.GpuPercent)} | {Loc.T("메모리", "Memory")} {SizeFormatter.Format(u.MemoryUsedBytes)} / {SizeFormatter.Format(u.MemoryTotalBytes)} ({u.MemoryPercent:0}%)";
     }
 
     public MainViewModel(SettingsService settingsService, FolderSizeCache sizeCache, ILog log)
@@ -406,6 +488,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Terminal.IsCollapsed = Settings.TerminalCollapsed;
         _sync = new PathSyncService(Explorer, Terminal, log) { Mode = Settings.SyncMode };
         _selectedSyncMode = SyncModes.First(o => o.Mode == Settings.SyncMode);
+        _languageIndex = Loc.Current == AppLanguage.English ? 1 : 0;
+        Loc.LanguageChanged += OnLanguageChanged;
 
         BuildFavoriteSlots();
         WireEvents();
@@ -568,7 +652,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             return;
         }
-        string? name = _dialogs.Prompt("즐겨찾기 이름 변경", "표시할 이름을 입력하세요.", slot.Name);
+        string? name = _dialogs.Prompt(Loc.T("즐겨찾기 이름 변경", "Rename favorite"), Loc.T("표시할 이름을 입력하세요.", "Enter the name to display."), slot.Name);
         if (name is not null)
         {
             slot.Name = name;
@@ -610,6 +694,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        Loc.LanguageChanged -= OnLanguageChanged;
         _monitor.Dispose();
         Terminal.Dispose();
     }

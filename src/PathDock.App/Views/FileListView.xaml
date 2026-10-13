@@ -1,6 +1,7 @@
 <UserControl x:Class="PathDock.App.Views.FileListView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:PathDock.App.Localization"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:ctl="clr-namespace:PathDock.App.Controls"
              xmlns:vm="clr-namespace:PathDock.App.ViewModels">
@@ -18,11 +19,11 @@
             <!-- 이름 검색(Ctrl+F로 이동): 입력한 글자가 이름에 들어간 파일/폴더만 목록에 보인다. Esc나 폴더 이동 시 해제 -->
             <ui:TextBox x:Name="FilterBox" Width="170" MinHeight="26" Height="26" Margin="8,-4,-6,-4" Padding="6,2"
                         FontSize="{DynamicResource PdFontSize}"
-                        PlaceholderText="이름 검색 (Ctrl+F)"
+                        PlaceholderText="{loc:T '이름 검색 (Ctrl+F)', 'Search names (Ctrl+F)'}"
                         Icon="{ui:SymbolIcon Search24}"
                         Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
                         KeyDown="FilterBox_KeyDown"
-                        AutomationProperties.AutomationId="FilterBox" AutomationProperties.Name="이름 검색" />
+                        AutomationProperties.AutomationId="FilterBox" AutomationProperties.Name="{loc:T '이름 검색', 'Search names'}" />
         </ctl:PanelCard.HeaderTrailing>
         <Grid>
             <Grid.RowDefinitions>
@@ -36,24 +37,24 @@
                          SelectionMode="Extended"
                          SelectionChanged="FileList_SelectionChanged"
                          AutomationProperties.AutomationId="FileList"
-                         AutomationProperties.Name="파일 목록"
+                         AutomationProperties.Name="{loc:T '파일 목록', 'File list'}"
                          MouseDoubleClick="FileList_MouseDoubleClick"
                          KeyDown="FileList_KeyDown">
                 <ui:ListView.ContextMenu>
                     <ContextMenu>
-                        <MenuItem Header="복사 (Ctrl+C)" Command="{Binding CopySelectedCommand}" />
-                        <MenuItem Header="잘라내기 (Ctrl+X)" Command="{Binding CutSelectedCommand}" />
-                        <MenuItem Header="붙여넣기 (Ctrl+V)" Command="{Binding PasteCommand}" />
+                        <MenuItem Header="{loc:T '복사 (Ctrl+C)', 'Copy (Ctrl+C)'}" Command="{Binding CopySelectedCommand}" />
+                        <MenuItem Header="{loc:T '잘라내기 (Ctrl+X)', 'Cut (Ctrl+X)'}" Command="{Binding CutSelectedCommand}" />
+                        <MenuItem Header="{loc:T '붙여넣기 (Ctrl+V)', 'Paste (Ctrl+V)'}" Command="{Binding PasteCommand}" />
                         <Separator />
-                        <MenuItem Header="이름 변경 (F2)" Command="{Binding RenameSelectedCommand}" />
-                        <MenuItem Header="삭제 - 휴지통 (Delete)" Command="{Binding DeleteSelectedCommand}" />
+                        <MenuItem Header="{loc:T '이름 변경 (F2)', 'Rename (F2)'}" Command="{Binding RenameSelectedCommand}" />
+                        <MenuItem Header="{loc:T '삭제 - 휴지통 (Delete)', 'Delete - Recycle Bin (Delete)'}" Command="{Binding DeleteSelectedCommand}" />
                         <Separator />
-                        <MenuItem Header="새 폴더 (Ctrl+Shift+N)" Command="{Binding NewFolderCommand}" />
+                        <MenuItem Header="{loc:T '새 폴더 (Ctrl+Shift+N)', 'New folder (Ctrl+Shift+N)'}" Command="{Binding NewFolderCommand}" />
                     </ContextMenu>
                 </ui:ListView.ContextMenu>
                 <ui:ListView.View>
                     <ui:GridView ColumnHeaderContainerStyle="{StaticResource PdHeaderStyle}">
-                        <ui:GridViewColumn x:Name="NameColumn" Header="이름" Width="280">
+                        <ui:GridViewColumn x:Name="NameColumn" Header="{loc:T '이름', 'Name'}" Width="280">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate DataType="{x:Type vm:FileItemViewModel}">
                                     <StackPanel Orientation="Horizontal" ToolTipService.InitialShowDelay="400"
@@ -85,11 +86,11 @@
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </ui:GridViewColumn>
-                        <ui:GridViewColumn x:Name="ModifiedColumn" Header="수정한 날짜" Width="140"
+                        <ui:GridViewColumn x:Name="ModifiedColumn" Header="{loc:T '수정한 날짜', 'Date modified'}" Width="140"
                                            DisplayMemberBinding="{Binding ModifiedText}" />
-                        <ui:GridViewColumn x:Name="SizeColumn" Header="크기" Width="130"
+                        <ui:GridViewColumn x:Name="SizeColumn" Header="{loc:T '크기', 'Size'}" Width="130"
                                            DisplayMemberBinding="{Binding SizeText}" />
-                        <ui:GridViewColumn x:Name="CountColumn" Header="하위 항목" Width="150"
+                        <ui:GridViewColumn x:Name="CountColumn" Header="{loc:T '하위 항목', 'Contents'}" Width="150"
                                            DisplayMemberBinding="{Binding CountText}" />
                     </ui:GridView>
                 </ui:ListView.View>

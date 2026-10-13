@@ -1,6 +1,7 @@
 <Window x:Class="PathDock.App.Views.InputDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:PathDock.App.Localization"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         FontFamily="{StaticResource PdFontFamily}"
         Width="420" SizeToContent="Height" ResizeMode="NoResize"
@@ -13,9 +14,9 @@
         <TextBlock x:Name="ErrorText" Margin="0,6,0,0" Foreground="#E5484D" TextWrapping="Wrap"
                    AutomationProperties.AutomationId="InputError" />
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-            <ui:Button Content="확인" Appearance="Primary" MinWidth="80" Margin="0,0,8,0" IsDefault="True"
+            <ui:Button Content="{loc:T '확인', 'OK'}" Appearance="Primary" MinWidth="80" Margin="0,0,8,0" IsDefault="True"
                        Click="Ok_Click" AutomationProperties.AutomationId="InputOk" />
-            <ui:Button Content="취소" MinWidth="80" IsCancel="True"
+            <ui:Button Content="{loc:T '취소', 'Cancel'}" MinWidth="80" IsCancel="True"
                        AutomationProperties.AutomationId="InputCancel" />
         </StackPanel>
     </StackPanel>

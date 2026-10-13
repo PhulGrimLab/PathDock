@@ -1,4 +1,5 @@
 using Microsoft.VisualBasic.FileIO;
+using PathDock.Core.Localization;
 
 namespace PathDock.Core.Explorer;
 
@@ -13,19 +14,19 @@ public static class FileOperations
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            return "이름을 입력하세요.";
+            return Loc.T("이름을 입력하세요.", "Enter a name.");
         }
         if (name is "." or "..")
         {
-            return "사용할 수 없는 이름입니다.";
+            return Loc.T("사용할 수 없는 이름입니다.", "This name cannot be used.");
         }
         if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
         {
-            return "이름에 \\ / : * ? \" < > | 문자는 쓸 수 없습니다.";
+            return Loc.T("이름에 \\ / : * ? \" < > | 문자는 쓸 수 없습니다.", "A name cannot contain any of these characters: \\ / : * ? \" < > |");
         }
         if (name.EndsWith('.') || name.EndsWith(' '))
         {
-            return "이름은 마침표나 공백으로 끝날 수 없습니다.";
+            return Loc.T("이름은 마침표나 공백으로 끝날 수 없습니다.", "A name cannot end with a period or a space.");
         }
         return null;
     }
@@ -38,12 +39,12 @@ public static class FileOperations
         {
             throw new ArgumentException(error, nameof(newName));
         }
-        string parent = Path.GetDirectoryName(path) ?? throw new ArgumentException("루트는 이름을 바꿀 수 없습니다.", nameof(path));
+        string parent = Path.GetDirectoryName(path) ?? throw new ArgumentException(Loc.T("루트는 이름을 바꿀 수 없습니다.", "A root folder cannot be renamed."), nameof(path));
         string target = Path.Combine(parent, newName);
         bool isDir = Directory.Exists(path);
         if (!isDir && !File.Exists(path))
         {
-            throw new FileNotFoundException("대상을 찾을 수 없습니다.", path);
+            throw new FileNotFoundException(Loc.T("대상을 찾을 수 없습니다.", "The item could not be found."), path);
         }
         if (string.Equals(path, target, StringComparison.Ordinal))
         {
@@ -52,7 +53,7 @@ public static class FileOperations
         bool caseOnly = string.Equals(path, target, StringComparison.OrdinalIgnoreCase);
         if (!caseOnly && (File.Exists(target) || Directory.Exists(target)))
         {
-            throw new IOException($"같은 이름이 이미 있습니다: {newName}");
+            throw new IOException(Loc.T($"같은 이름이 이미 있습니다: {newName}", $"An item with the same name already exists: {newName}"));
         }
 
         if (caseOnly)
@@ -92,7 +93,7 @@ public static class FileOperations
         string target = Path.Combine(parent, name);
         if (File.Exists(target) || Directory.Exists(target))
         {
-            throw new IOException($"같은 이름이 이미 있습니다: {name}");
+            throw new IOException(Loc.T($"같은 이름이 이미 있습니다: {name}", $"An item with the same name already exists: {name}"));
         }
         Directory.CreateDirectory(target);
         return target;
@@ -101,7 +102,7 @@ public static class FileOperations
     /// <summary>"새 폴더", "새 폴더 (2)"처럼 아직 없는 기본 이름을 제안한다.</summary>
     public static string SuggestNewFolderName(string parent)
     {
-        const string Base = "새 폴더";
+        string Base = Loc.T("새 폴더", "New folder");
         string name = Base;
         for (int n = 2; Directory.Exists(Path.Combine(parent, name)) || File.Exists(Path.Combine(parent, name)); n++)
         {
@@ -122,7 +123,8 @@ public static class FileOperations
         string ext = isDirectory ? string.Empty : Path.GetExtension(name);
         for (int n = 1; ; n++)
         {
-            string candidate = Path.Combine(destDir, n == 1 ? $"{stem} - 복사{ext}" : $"{stem} - 복사 ({n}){ext}");
+            string copy = Loc.T("복사", "Copy");
+            string candidate = Path.Combine(destDir, n == 1 ? $"{stem} - {copy}{ext}" : $"{stem} - {copy} ({n}){ext}");
             if (!File.Exists(candidate) && !Directory.Exists(candidate))
             {
                 return candidate;
@@ -144,11 +146,11 @@ public static class FileOperations
         bool isDir = Directory.Exists(source);
         if (!isDir && !File.Exists(source))
         {
-            throw new FileNotFoundException("대상을 찾을 수 없습니다.", source);
+            throw new FileNotFoundException(Loc.T("대상을 찾을 수 없습니다.", "The item could not be found."), source);
         }
         if (isDir && IsSameOrInside(destDir, source))
         {
-            throw new IOException("폴더를 자기 자신 안으로 복사할 수 없습니다.");
+            throw new IOException(Loc.T("폴더를 자기 자신 안으로 복사할 수 없습니다.", "A folder cannot be copied into itself."));
         }
         string target = UniqueTargetPath(destDir, Path.GetFileName(source.TrimEnd('\\', '/')), isDir);
         if (isDir)
@@ -188,7 +190,7 @@ public static class FileOperations
         bool isDir = Directory.Exists(source);
         if (!isDir && !File.Exists(source))
         {
-            throw new FileNotFoundException("대상을 찾을 수 없습니다.", source);
+            throw new FileNotFoundException(Loc.T("대상을 찾을 수 없습니다.", "The item could not be found."), source);
         }
         string trimmed = source.TrimEnd('\\', '/');
         if (string.Equals(Path.GetDirectoryName(trimmed), Path.GetFullPath(destDir).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase))
@@ -197,7 +199,7 @@ public static class FileOperations
         }
         if (isDir && IsSameOrInside(destDir, source))
         {
-            throw new IOException("폴더를 자기 자신 안으로 옮길 수 없습니다.");
+            throw new IOException(Loc.T("폴더를 자기 자신 안으로 옮길 수 없습니다.", "A folder cannot be moved into itself."));
         }
         bool sameVolume = string.Equals(Path.GetPathRoot(Path.GetFullPath(source)), Path.GetPathRoot(Path.GetFullPath(destDir)), StringComparison.OrdinalIgnoreCase);
         if (sameVolume)
@@ -252,7 +254,7 @@ public static class FileOperations
         }
         else
         {
-            throw new FileNotFoundException("대상을 찾을 수 없습니다.", path);
+            throw new FileNotFoundException(Loc.T("대상을 찾을 수 없습니다.", "The item could not be found."), path);
         }
     }
 }

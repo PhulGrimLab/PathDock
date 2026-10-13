@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using PathDock.Core.Explorer;
+using PathDock.Core.Localization;
 using Wpf.Ui.Controls;
 
 namespace PathDock.App.ViewModels;
@@ -13,7 +14,7 @@ namespace PathDock.App.ViewModels;
 /// </summary>
 public sealed partial class FileItemViewModel : ObservableObject
 {
-    public const string CalculatingText = "계산 중…";
+    public static string CalculatingText => Loc.T("계산 중…", "Calculating…");
 
     public FileItemViewModel(FileItem item)
     {
@@ -94,8 +95,8 @@ public sealed partial class FileItemViewModel : ObservableObject
             {
                 return CalculatingText;
             }
-            string size = OverLimit ? SizeFormatter.Format(FolderSizeCalculator.SizeLimit) + " 이상" : SizeFormatter.Format(Stats.TotalSize) + (Stats.Incomplete ? "+" : string.Empty);
-            return size + (IsStale ? " (갱신 중)" : string.Empty);
+            string size = OverLimit ? SizeFormatter.Format(FolderSizeCalculator.SizeLimit) + Loc.T(" 이상", " or more") : SizeFormatter.Format(Stats.TotalSize) + (Stats.Incomplete ? "+" : string.Empty);
+            return size + (IsStale ? Loc.T(" (갱신 중)", " (updating)") : string.Empty);
         }
     }
 
@@ -103,9 +104,23 @@ public sealed partial class FileItemViewModel : ObservableObject
     public bool OverLimit => Stats is not null && Stats.TotalSize >= FolderSizeCalculator.SizeLimit;
 
     /// <summary>폴더의 하위 파일/폴더 수. 예: "파일 12 · 폴더 3", 1000개 이상은 "1천개 이상".</summary>
-    public string CountText => Stats is null ? string.Empty : $"파일 {CountPart(Stats.FileCount)} · 폴더 {CountPart(Stats.FolderCount)}";
+    public string CountText => Stats is null
+        ? string.Empty
+        : Loc.T($"파일 {CountPart(Stats.FileCount)} · 폴더 {CountPart(Stats.FolderCount)}",
+            $"{CountPart(Stats.FileCount, "file", "files")} · {CountPart(Stats.FolderCount, "folder", "folders")}");
 
-    private string CountPart(int n) => n >= 1000 ? "1천개 이상" : OverLimit ? $"{n:N0}개 이상" : n.ToString("N0");
+    /// <summary>개수 문구. 한국어는 숫자만("파일 {0}"), 영어는 단수/복수 단위를 붙인다. 1000개 이상은 "1천개 이상"/"1,000+".</summary>
+    private string CountPart(int n, string singular = "", string plural = "")
+    {
+        string number = n >= 1000
+            ? Loc.T("1천개 이상", "1,000+")
+            : OverLimit ? Loc.T($"{n:N0}개 이상", $"{n:N0}+") : n.ToString("N0");
+        if (Loc.IsKorean || singular.Length == 0)
+        {
+            return number;
+        }
+        return n >= 1000 || OverLimit ? $"{number} {plural}" : Loc.Plural(n, singular, plural);
+    }
 
     /// <summary>마우스를 올리면 썸네일을 보여줄 이미지 파일인지.</summary>
     public bool IsImageFile => !IsDirectory && ImagePreviewTypes.IsPreviewable(Name);
@@ -141,13 +156,13 @@ public sealed partial class FileItemViewModel : ObservableObject
                 string size = SizeFormatter.Format(text.FileBytes);
                 return text.TotalLines switch
                 {
-                    null => $"앞 {TextPreviewer.MaxLines}줄 · {size}",
-                    0 => $"빈 파일 · {size}",
-                    int n when n > TextPreviewer.MaxLines => $"{n:N0}줄 중 앞 {TextPreviewer.MaxLines}줄 · {size}",
-                    int n => $"{n:N0}줄 · {size}",
+                    null => Loc.T($"앞 {TextPreviewer.MaxLines}줄 · {size}", $"First {TextPreviewer.MaxLines} lines · {size}"),
+                    0 => Loc.T($"빈 파일 · {size}", $"Empty file · {size}"),
+                    int n when n > TextPreviewer.MaxLines => Loc.T($"{n:N0}줄 중 앞 {TextPreviewer.MaxLines}줄 · {size}", $"First {TextPreviewer.MaxLines} of {n:N0} lines · {size}"),
+                    int n => Loc.T($"{n:N0}줄 · {size}", $"{Loc.Plural(n, "line", "lines")} · {size}"),
                 };
             }
-            return "불러오는 중…";
+            return Loc.T("불러오는 중…", "Loading…");
         }
     }
 
@@ -177,6 +192,9 @@ public sealed partial class FileItemViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SizeText))]
     private bool _isStale;
+
+    /// <summary>언어가 바뀌었을 때 코드에서 만든 문구(크기·개수·미리보기 설명)를 다시 읽게 한다.</summary>
+    public void RefreshLanguage() => OnPropertyChanged(string.Empty);
 
     public void SetStats(FolderStats stats, bool stale = false)
     {

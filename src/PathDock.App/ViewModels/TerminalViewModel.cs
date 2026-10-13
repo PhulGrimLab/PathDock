@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using PathDock.Core.Localization;
 using PathDock.Core.Logging;
 using PathDock.Core.Sync;
 using PathDock.Core.Terminal;
@@ -25,9 +26,37 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
     [ObservableProperty]
     private TerminalSession _session;
 
-    /// <summary>하단 상태 문구(실행 중/대기 중/종료 등).</summary>
-    [ObservableProperty]
-    private string _statusText = "터미널 시작 중...";
+    private enum Status
+    {
+        Starting,
+        Idle,
+        Running,
+        Exited,
+        WaitingToMove,
+    }
+
+    private Status _status = Status.Starting;
+    private string _statusDetail = string.Empty;
+
+    /// <summary>하단 상태 문구(실행 중/대기 중/종료 등). 상태와 세부값(종료 코드, 대기 중인 경로)만 저장하고 문구는 현재 언어로 만든다.</summary>
+    public string StatusText => _status switch
+    {
+        Status.Idle => Loc.T("터미널: 대기 중(입력 가능)", "Terminal: idle (ready for input)"),
+        Status.Running => Loc.T("터미널: 명령 실행 중", "Terminal: running a command"),
+        Status.Exited => Loc.T($"터미널 종료됨 (코드 {_statusDetail})", $"Terminal exited (code {_statusDetail})"),
+        Status.WaitingToMove => Loc.T($"터미널 실행 중 - 이동 대기: {_statusDetail}", $"Terminal busy - waiting to move: {_statusDetail}"),
+        _ => Loc.T("터미널 시작 중...", "Starting terminal..."),
+    };
+
+    private void SetStatus(Status status, string detail = "")
+    {
+        _status = status;
+        _statusDetail = detail;
+        OnPropertyChanged(nameof(StatusText));
+    }
+
+    /// <summary>언어가 바뀌었을 때 코드에서 만든 문구를 다시 읽게 한다.</summary>
+    public void RefreshLanguage() => OnPropertyChanged(string.Empty);
 
     /// <summary>탐색기에서 온 이동이 터미널 실행 중이라 보류 중인지(상태 문구를 강조 표시).</summary>
     [ObservableProperty]
@@ -46,7 +75,7 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
     [NotifyPropertyChangedFor(nameof(CollapseToolTip))]
     private bool _isCollapsed;
 
-    public string CollapseToolTip => IsCollapsed ? "터미널 펼치기" : "터미널 접기";
+    public string CollapseToolTip => IsCollapsed ? Loc.T("터미널 펼치기", "Expand terminal") : Loc.T("터미널 접기", "Collapse terminal");
 
     /// <summary>사용자에게 알릴 결과 메시지(저장 성공/실패). MainViewModel이 하단 안내줄에 표시한다.</summary>
     public event Action<string, bool>? Notice;
@@ -55,7 +84,7 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
     [CommunityToolkit.Mvvm.Input.RelayCommand]
     private void SaveOutput()
     {
-        string? path = _dialogs.PickSaveFile("터미널 내용 저장", $"terminal-{DateTime.Now:yyyyMMdd-HHmmss}.txt");
+        string? path = _dialogs.PickSaveFile(Loc.T("터미널 내용 저장", "Save terminal contents"), $"terminal-{DateTime.Now:yyyyMMdd-HHmmss}.txt");
         if (path is null)
         {
             return;
@@ -64,12 +93,12 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
         {
             System.IO.File.WriteAllText(path, Session.Screen.GetAllText() + "\r\n", new System.Text.UTF8Encoding(true));
             _log.Info($"터미널 내용 저장: {path}");
-            Notice?.Invoke($"터미널 내용을 저장했습니다: {path}", true);
+            Notice?.Invoke(Loc.T($"터미널 내용을 저장했습니다: {path}", $"Terminal contents saved: {path}"), true);
         }
         catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
         {
             _log.Warn($"터미널 내용 저장 실패: {path} - {ex.Message}");
-            Notice?.Invoke($"저장하지 못했습니다: {ex.Message}", false);
+            Notice?.Invoke(Loc.T($"저장하지 못했습니다: {ex.Message}", $"Could not save: {ex.Message}"), false);
         }
     }
 
@@ -108,7 +137,7 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
             {
                 return;
             }
-            StatusText = idle ? "터미널: 대기 중(입력 가능)" : "터미널: 명령 실행 중";
+            SetStatus(idle ? Status.Idle : Status.Running);
             if (idle)
             {
                 IsPending = false;
@@ -118,7 +147,7 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
         {
             if (ReferenceEquals(s, Session))
             {
-                StatusText = $"터미널 종료됨 (코드 {code})";
+                SetStatus(Status.Exited, code.ToString());
             }
         });
         return s;
@@ -129,19 +158,23 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
     {
         TerminalSession old = Session;
         Session = CreateSession();
-        StatusText = "터미널 시작 중...";
+        SetStatus(Status.Starting);
         IsPending = false;
         Start(workingDirectory, shell);
         old.Dispose();
     }
 
+    private TerminalShell _shell = TerminalShell.PowerShell;
+
     /// <summary>패널 머리글에 표시할 셸 이름(Start에서 정해진다).</summary>
-    [ObservableProperty]
-    private string _header = "터미널 - PowerShell";
+    public string Header => _shell == TerminalShell.CommandPrompt
+        ? Loc.T("터미널 - 명령 프롬프트", "Terminal - Command Prompt")
+        : Loc.T("터미널 - PowerShell", "Terminal - PowerShell");
 
     public void Start(string? workingDirectory, TerminalShell shell = TerminalShell.PowerShell)
     {
-        Header = shell == TerminalShell.CommandPrompt ? "터미널 - 명령 프롬프트" : "터미널 - PowerShell";
+        _shell = shell;
+        OnPropertyChanged(nameof(Header));
         Session.Start(workingDirectory, shell);
     }
 
@@ -153,7 +186,7 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
         bool delivered = Session.RequestChangeDirectory(path);
         if (!delivered)
         {
-            StatusText = $"터미널 실행 중 - 이동 대기: {path}";
+            SetStatus(Status.WaitingToMove, path);
             IsPending = true;
         }
         else

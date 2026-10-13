@@ -87,7 +87,7 @@ public sealed class PathSyncService
         if (normalized is null || !Directory.Exists(normalized))
         {
             _log.Warn($"sync {direction} 실패: 경로 없음 ({path})");
-            Warning?.Invoke(new SyncWarning($"폴더를 찾을 수 없어 동기화하지 않았습니다: {path}"));
+            Warning?.Invoke(new SyncWarning(Localization.Loc.T($"폴더를 찾을 수 없어 동기화하지 않았습니다: {path}", $"Not synced because the folder could not be found: {path}")));
             return;
         }
         if (PathNormalizer.AreSame(target.CurrentPath, normalized))

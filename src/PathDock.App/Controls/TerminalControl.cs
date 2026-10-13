@@ -6,6 +6,7 @@ using System.Windows.Automation.Provider;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using PathDock.Core.Localization;
 using PathDock.Core.Terminal;
 
 namespace PathDock.App.Controls;
@@ -689,8 +690,10 @@ public sealed class TerminalControl : FrameworkElement
                 // 여러 줄은 줄마다 명령으로 실행되므로 한 번 확인한다(우클릭 실수 방지).
                 string first = text.Split('\r')[0];
                 string preview = first.Length > 60 ? first[..60] + "…" : first;
-                string message = $"{lines}줄을 터미널에 붙여넣습니다. 줄바꿈마다 명령이 바로 실행됩니다.\n\n첫 줄: {preview}\n\n계속할까요?";
-                if (!PathDock.App.Views.ConfirmDialog.Ask(Window.GetWindow(this), "여러 줄 붙여넣기", message))
+                string message = Loc.T(
+                    $"{lines}줄을 터미널에 붙여넣습니다. 줄바꿈마다 명령이 바로 실행됩니다.\n\n첫 줄: {preview}\n\n계속할까요?",
+                    $"{lines} lines will be pasted into the terminal. Each line break runs a command immediately.\n\nFirst line: {preview}\n\nContinue?");
+                if (!PathDock.App.Views.ConfirmDialog.Ask(Window.GetWindow(this), Loc.T("여러 줄 붙여넣기", "Paste multiple lines"), message))
                 {
                     return;
                 }

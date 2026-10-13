@@ -52,6 +52,8 @@ public sealed class AppSettings
     public bool StartAtLastPath { get; set; } = true;
     /// <summary>터미널에서 실행할 셸(다음 실행부터 적용).</summary>
     public TerminalShell TerminalShell { get; set; } = TerminalShell.PowerShell;
+    /// <summary>화면 언어 코드("ko" 또는 "en"). 비어 있으면 운영체제 표시 언어를 따른다.</summary>
+    public string Language { get; set; } = string.Empty;
     /// <summary>터미널 패널을 접은 상태로 시작할지.</summary>
     public bool TerminalCollapsed { get; set; }
 }

@@ -2,6 +2,7 @@ using System.Windows;
 using PathDock.App.ViewModels;
 using PathDock.App.Views;
 using PathDock.Core.Explorer;
+using PathDock.Core.Localization;
 using PathDock.Core.Logging;
 using PathDock.Core.Settings;
 
@@ -30,6 +31,7 @@ public partial class App : Application
         var settings = new SettingsService(dataDir, _logger);
         // 테마는 창이 만들어지기 전에 적용해야 첫 화면부터 올바른 색으로 그려진다.
         AppSettings loaded = settings.Load();
+        Loc.SetLanguage(Loc.Parse(loaded.Language)); // 문구는 첫 화면부터 선택한 언어로 만들어야 한다.
         Services.ThemeService.Apply(loaded.Theme);
         Services.FontService.ApplyUi(loaded.UiFontSize);
         var sizeCache = new FolderSizeCache(dataDir, _logger);

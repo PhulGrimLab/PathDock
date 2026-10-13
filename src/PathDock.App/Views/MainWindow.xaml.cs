@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
 using PathDock.App.ViewModels;
+using PathDock.Core.Localization;
 using Wpf.Ui.Controls;
 
 namespace PathDock.App.Views;
@@ -31,6 +32,9 @@ public partial class MainWindow : FluentWindow
         _vm = vm;
         InitializeComponent();
         DataContext = vm;
+        UpdateVersionLabel();
+        Loc.LanguageChanged += UpdateVersionLabel;
+        Closed += (_, _) => Loc.LanguageChanged -= UpdateVersionLabel;
         ApplyMinSize(vm.UiFontSize);
         vm.PropertyChanged += (_, e) =>
         {
@@ -51,6 +55,15 @@ public partial class MainWindow : FluentWindow
         Closing += OnClosing;
         Loaded += (_, _) => TerminalPanel.FocusTerminal();
         StartClock();
+    }
+
+    /// <summary>제목 표시줄의 버전·빌드 날짜 문구와 툴팁을 현재 언어로 만든다.</summary>
+    private void UpdateVersionLabel()
+    {
+        VersionLabel.Text = Services.AppInfo.TitleBarText;
+        VersionLabel.ToolTip = Services.AppInfo.BuildTime is { } built
+            ? Loc.T($"버전 {Services.AppInfo.Version} · 빌드 {built}", $"Version {Services.AppInfo.Version} · built {built}")
+            : Loc.T($"버전 {Services.AppInfo.Version}", $"Version {Services.AppInfo.Version}");
     }
 
     /// <summary>
@@ -106,7 +119,7 @@ public partial class MainWindow : FluentWindow
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
         {
-            _vm.InfoMessage = $"달력을 열 수 없습니다: {ex.Message}";
+            _vm.InfoMessage = Loc.T($"달력을 열 수 없습니다: {ex.Message}", $"Could not open the calendar: {ex.Message}");
         }
     }
 
