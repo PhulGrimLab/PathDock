@@ -110,7 +110,7 @@ public sealed class SettingsService
             File.WriteAllText(tmp, JsonSerializer.Serialize(settings, JsonOptions));
             File.Move(tmp, _filePath, overwrite: true);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
         {
             _log.Warn($"설정 저장 실패: {ex.Message}");
         }

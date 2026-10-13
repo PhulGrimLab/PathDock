@@ -103,7 +103,7 @@ public sealed partial class ExplorerViewModel
         RunFileOperation($"이름을 바꿀 수 없습니다: {item.Name}", item.FullPath, () => FileOperations.Rename(item.FullPath, name));
     }
 
-    /// <summary>선택 항목을 휴지통으로(Delete). 확인 창에서 "예"를 눌러야 실행되며 복구 가능하다.</summary>
+    /// <summary>선택 항목을 삭제(Delete). 확인 창에서 "예"를 눌러야 실행된다. 고정 디스크는 휴지통으로(복구 가능), 그 밖의 드라이브는 영구 삭제이며 문구로 알린다.</summary>
     [RelayCommand]
     private void DeleteSelected()
     {
@@ -112,7 +112,10 @@ public sealed partial class ExplorerViewModel
             return;
         }
         string kind = item.IsDirectory ? "폴더(하위 항목 포함)" : "파일";
-        if (!_dialogs.Confirm("삭제 확인", $"{kind} '{item.Name}'을(를) 휴지통으로 보낼까요?"))
+        string question = FileOperations.UsesRecycleBin(item.FullPath)
+            ? $"{kind} '{item.Name}'을(를) 휴지통으로 보낼까요?"
+            : $"{kind} '{item.Name}'은(는) 이 드라이브에 휴지통이 없어 영구 삭제됩니다(복구 불가). 삭제할까요?";
+        if (!_dialogs.Confirm("삭제 확인", question))
         {
             return;
         }

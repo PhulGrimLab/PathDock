@@ -110,6 +110,27 @@ public static class FileOperations
         return name;
     }
 
+    /// <summary>
+    /// 이 경로를 지우면 휴지통을 거치는지(고정 디스크만 해당). 네트워크/이동식 드라이브는 휴지통이 없어 바로 영구 삭제된다.
+    /// 확인 문구가 실제 동작과 같도록 호출 측이 판단에 쓴다.
+    /// </summary>
+    public static bool UsesRecycleBin(string path)
+    {
+        string? root = Path.GetPathRoot(path);
+        if (string.IsNullOrEmpty(root) || root.StartsWith(@"\\", StringComparison.Ordinal))
+        {
+            return false;
+        }
+        try
+        {
+            return new DriveInfo(root).DriveType == DriveType.Fixed;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>휴지통으로 보낸다(영구 삭제 아님 - 복구 가능). 확인 창/진행 창은 띄우지 않는다.</summary>
     public static void DeleteToRecycleBin(string path)
     {

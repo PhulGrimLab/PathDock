@@ -28,6 +28,7 @@ public sealed class AsyncFileLogger : ILog, IDisposable
 {
     private const int QueueCapacity = 2048;
     private const int FlushWaitMs = 2000;
+    private const int RetentionDays = 14;
 
     private readonly Channel<string> _queue = Channel.CreateBounded<string>(
         new BoundedChannelOptions(QueueCapacity) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true });
@@ -38,6 +39,7 @@ public sealed class AsyncFileLogger : ILog, IDisposable
     {
         _dir = Path.Combine(dataDir, "logs");
         Directory.CreateDirectory(_dir);
+        DeleteOldLogs();
         _writer = new Thread(WriteLoop) { IsBackground = true, Name = "PathDock.LogWriter" };
         _writer.Start();
     }
@@ -48,7 +50,33 @@ public sealed class AsyncFileLogger : ILog, IDisposable
 
     private void Enqueue(string level, string message)
     {
-        _queue.Writer.TryWrite($"{DateTime.Now:HH:mm:ss.fff} [{level}] {message}");
+        _queue.Writer.TryWrite($"{DateTime.Now:HH:mm:ss.fff} [{level}] {Sanitize(message)}");
+    }
+
+    /// <summary>줄바꿈 등 제어 문자를 공백으로 바꿔 한 줄로 만든다(경로/제목 등 외부 입력으로 로그 줄을 위조하지 못하게).</summary>
+    public static string Sanitize(string message)
+    {
+        return message.Any(char.IsControl) ? string.Concat(message.Select(ch => char.IsControl(ch) ? ' ' : ch)) : message;
+    }
+
+    /// <summary>보관 기간이 지난 로그 파일을 지운다. 실패는 무시한다.</summary>
+    private void DeleteOldLogs()
+    {
+        try
+        {
+            DateTime limit = DateTime.Now.AddDays(-RetentionDays);
+            foreach (string file in Directory.EnumerateFiles(_dir, "pathdock-*.log"))
+            {
+                if (File.GetLastWriteTime(file) < limit)
+                {
+                    File.Delete(file);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // 정리 실패는 로깅/실행에 영향을 주지 않는다.
+        }
     }
 
     /// <summary>Writer 스레드 본체: 큐가 완료될 때까지 날짜별 파일에 한 줄씩 기록한다.</summary>

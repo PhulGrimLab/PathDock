@@ -53,7 +53,7 @@
                     <!-- 현재 날짜/시간(초 단위). 더블 클릭하면 Windows 알림 센터의 달력을 연다 -->
                     <TextBlock x:Name="ClockText" Background="Transparent" VerticalAlignment="Center"
                                Margin="0,0,8,0" Padding="6,4"
-                               FontSize="{DynamicResource PdFontSize}"
+                               FontSize="14"
                                ToolTip="더블 클릭: 달력 열기"
                                PreviewMouseLeftButtonDown="OnClockMouseDown"
                                AutomationProperties.AutomationId="ClockText"

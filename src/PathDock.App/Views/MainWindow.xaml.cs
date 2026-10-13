@@ -57,7 +57,7 @@ public partial class MainWindow : FluentWindow
 
     private void UpdateClock()
     {
-        string text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
+        string text = DateTime.Now.ToString("yyyy-MM-dd (ddd) HH:mm:ss", CultureInfo.CurrentCulture);
         if (ClockText.Text != text)
         {
             ClockText.Text = text;

@@ -13,7 +13,7 @@ namespace PathDock.Core.Terminal;
 public sealed class TerminalSession : IDisposable
 {
     /// <summary>
-    /// PowerShell 프롬프트 훅(doc/02 3절). 프롬프트가 그려질 때마다 창 제목을 "PD:번호:경로"로 바꿔 VtParser에 알린다.
+    /// PowerShell 프롬프트 훅(doc/02 3절). 프롬프트가 그려질 때마다 창 제목을 "PD:토큰:번호:경로"로 바꿔 VtParser에 알린다.
     /// 번호는 매번 증가하므로 경로가 같아도 conhost가 제목 변경을 다시 전달한다(= 프롬프트 대기 신호). ASCII만 사용(5.1 파일 인코딩 안전).
     /// </summary>
     public const string ShellIntegrationScript = """
@@ -23,7 +23,7 @@ public sealed class TerminalSession : IDisposable
             $p = ''
             try { if ((Get-Location).Provider.Name -eq 'FileSystem') { $p = (Get-Location).ProviderPath } } catch {}
             $global:__pdN++
-            $Host.UI.RawUI.WindowTitle = "PD:$($global:__pdN):$p"
+            $Host.UI.RawUI.WindowTitle = "PD:$($global:__pdT):$($global:__pdN):$p"
             & $global:__pdOrigPrompt
         }
         """;
@@ -76,8 +76,12 @@ public sealed class TerminalSession : IDisposable
         string dir = Path.Combine(Path.GetTempPath(), "PathDock");
         Directory.CreateDirectory(dir);
         _scriptPath = Path.Combine(dir, $"shell-integration-{Environment.ProcessId}-{Guid.NewGuid():N}.ps1");
-        File.WriteAllText(_scriptPath, ShellIntegrationScript);
-        string cmd = $"powershell.exe -NoLogo -NoExit -ExecutionPolicy Bypass -File \"{_scriptPath}\"";
+        // 토큰은 실행마다 새로 만든다: 셸에서 돌아가는 다른 프로그램이 같은 제목을 출력해 상태를 속이는 것을 막는다.
+        string token = Guid.NewGuid().ToString("N");
+        _parser.MarkerToken = token;
+        File.WriteAllText(_scriptPath, $"$global:__pdT = '{token}'\n" + ShellIntegrationScript);
+        string powerShell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+        string cmd = $"\"{powerShell}\" -NoLogo -NoExit -ExecutionPolicy Bypass -File \"{_scriptPath}\"";
         _log.Info($"터미널 시작: cwd={workingDirectory}");
         _pty.Start(cmd, workingDirectory, Screen.Cols, Screen.Rows);
     }
@@ -226,9 +230,27 @@ public sealed class TerminalSession : IDisposable
         {
             _expectedCwd = path;
         }
-        string quoted = path.Replace("'", "''");
+        string quoted = EscapeSingleQuoted(path);
         _log.Info($"터미널 cd 주입: {path}");
         SendInput($"Set-Location -LiteralPath '{quoted}'\r");
+    }
+
+    /// <summary>
+    /// PowerShell 작은따옴표 문자열 안에 넣을 수 있게 이스케이프한다. PowerShell은 ' 말고도 ‘ ’ ‚ ‛ 를
+    /// 작은따옴표로 취급하므로(폴더 이름에 올 수 있음) 모두 두 번씩 써야 문자열이 끊기지 않는다.
+    /// </summary>
+    public static string EscapeSingleQuoted(string text)
+    {
+        var sb = new StringBuilder(text.Length + 8);
+        foreach (char ch in text)
+        {
+            sb.Append(ch);
+            if (ch is '\'' or '\u2018' or '\u2019' or '\u201A' or '\u201B')
+            {
+                sb.Append(ch);
+            }
+        }
+        return sb.ToString();
     }
 
     public void Resize(int cols, int rows)

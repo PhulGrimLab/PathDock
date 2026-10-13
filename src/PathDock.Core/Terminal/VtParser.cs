@@ -32,6 +32,12 @@ public sealed class VtParser
     public event Action? PromptShown;
     public event Action<string>? TitleChanged;
 
+    /// <summary>
+    /// 셸 통합 마커에 요구하는 토큰(null이면 토큰 없는 "PD:번호:경로" 형식). 토큰이 다른 제목은 일반 제목으로 취급해
+    /// 프로그램 출력으로 프롬프트/경로 신호를 위조하지 못하게 한다.
+    /// </summary>
+    public string? MarkerToken { get; set; }
+
     public VtParser(ScreenBuffer buffer)
     {
         _b = buffer;
@@ -430,12 +436,12 @@ public sealed class VtParser
     /// </summary>
     private bool TryDispatchShellMarker(string payload)
     {
-        const string Prefix = "PD:";
-        if (!payload.StartsWith(Prefix, StringComparison.Ordinal))
+        string prefix = MarkerToken is null ? "PD:" : $"PD:{MarkerToken}:";
+        if (!payload.StartsWith(prefix, StringComparison.Ordinal))
         {
             return false;
         }
-        int second = payload.IndexOf(':', Prefix.Length);
+        int second = payload.IndexOf(':', prefix.Length);
         if (second < 0)
         {
             return false;

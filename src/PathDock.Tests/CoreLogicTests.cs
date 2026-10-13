@@ -680,3 +680,48 @@ public class FileCategorizerTests
         Assert.AreEqual("Dark", new AppSettings().Theme);
     }
 }
+
+[TestClass]
+public class SecurityFixTests
+{
+    [TestMethod]
+    [DataRow("C:\\a'b", "C:\\a''b")]
+    [DataRow("C:\\Bob\u2019s", "C:\\Bob\u2019\u2019s")]
+    [DataRow("C:\\x\u2019;calc;\u2019y", "C:\\x\u2019\u2019;calc;\u2019\u2019y")]
+    [DataRow("C:\\plain", "C:\\plain")]
+    public void EscapeSingleQuoted_DoublesEveryQuoteChar(string input, string expected)
+    {
+        Assert.AreEqual(expected, TerminalSession.EscapeSingleQuoted(input));
+    }
+
+    [TestMethod]
+    public void VtParser_WithToken_IgnoresForgedMarker()
+    {
+        var b = new ScreenBuffer(80, 5);
+        var p = new VtParser(b) { MarkerToken = "abc" };
+        int prompts = 0;
+        string? cwd = null;
+        p.PromptShown += () => prompts++;
+        p.CwdReported += c => cwd = c;
+        p.Feed(System.Text.Encoding.UTF8.GetBytes("\x1b]0;PD:9:C:\\evil\a"), 0 + System.Text.Encoding.UTF8.GetByteCount("\x1b]0;PD:9:C:\\evil\a"));
+        Assert.AreEqual(0, prompts);
+        Assert.IsNull(cwd);
+        string real = "\x1b]0;PD:abc:3:C:\\ok\a";
+        p.Feed(System.Text.Encoding.UTF8.GetBytes(real), System.Text.Encoding.UTF8.GetByteCount(real));
+        Assert.AreEqual(1, prompts);
+        Assert.AreEqual("C:\\ok", cwd);
+    }
+
+    [TestMethod]
+    public void Logger_Sanitize_RemovesControlChars()
+    {
+        Assert.AreEqual("a b c", AsyncFileLogger.Sanitize("a\nb\rc"));
+        Assert.AreEqual("plain", AsyncFileLogger.Sanitize("plain"));
+    }
+
+    [TestMethod]
+    public void UsesRecycleBin_FalseForUnc()
+    {
+        Assert.IsFalse(FileOperations.UsesRecycleBin(@"\\server\share\x"));
+    }
+}
