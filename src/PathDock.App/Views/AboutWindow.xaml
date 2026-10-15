@@ -5,19 +5,19 @@
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:ctl="clr-namespace:PathDock.App.Controls"
                  FontFamily="{StaticResource PdFontFamily}"
-                 Title="{loc:T 'PathDock 정보', 'About PathDock'}" Width="560" SizeToContent="Height"
-                 ResizeMode="NoResize" ShowInTaskbar="False"
+                 Title="{loc:T 'PathDock 정보', 'About PathDock'}" Width="580" SizeToContent="Height"                 ResizeMode="NoResize" ShowInTaskbar="False"
                  WindowStartupLocation="CenterOwner"
                  ExtendsContentIntoTitleBar="True" WindowBackdropType="Mica">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
         <ui:TitleBar Grid.Row="0" Title="{loc:T 'PathDock 정보', 'About PathDock'}" ShowMinimize="False" ShowMaximize="False" />
 
-        <StackPanel Grid.Row="1" Margin="28,8,28,24">
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="28,8,28,24">
             <!-- 제품 소개 -->
             <StackPanel Orientation="Horizontal">
                 <Image Source="pack://application:,,,/Assets/PathDock.png" Width="72" Height="72"
@@ -31,6 +31,29 @@
             </StackPanel>
 
             <TextBlock x:Name="TaglineText" Margin="0,16,0,0" TextWrapping="Wrap" />
+
+            <!-- 기능 요약과 단축키 -->
+            <ctl:PanelCard Margin="0,18,0,0" Header="{loc:T '기능과 단축키', 'Features and shortcuts'}" Symbol="Keyboard24" ContentPadding="14,10"
+                           AutomationProperties.AutomationId="AboutShortcuts">
+                <StackPanel>
+                    <TextBlock x:Name="FeaturesText" TextWrapping="Wrap" Margin="0,0,0,8" />
+                    <ItemsControl x:Name="ShortcutList" Grid.IsSharedSizeScope="True" Focusable="False">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="ShortcutKeys" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Keys}" FontWeight="SemiBold" Margin="0,0,16,0"
+                                               Foreground="{DynamicResource SystemAccentColorPrimaryBrush}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Description}" TextWrapping="Wrap" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ctl:PanelCard>
 
             <!-- 상세 정보 카드 -->
             <ctl:PanelCard Margin="0,18,0,0" Header="{loc:T '제품 정보', 'About'}" Symbol="Info24" ContentPadding="14,10">
@@ -84,5 +107,6 @@
                            Click="OnCloseClick" AutomationProperties.AutomationId="AboutCloseButton" />
             </StackPanel>
         </StackPanel>
+        </ScrollViewer>
     </Grid>
 </ui:FluentWindow>
