@@ -27,7 +27,7 @@ public sealed class AppDriver : IDisposable
 
     /// <summary>앱 실행 파일 위치(하네스 출력 폴더 기준 상대 경로).</summary>
     public static string AppExePath => Path.GetFullPath(Path.Combine(
-        AppContext.BaseDirectory, "..", "..", "..", "..", "PathDock.App", "bin", "Debug", "net10.0-windows", "PathDock.App.exe"));
+        AppContext.BaseDirectory, "..", "..", "..", "..", "..", "PathDock.App", "bin", "x64", "Debug", "net10.0-windows", "PathDock.App.exe"));
 
     /// <summary>앱을 시작하고 메인 창과 첫 프롬프트(터미널)가 뜰 때까지 기다린다.</summary>
     public static AppDriver Launch(string dataDir)

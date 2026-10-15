@@ -14,7 +14,7 @@ param([switch]$SkipBuild, [string[]]$Tests)
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $Project = Join-Path $RepoRoot "src\PathDock.UiAutomation.Tests\PathDock.UiAutomation.Tests.csproj"
-$Harness = Join-Path $RepoRoot "src\PathDock.UiAutomation.Tests\bin\Debug\net10.0-windows\PathDock.UiAutomation.Tests.exe"
+$Harness = Join-Path $RepoRoot "src\PathDock.UiAutomation.Tests\bin\x64\Debug\net10.0-windows\PathDock.UiAutomation.Tests.exe"
 
 Get-Process -Name "PathDock.App" -ErrorAction SilentlyContinue | ForEach-Object {
     try { Stop-Process -Id $_.Id -Force -ErrorAction Stop } catch {}

@@ -247,8 +247,11 @@ var tests = new List<(string Name, Action Body)>
     {
         string a = MakeDir("pdA_bad");
         using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
-        app.TypePath(Path.Combine(a, "no_such_folder"));
-        app.WaitUntil(() => app.PathBarText() == a, $"잘못된 경로 후 경로가 복원되지 않음: '{app.PathBarText()}'");
+        string bad = Path.Combine(a, "no_such_folder");
+        app.TypePath(bad);
+        // 4553801 이후: 오류 시 주소창은 복원하지 않고 입력한 경로를 그대로 둔다(고쳐 쓸 수 있도록).
+        Thread.Sleep(1500);
+        if (app.PathBarText() != bad) throw new TestFailedException($"잘못된 경로 입력 후 주소창이 입력값을 유지하지 않음: '{app.PathBarText()}'");
     }),
 
     ("SyncMode_ExplorerToTerminal_ChangesTerminalPrompt", () =>
