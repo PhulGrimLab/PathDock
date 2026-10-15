@@ -69,7 +69,7 @@
 | `DrivePanelView` | MainViewModel | `DriveCard` 목록, 패널 배경은 `PdDrivePanelBackgroundBrush`(네이비) |
 | `AncestorColumnView` | AncestorColumnViewModel | 조부모/부모 열이 **같은 뷰를 재사용**, 선택 항목 왼쪽 강조 막대 |
 | `FileListView` | ExplorerViewModel | 종류별 아이콘/색, 정렬 머리글(▲▼), 이름 검색 입력칸(Ctrl+F), 요약 줄, 미리보기 툴팁, 단축키·우클릭 메뉴(이름 변경/삭제/새 폴더/복사/잘라내기/붙여넣기) |
-| `TerminalPanelView` | TerminalViewModel | 셸 상태, 도움말·내용 저장·화면 지우기·접기 버튼을 머리글에 표시 |
+| `TerminalPanelView` | TerminalViewModel | 셸 상태, 도움말·내용 저장·화면 지우기·접기 버튼을 머리글에 표시. 본문 위쪽에 **탭 줄**(탭 버튼 + 닫기 `×`, 오른쪽 `+`; 선택된 탭은 강조색 밑줄, 탭이 많으면 가로 스크롤). 탭 버튼은 포커스를 가져가지 않고 클릭 후 포커스를 터미널로 돌려준다 |
 | `StatusBarView` | MainViewModel | 동기화 요약 + `UsageMeter` 3개 |
 | `SettingsWindow` | MainViewModel | 언어, 글자 크기(화면/터미널), 터미널 셸·테마·글자색/배경색(미리보기), 시작 시 마지막 경로, 즐겨찾기 초기화 |
 | `AboutWindow` | (AppInfo) | 정보 창 |
@@ -105,5 +105,5 @@
 기존 ID 유지(주소 표시줄 `PathBar`는 안쪽 TextBox가 가짐): `FavoritesBar`, `Favorite_1..10`, `PathBar`, `SyncModeCombo`, `FileList`, `Terminal`, `TerminalStatus`, `FolderSummary`, `Drive_<문자>`, `AncestorColumn_1/2`, `InfoBar`.
 신규: `AboutButton`, `ThemeButton`, `Meter_Cpu/Gpu/Memory`(이름: "CPU 12%" 등), `SyncSummary`, 정보 창(`AboutVersionTextBlock`, `AboutEnvironmentTextBlock`, `AboutCopyButton`, `AboutLogsButton`, `AboutCloseButton`).
 이후 추가: 제목 표시줄 `CalculatorButton`, `EmptyRecycleBinButton`, `SettingsButton`, `ClockText`, `VersionLabel` / 탐색 `BackButton`, `ForwardButton`, `UpButton`, `RefreshButton`, `FilterBox`, `ImagePreview`, `TextPreview` /
-터미널 `TerminalClearButton`, `TerminalSaveButton`, `TerminalCollapseButton`, `TerminalHelp` / 설정 창(`LanguageCombo`, `UiFontSizeSlider`, `TerminalFontSizeSlider`, `TerminalShellCombo`, `TerminalThemeCombo`,
+터미널 `TerminalClearButton`, `TerminalSaveButton`, `TerminalCollapseButton`, `TerminalHelp`, 탭 줄 `TerminalTabAdd`, `TerminalTab_<번호>`, `TerminalTabClose_<번호>`(번호는 1부터, 닫아도 재사용하지 않음; 탭이 하나면 닫기 버튼은 숨김=UIA 트리에 없음) / 설정 창(`LanguageCombo`, `UiFontSizeSlider`, `TerminalFontSizeSlider`, `TerminalShellCombo`, `TerminalThemeCombo`,
 `TerminalForegroundBox`, `TerminalBackgroundBox`, `TerminalColorError`, `StartAtLastPathCheck`, `Reset*Button`, `SettingsCloseButton`) / 대화상자(`InputBox`, `InputOk`, `InputCancel`, `InputError`, `ConfirmMessage`, `ConfirmYes`, `ConfirmNo`).

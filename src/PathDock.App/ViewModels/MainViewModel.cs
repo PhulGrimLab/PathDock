@@ -474,7 +474,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         _sizeCache.Load();
         Explorer = new ExplorerViewModel(log, _sizeCache, _dialogs);
-        Terminal = new TerminalViewModel(log, _dialogs);
+        Terminal = new TerminalViewModel(log, _dialogs) { StartDirectoryProvider = () => Explorer.CurrentPath };
         _isDarkTheme = Services.ThemeService.Normalize(Settings.Theme) == Services.ThemeService.Dark;
         _startAtLastPath = Settings.StartAtLastPath;
         _terminalThemeIndex = Math.Max(0, TerminalThemes.All.ToList().FindIndex(t => t.Key == TerminalThemes.Find(Settings.TerminalTheme).Key));

@@ -105,6 +105,10 @@ public sealed class AppDriver : IDisposable
         return e!;
     }
 
+    /// <summary>요소가 지금 UIA 트리에 있는지(기다리지 않는다). 숨겨진(Collapsed) 요소는 트리에 없다.</summary>
+    public bool Exists(string automationId) =>
+        Window.FindFirst(TreeScope.Descendants, new PropertyCondition(AutomationElement.AutomationIdProperty, automationId)) is not null;
+
     public void Click(string automationId)
     {
         AutomationElement e = Find(automationId);

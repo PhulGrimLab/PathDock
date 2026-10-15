@@ -4,13 +4,14 @@
 
 ## 1. PathDock.Tests (MSTest, net10.0-windows)
 
-현재 **108개**(2026-10-15 전부 통과). 파일: `CoreLogicTests.cs`(핵심 로직 다수), `TerminalSessionTests.cs`(ConPTY 통합), `TerminalThemeTests.cs`,
+현재 **112개**(2026-10-15 전부 통과). 파일: `CoreLogicTests.cs`(핵심 로직 다수), `TerminalSessionTests.cs`(ConPTY 통합), `TerminalTabTitleTests.cs`(탭 제목 규칙), `TerminalThemeTests.cs`,
 `LocTests.cs`(언어), `TextPreviewerTests.cs`, `ImagePreviewTypesTests.cs`.
 
 | 영역 | 주요 케이스 |
 |---|---|
 | 파일 조작 | 이름 검증/변경(대소문자만 변경 포함), 새 폴더 이름 제안, 복사/이동 이름 충돌("- 복사"), 휴지통 삭제 |
 | 터미널 테마/언어/미리보기 | 테마 조회·사용자 색 덮어쓰기·잘못된 색 문자열, `Loc.T`/`Plural`/OS 언어 판정, 텍스트 미리보기(인코딩·바이너리 생략), 이미지 형식 판별 |
+| 터미널 탭 제목 | 셸 이름만(경로 모름), 마지막 폴더 이름(후행 `\` 유무), 한글 경로, 드라이브 루트 `C:`, UNC 공유 이름 |
 | 터미널 통합(추가) | 명령 프롬프트(cmd)에서 cwd 보고·요청/사용자 이동 추적, 토큰이 있는 셸 마커만 인정(위조 마커 무시), 로그의 제어 문자 제거, 스크롤백 포함 전체 텍스트 |
 | PathNormalizer | 후행 `\`, 드라이브 대소문자, 공백/한글, UNC, 상대경로, `..` |
 | ExplorerService | 폴더 우선 정렬, 접근 불가 폴더, 뒤로/앞으로/위로, 존재하지 않는 경로 |
@@ -25,7 +26,7 @@
 실제 `PathDock.App.exe`를 `PATHDOCK_DATA_DIR`(임시 폴더)로 격리해 띄우고 `System.Windows.Automation`으로 조작한다.
 CodeAtlas에서 얻은 교훈 적용: `Invoke` 스퓨리어스 예외는 삼키고 상태 변화로 판정, 새 창/대화상자는 `EnumWindows`로 탐색.
 
-| 테스트 (구현됨, 19개) | 검증 |
+| 테스트 (구현됨, 23개) | 검증 |
 |---|---|
 | Favorites_Click_NavigatesExplorer | 즐겨찾기 1·2 클릭 → 경로 표시줄이 해당 폴더로 |
 | Drives_ShowSystemDriveUsage_AndClickNavigatesToRoot | 드라이브 패널에 시스템 드라이브가 표시되고 클릭하면 루트로 이동 |
@@ -45,6 +46,10 @@ CodeAtlas에서 얻은 교훈 적용: `Invoke` 스퓨리어스 예외는 삼키�
 | SyncMode_ExplorerToTerminal_ChangesTerminalPrompt | 양방향에서 즐겨찾기 이동 → 터미널 프롬프트가 새 폴더로 |
 | SyncMode_TerminalToExplorer_UpdatesPathBar | 터미널에 `cd` 입력 → 경로 표시줄 갱신 |
 | SyncMode_Off_DoesNotPropagate | 동기화 끄기 후 탐색기 이동이 터미널에 전파되지 않음 |
+| Tabs_AddAndClose_LastTabCannotBeClosed | 탭 1개일 때 닫기 버튼 없음 → `+`로 2번째 탭 생성(셸 시작, 닫기 버튼 표시) → 닫으면 다시 1개 |
+| Tabs_AreIndependent_AndSelectingTabFollowsInExplorer | 새 탭은 탐색기 폴더에서 시작, 둘째 탭 `cd`는 탐색기가 따라감, 첫 탭 선택 시 탐색기가 첫 탭 폴더로 복귀하고 첫 탭 화면에 둘째 탭 프롬프트가 없음, 탭 제목에 폴더 이름 |
+| Tabs_KeyboardShortcuts_NewSwitchClose | Ctrl+Shift+T 새 탭, Ctrl+Tab / Ctrl+Shift+Tab 전환(처음↔끝 순환), Ctrl+Shift+W 닫기(마지막 탭은 유지) |
+| Tabs_CloseBusyTab_AsksConfirm | 명령 실행 중인 탭을 닫으면 확인 창: 아니오=유지, 예=닫힘 |
 | Settings_SyncMode_PersistsAcrossRestart | 모드 변경 → 정상 종료 → 재시작 시 복원 |
 
 하네스 보조: `--dump [AutomationId]`로 UIA 트리(이름/종류/Id)를 출력해 요소를 진단한다. `SendKeys` 전에
@@ -53,7 +58,7 @@ CodeAtlas에서 얻은 교훈 적용: `Invoke` 스퓨리어스 예외는 삼키�
 앱은 UIA 식별을 위해 주요 요소에 `AutomationProperties.AutomationId`를 지정한다
 (`PathBar`, `SyncModeCombo`, `Favorite_1..10`, `FileList`, `Terminal` 등, 전체 목록은 doc/05 7절).
 
-**아직 UI 테스트가 없는 기능**(MSTest 또는 수동 확인만): 터미널 선택/복사, 셸 선택(cmd), 설정 창, 언어 전환, 이름 검색, 미리보기 툴팁, 복사/이동/붙여넣기, 계산기/휴지통 버튼.
+**아직 UI 테스트가 없는 기능**(MSTest 또는 수동 확인만): 터미널 선택/복사, 셸 선택(cmd)과 셸 변경 시 선택된 탭 재시작, 최대 탭 수(8개) 제한 안내, 설정 창, 언어 전환, 이름 검색, 미리보기 툴팁, 복사/이동/붙여넣기, 계산기/휴지통 버튼.
 터미널 텍스트는 `TerminalControl`이 UIA `ValuePattern`(읽기 전용 화면 텍스트)으로 노출한다.
 
 ## 3. 실행

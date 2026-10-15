@@ -10,7 +10,7 @@ PathDock.App (WPF, net10.0-windows)
  │                    AncestorColumnView, FileListView, TerminalPanelView, StatusBarView,
  │                    SettingsWindow, AboutWindow, InputDialog, ConfirmDialog (XAML, code-behind 최소; 상세 doc/05)
  ├─ Controls/         PanelCard, DriveCard, FavoriteChip, UsageMeter, AddressBar, TerminalControl
- ├─ ViewModels/       MainViewModel, ExplorerViewModel(+FileActions), TerminalViewModel,
+ ├─ ViewModels/       MainViewModel, ExplorerViewModel(+FileActions), TerminalViewModel(+TerminalTab: 탭별 세션·상태),
  │                    FavoriteSlotViewModel, DriveItemViewModel, FileItemViewModel
  ├─ Localization/     LocSource ({loc:T} XAML 마크업 확장)
  ├─ Themes/           Generic.xaml (커스텀 컨트롤 스타일)
@@ -46,6 +46,7 @@ PathDock.Core (net10.0, UI 비의존 → 단위 테스트 용이)
 | `SettingsService` | 즐겨찾기(최대 10), 동기화 모드, 창 위치/크기, 분할 높이, 테마/글자 크기/터미널 셸·색/언어 JSON 저장/복원 (항목은 doc/00 4절) |
 | `FileOperations` | 이름 검증·변경, 새 폴더, 복사/이동(이름 충돌 시 "- 복사"), 휴지통 삭제. 상태 없음 |
 | `FileSorter` / `FileCategory` | 정렬(폴더 우선·자연 정렬) / 확장자 → 파일 종류 분류 |
+| `TerminalTabTitle` | 탭 제목 규칙("셸 · 현재 폴더 이름"). `TerminalViewModel`/`TerminalTab`이 탭 목록·선택·세션 수명을 관리(doc/02 8절) |
 | `TerminalThemes` | 터미널 테마 5종과 사용자 지정 색 해석(`Find`/`Resolve`) |
 | `Loc` | 화면 문구 `Loc.T(한국어, English)`, 영어 단수/복수, 언어 변경 이벤트 |
 | `ThemeService` (App) | 다크/라이트/고대비 적용, 주소 표시줄·드라이브 패널 배경색, 밝은 테마 보조 글자색 대비 보정 |

@@ -123,6 +123,39 @@ public partial class MainWindow : FluentWindow
         }
     }
 
+    /// <summary>
+    /// 터미널 탭 단축키(Ctrl+Shift+T 새 탭, Ctrl+Shift+W 닫기, Ctrl+Tab / Ctrl+Shift+Tab 전환).
+    /// 터미널이 키를 셸로 보내기 전에 창에서 먼저 가로챈다(Preview). 처리한 뒤에는 입력이 이어지도록 포커스를 터미널로 준다.
+    /// </summary>
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        base.OnPreviewKeyDown(e);
+        ModifierKeys mods = Keyboard.Modifiers;
+        TerminalViewModel t = _vm.Terminal;
+        if (e.Key == Key.T && mods == (ModifierKeys.Control | ModifierKeys.Shift))
+        {
+            t.NewTabCommand.Execute(null);
+        }
+        else if (e.Key == Key.W && mods == (ModifierKeys.Control | ModifierKeys.Shift))
+        {
+            t.CloseTabCommand.Execute(null);
+        }
+        else if (e.Key == Key.Tab && mods == ModifierKeys.Control)
+        {
+            t.NextTabCommand.Execute(null);
+        }
+        else if (e.Key == Key.Tab && mods == (ModifierKeys.Control | ModifierKeys.Shift))
+        {
+            t.PreviousTabCommand.Execute(null);
+        }
+        else
+        {
+            return;
+        }
+        e.Handled = true;
+        TerminalPanel.FocusTerminal();
+    }
+
     /// <summary>저장된 창 위치/크기/최대화/분할 비율을 복원한다(화면 밖이면 위치는 OS 기본값).</summary>
     private void RestoreWindowState()
     {

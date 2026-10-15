@@ -284,6 +284,98 @@ var tests = new List<(string Name, Action Body)>
         }
     }),
 
+    ("Tabs_AddAndClose_LastTabCannotBeClosed", () =>
+    {
+        string a = MakeDir("pdA_tabadd");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        app.Find("TerminalTab_1");
+        if (app.Exists("TerminalTabClose_1"))
+        {
+            throw new TestFailedException("탭이 하나뿐인데 닫기 버튼이 보임");
+        }
+        app.Click("TerminalTabAdd");
+        app.WaitUntil(() => app.Exists("TerminalTab_2"), "새 탭이 만들어지지 않음");
+        app.WaitUntil(() => app.Exists("TerminalTabClose_1") && app.Exists("TerminalTabClose_2"), "탭이 둘일 때 닫기 버튼이 보이지 않음");
+        app.WaitUntil(() => app.TerminalText().Contains("pdA_tabadd>"), $"새 탭의 셸이 시작되지 않음:\n{app.TerminalText()}", 25000);
+        app.Click("TerminalTabClose_2");
+        app.WaitUntil(() => !app.Exists("TerminalTab_2"), "탭이 닫히지 않음");
+        app.WaitUntil(() => !app.Exists("TerminalTabClose_1"), "탭이 하나로 줄었는데 닫기 버튼이 남음");
+    }),
+
+    ("Tabs_AreIndependent_AndSelectingTabFollowsInExplorer", () =>
+    {
+        string a = MakeDir("pdA_tabs"), b = MakeDir("pdB_tabs");
+        using var app = AppDriver.Launch(NewDataDir(null, "Bidirectional", a));
+        app.WaitUntil(() => app.TerminalText().Contains("pdA_tabs>"), $"첫 탭의 셸이 시작되지 않음:\n{app.TerminalText()}", 25000);
+        app.Click("TerminalTabAdd");
+        app.WaitUntil(() => app.Exists("TerminalTab_2"), "새 탭이 만들어지지 않음");
+        // 새 탭은 탐색기의 현재 폴더에서 시작한다.
+        app.WaitUntil(() => app.TerminalText().Contains("pdA_tabs>"), $"새 탭이 탐색기 폴더에서 시작하지 않음:\n{app.TerminalText()}", 25000);
+        app.TypeInTerminal("cd " + b + "{ENTER}");
+        app.WaitUntil(() => app.PathBarText() == b, $"둘째 탭의 cd를 탐색기가 따라가지 않음: '{app.PathBarText()}'", 25000);
+
+        app.Click("TerminalTab_1");
+        app.WaitUntil(() => app.PathBarText() == a, $"첫 탭을 선택했는데 탐색기가 그 폴더로 가지 않음: '{app.PathBarText()}'", 25000);
+        if (app.TerminalText().Contains("pdB_tabs>"))
+        {
+            throw new TestFailedException("첫 탭 화면에 둘째 탭의 프롬프트가 보임(탭이 독립적이지 않음):\n" + app.TerminalText());
+        }
+
+        app.Click("TerminalTab_2");
+        app.WaitUntil(() => app.PathBarText() == b, $"둘째 탭을 선택했는데 탐색기가 그 폴더로 가지 않음: '{app.PathBarText()}'", 25000);
+        app.WaitUntil(() => app.TerminalText().Contains("pdB_tabs>"), $"둘째 탭 화면이 보이지 않음:\n{app.TerminalText()}");
+        if (!app.Find("TerminalTab_2").Current.Name.Contains("pdB_tabs"))
+        {
+            throw new TestFailedException($"탭 제목이 현재 폴더를 보여주지 않음: '{app.Find("TerminalTab_2").Current.Name}'");
+        }
+    }),
+
+    ("Tabs_KeyboardShortcuts_NewSwitchClose", () =>
+    {
+        string a = MakeDir("pdA_tabkeys"), b = MakeDir("pdB_tabkeys");
+        using var app = AppDriver.Launch(NewDataDir(null, "Bidirectional", a));
+        app.WaitUntil(() => app.TerminalText().Contains("pdA_tabkeys>"), $"첫 탭의 셸이 시작되지 않음:\n{app.TerminalText()}", 25000);
+        app.TypeInTerminal("^+t"); // Ctrl+Shift+T: 새 탭
+        app.WaitUntil(() => app.Exists("TerminalTab_2"), "Ctrl+Shift+T로 새 탭이 만들어지지 않음");
+        app.WaitUntil(() => app.TerminalText().Contains("pdA_tabkeys>"), $"새 탭의 셸이 시작되지 않음:\n{app.TerminalText()}", 25000);
+        app.TypeInTerminal("cd " + b + "{ENTER}");
+        app.WaitUntil(() => app.PathBarText() == b, $"둘째 탭의 cd를 탐색기가 따라가지 않음: '{app.PathBarText()}'", 25000);
+
+        app.PressKeys("^{TAB}"); // 다음 탭(끝에서 처음으로)
+        app.WaitUntil(() => app.PathBarText() == a, $"Ctrl+Tab으로 첫 탭이 선택되지 않음: '{app.PathBarText()}'", 25000);
+        app.PressKeys("^+{TAB}"); // 이전 탭(처음에서 끝으로)
+        app.WaitUntil(() => app.PathBarText() == b, $"Ctrl+Shift+Tab으로 둘째 탭이 선택되지 않음: '{app.PathBarText()}'", 25000);
+
+        app.PressKeys("^+w"); // Ctrl+Shift+W: 선택된 탭(둘째) 닫기
+        app.WaitUntil(() => !app.Exists("TerminalTab_2"), "Ctrl+Shift+W로 탭이 닫히지 않음");
+        app.WaitUntil(() => app.PathBarText() == a, $"탭을 닫은 뒤 남은 탭의 폴더로 가지 않음: '{app.PathBarText()}'", 25000);
+        app.PressKeys("^+w"); // 마지막 탭은 닫히지 않는다.
+        Thread.Sleep(500);
+        app.Find("TerminalTab_1");
+    }),
+
+    ("Tabs_CloseBusyTab_AsksConfirm", () =>
+    {
+        string a = MakeDir("pdA_tabbusy");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        app.Click("TerminalTabAdd");
+        app.WaitUntil(() => app.Exists("TerminalTab_2"), "새 탭이 만들어지지 않음");
+        app.WaitUntil(() => app.TerminalText().Contains("pdA_tabbusy>"), $"새 탭의 셸이 시작되지 않음:\n{app.TerminalText()}", 25000);
+        app.TypeInTerminal("Start-Sleep -Seconds 120{ENTER}");
+        app.WaitUntil(() => app.Find("TerminalStatus").Current.Name.Contains("실행 중"), $"명령 실행 상태가 되지 않음: '{app.Find("TerminalStatus").Current.Name}'");
+
+        app.Click("TerminalTabClose_2");
+        app.AnswerConfirm("터미널 탭 닫기", false);
+        Thread.Sleep(700);
+        if (!app.Exists("TerminalTab_2"))
+        {
+            throw new TestFailedException("확인 창에서 아니오를 눌렀는데 탭이 닫힘");
+        }
+        app.Click("TerminalTabClose_2");
+        app.AnswerConfirm("터미널 탭 닫기", true);
+        app.WaitUntil(() => !app.Exists("TerminalTab_2"), "확인 창에서 예를 눌렀는데 탭이 닫히지 않음");
+    }),
+
     ("Settings_SyncMode_PersistsAcrossRestart", () =>
     {
         string a = MakeDir("pdA_persist");

@@ -28,6 +28,8 @@ public partial class AboutWindow : FluentWindow
         new("F5", Loc.T("새로 고침", "Refresh")),
         new("Ctrl+F", Loc.T("이름 검색 (Esc로 해제)", "Filter by name (Esc to clear)")),
         new("Ctrl+Alt+C / E", Loc.T("계산기 / 휴지통 비우기", "Calculator / empty Recycle Bin")),
+        new("Ctrl+Shift+T / W", Loc.T("터미널 새 탭 / 현재 탭 닫기", "New terminal tab / close current tab")),
+        new("Ctrl+Tab / Ctrl+Shift+Tab", Loc.T("다음 / 이전 터미널 탭", "Next / previous terminal tab")),
         new(Loc.T("터미널 Ctrl+C", "Terminal Ctrl+C"), Loc.T("선택이 있으면 복사, 없으면 실행 중단", "Copy if text is selected, otherwise interrupt")),
         new(Loc.T("터미널 Ctrl+Shift+C / Ctrl+V", "Terminal Ctrl+Shift+C / Ctrl+V"), Loc.T("복사 / 붙여넣기", "Copy / paste")),
         new(Loc.T("터미널 우클릭", "Terminal right-click"), Loc.T("선택이 있으면 복사, 없으면 붙여넣기", "Copy if text is selected, otherwise paste")),
@@ -39,8 +41,8 @@ public partial class AboutWindow : FluentWindow
         VersionText.Text = Loc.T($"버전 {AppInfo.Version}", $"Version {AppInfo.Version}");
         TaglineText.Text = AppInfo.Tagline;
         FeaturesText.Text = Loc.T(
-            "즐겨찾기 10칸(빈 칸 클릭=현재 폴더 등록, 우클릭=편집) · 탐색기 · 내장 터미널(PowerShell/명령 프롬프트) · 탐색기와 터미널의 경로 동기화(양방향/단방향/끄기).",
-            "10 favorite slots (click an empty slot to register the current folder, right-click to edit) · file explorer · built-in terminal (PowerShell/Command Prompt) · path sync between explorer and terminal (two-way/one-way/off).");
+            "즐겨찾기 10칸(빈 칸 클릭=현재 폴더 등록, 우클릭=편집) · 탐색기 · 내장 터미널(PowerShell/명령 프롬프트, 여러 탭) · 탐색기와 터미널의 경로 동기화(양방향/단방향/끄기).",
+            "10 favorite slots (click an empty slot to register the current folder, right-click to edit) · file explorer · built-in terminal (PowerShell/Command Prompt, multiple tabs) · path sync between explorer and terminal (two-way/one-way/off).");
         ShortcutList.ItemsSource = BuildShortcutRows();
         MaxHeight = SystemParameters.WorkArea.Height; // 작은 화면에서는 창이 잘리지 않고 안쪽이 스크롤된다.
         AuthorText.Text = AppInfo.Author;

@@ -10,13 +10,13 @@
 | **1차 MVP** (UI, 파일 탐색, 즐겨찾기 10칸, 경로 표시) | **완료** | UI 테스트 `Favorites_*`, `Explorer_*`, `PathBar_*` |
 | **2차** (PowerShell 내장 터미널, 탐색기 → 터미널) | **완료** | MSTest 통합 3개 + UI `SyncMode_ExplorerToTerminal_*` |
 | **3차** (터미널 → 탐색기, 4개 모드, 루프/Busy 방지) | **완료** | MSTest `PathSyncServiceTests` 모드 표 + Busy 보류 + UI `SyncMode_*` |
-| 4차 (탭, Git 상태, 설정 영속화, 파일 조작) | **일부** — 설정 영속화, 파일 조작(이름 변경/삭제/새 폴더/다중 선택 복사·이동·붙여넣기), 즐겨찾기 편집 완료. **터미널 탭, Git 상태는 미착수** | `Settings_*`, `Explorer_*` |
+| 4차 (탭, Git 상태, 설정 영속화, 파일 조작) | **일부** — 설정 영속화, 파일 조작(이름 변경/삭제/새 폴더/다중 선택 복사·이동·붙여넣기), 즐겨찾기 편집, **터미널 탭(15절)** 완료. **Git 상태는 미착수** | `Settings_*`, `Explorer_*`, `Tabs_*` |
 | 5차 (CMD, WSL, AI CLI) | **일부** — 명령 프롬프트(cmd) 지원 완료(doc/02 3.1절). WSL, AI CLI는 미착수 | MSTest `CommandPrompt_ReportsCwd_*` |
 
 ## 2. 테스트 현황 (모두 통과)
 
-- `doc/run_tests.ps1`: MSTest **108개** (2026-10-15 실행, 전부 통과). 10/12 시점 77개에서 이미지/텍스트 미리보기, 터미널 테마, 언어(Loc), 터미널 세션 등이 추가됨.
-- `doc/run_ui_tests.ps1`: UI Automation **19개** (2026-10-15 실행, 전부 통과). 아래 11절의 하네스 수정 2건 포함.
+- `doc/run_tests.ps1`: MSTest **112개** (2026-10-15 실행, 전부 통과). 10/12 시점 77개에서 이미지/텍스트 미리보기, 터미널 테마, 언어(Loc), 터미널 세션, 탭 제목(4개) 등이 추가됨.
+- `doc/run_ui_tests.ps1`: UI Automation **23개** (2026-10-15 실행, 전부 통과). 아래 11절의 하네스 수정 2건, 15절의 탭 테스트 4개 포함.
 
 ## 3. 이번 개발에서 실측으로 발견·수정한 문제 (회귀 테스트 있음)
 
@@ -33,14 +33,14 @@
 
 ## 4. 알려진 한계 / 다음 할 일
 
-> 우선순위 후보: ① 터미널 탭 ② Git 상태 ③ UI 테스트 보강(터미널 선택/복사, cmd, 설정 창, 언어, 복사/이동 — doc/03 2절) ④ 풀스크린 앱(vim/less) 지원 ⑤ WSL/AI CLI ⑥ 이름 중복/상표 확인(사람).
+> 우선순위 후보: ① Git 상태 ② 탭 저장/복원·순서 변경 ③ UI 테스트 보강(터미널 선택/복사, cmd, 설정 창, 언어, 복사/이동 — doc/03 2절) ④ 풀스크린 앱(vim/less) 지원 ⑤ WSL/AI CLI ⑥ 이름 중복/상표 확인(사람).
 
 1. **터미널 에뮬레이션은 부분 구현** (doc/02 6절): vim/less 같은 풀스크린 앱, 터미널 앱으로의 마우스 입력 전달, 줄바꿈 재배치(리사이즈), 이탤릭 서체는 미검증/미지원. (텍스트 선택/복사는 10/13 구현 - 12절)
 2. 사용자가 프롬프트에 타이핑하던 중 탐색기에서 이동하면 입력 줄 뒤에 cd가 붙는다 (doc/02 4절).
 3. 파일 목록 열 머리글이 밝은 색(WPF-UI `GridViewColumnHeader` 스타일 미적용) — 외형 문제.
 4. 뒤로/앞으로 이동 대상 폴더가 사라졌으면 이력 포인터만 움직이고 목록은 유지된다(오류 표시는 됨).
 5. `PathDock` 명칭 중복/상표 확인(기획서 7절) 미수행 — 사람이 확인해야 함.
-6. 터미널 탭, Git 상태는 4차 잔여. (이름 변경/삭제/새 폴더는 8절, 다중 선택 복사/이동·즐겨찾기 편집은 커밋 69e8ee3에서 구현)
+6. Git 상태는 4차 잔여. (터미널 탭은 15절에서 구현) (이름 변경/삭제/새 폴더는 8절, 다중 선택 복사/이동·즐겨찾기 편집은 커밋 69e8ee3에서 구현)
 8. **폴더 크기 계산 비용**: 하위 폴더가 큰 곳(예: `C:` 루트)을 처음 열면 오래 걸린다. 3개씩 병렬, 이동하면 취소, 완료되는 대로 표시한다. 두 번째부터는 캐시(5절)로 즉시 보인다. 접근 불가 항목이 있으면 크기 뒤에 `+`, 링크/정션은 따라가지 않는다.
 7. CI는 릴리스 워크플로(`.github/workflows/release.yml`, 13절)뿐이다. MSTest는 무인 실행 가능, UI 테스트는 데스크톱 세션이 필요해 CI에서는 돌리지 않는다.
 
@@ -124,3 +124,15 @@
 
 - 드라이브 열 배경을 네이비로 구분: 다크 `#1B2433`, 라이트 `#E8EEF7`, 고대비는 시스템 `Window` 색. 리소스 키 `PdDrivePanelBackgroundBrush`(`App.xaml` 기본값, 테마 전환 시 `ThemeService.ApplyAddressBarColors`가 갱신), 적용은 `DrivePanelView.xaml`의 `PanelCard.Background`.
 - 확인: 다크 테마를 실제 실행해 화면으로 확인, UI 테스트 19/19 통과. 라이트 테마와 고대비는 화면으로 확인하지 않았다.
+
+## 15. 터미널 탭 (2026-10-15)
+
+설계 상세는 [02_Terminal_And_PathSync_Design.md](./02_Terminal_And_PathSync_Design.md) 8절.
+
+- **기능**: 탭 줄(`+` 새 탭, `×` 닫기, 클릭 전환), 최대 8개, 탭마다 독립 셸·상태, 제목 "셸 · 현재 폴더", 선택된 탭만 경로 동기화에 참여, 탭 전환 시 탐색기가 그 탭 폴더로 이동(모드가 허용할 때).
+  새 탭은 탐색기 현재 폴더 + 설정의 셸로 시작. 실행 중인 탭을 닫으면 확인, 마지막 탭은 닫을 수 없음.
+- **단축키**: Ctrl+Shift+T(새 탭), Ctrl+Shift+W(닫기), Ctrl+Tab / Ctrl+Shift+Tab(다음/이전). 정보 창 단축키 표와 README에도 반영.
+- **코드**: `TerminalTab`(탭 상태), `TerminalViewModel`(탭 목록·선택·명령; 기존 단일 세션 구조를 탭 기반으로 바꿈), `TerminalTabTitle`(Core, 제목 규칙), `TerminalPanelView`(탭 줄), `MainWindow.OnPreviewKeyDown`(단축키).
+- **테스트**: MSTest `TerminalTabTitleTests` 4개, UI `Tabs_AddAndClose_LastTabCannotBeClosed`, `Tabs_AreIndependent_AndSelectingTabFollowsInExplorer`, `Tabs_KeyboardShortcuts_NewSwitchClose`, `Tabs_CloseBusyTab_AsksConfirm`. 전체 MSTest 112/112, UI 23/23 통과.
+- **알려진 한계**: 탭을 저장/복원하지 않는다(재시작하면 1개). 탭 순서 변경, 직접 이름 지정 없음. 최대 탭 수 도달 안내, 셸 변경 시 선택된 탭만 재시작하는 동작은 자동 테스트가 없다(코드로 확인).
+- 화면은 다크 테마에서 탭 3개를 열어 직접 확인했다. 라이트 테마와 탭이 넘쳐 가로 스크롤이 생기는 경우는 화면으로 확인하지 못했다.
