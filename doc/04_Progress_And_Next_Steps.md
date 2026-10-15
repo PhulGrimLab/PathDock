@@ -11,7 +11,7 @@
 | **2차** (PowerShell 내장 터미널, 탐색기 → 터미널) | **완료** | MSTest 통합 3개 + UI `SyncMode_ExplorerToTerminal_*` |
 | **3차** (터미널 → 탐색기, 4개 모드, 루프/Busy 방지) | **완료** | MSTest `PathSyncServiceTests` 모드 표 + Busy 보류 + UI `SyncMode_*` |
 | 4차 (탭, Git 상태, 설정 영속화, 파일 조작) | **일부** — 설정 영속화, 파일 조작(이름 변경/삭제/새 폴더/다중 선택 복사·이동·붙여넣기), 즐겨찾기 편집 완료. **터미널 탭, Git 상태는 미착수** | `Settings_*`, `Explorer_*` |
-| 5차 (CMD, WSL, AI CLI) | 미착수 | |
+| 5차 (CMD, WSL, AI CLI) | **일부** — 명령 프롬프트(cmd) 지원 완료(doc/02 3.1절). WSL, AI CLI는 미착수 | MSTest `CommandPrompt_ReportsCwd_*` |
 
 ## 2. 테스트 현황 (모두 통과)
 
@@ -32,6 +32,8 @@
 | UI 테스트 간헐 실패 | 앱이 포그라운드가 아닌 채 `SendKeys` | `Native.BringToFront` |
 
 ## 4. 알려진 한계 / 다음 할 일
+
+> 우선순위 후보: ① 터미널 탭 ② Git 상태 ③ UI 테스트 보강(터미널 선택/복사, cmd, 설정 창, 언어, 복사/이동 — doc/03 2절) ④ 풀스크린 앱(vim/less) 지원 ⑤ WSL/AI CLI ⑥ 이름 중복/상표 확인(사람).
 
 1. **터미널 에뮬레이션은 부분 구현** (doc/02 6절): vim/less 같은 풀스크린 앱, 터미널 앱으로의 마우스 입력 전달, 줄바꿈 재배치(리사이즈), 이탤릭 서체는 미검증/미지원. (텍스트 선택/복사는 10/13 구현 - 12절)
 2. 사용자가 프롬프트에 타이핑하던 중 탐색기에서 이동하면 입력 줄 뒤에 cd가 붙는다 (doc/02 4절).

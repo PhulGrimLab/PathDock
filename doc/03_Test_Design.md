@@ -4,8 +4,14 @@
 
 ## 1. PathDock.Tests (MSTest, net10.0-windows)
 
+현재 **108개**(2026-10-15 전부 통과). 파일: `CoreLogicTests.cs`(핵심 로직 다수), `TerminalSessionTests.cs`(ConPTY 통합), `TerminalThemeTests.cs`,
+`LocTests.cs`(언어), `TextPreviewerTests.cs`, `ImagePreviewTypesTests.cs`.
+
 | 영역 | 주요 케이스 |
 |---|---|
+| 파일 조작 | 이름 검증/변경(대소문자만 변경 포함), 새 폴더 이름 제안, 복사/이동 이름 충돌("- 복사"), 휴지통 삭제 |
+| 터미널 테마/언어/미리보기 | 테마 조회·사용자 색 덮어쓰기·잘못된 색 문자열, `Loc.T`/`Plural`/OS 언어 판정, 텍스트 미리보기(인코딩·바이너리 생략), 이미지 형식 판별 |
+| 터미널 통합(추가) | 명령 프롬프트(cmd)에서 cwd 보고·요청/사용자 이동 추적, 토큰이 있는 셸 마커만 인정(위조 마커 무시), 로그의 제어 문자 제거, 스크롤백 포함 전체 텍스트 |
 | PathNormalizer | 후행 `\`, 드라이브 대소문자, 공백/한글, UNC, 상대경로, `..` |
 | ExplorerService | 폴더 우선 정렬, 접근 불가 폴더, 뒤로/앞으로/위로, 존재하지 않는 경로 |
 | SettingsService | 저장/복원, 손상된 JSON → 기본값, 즐겨찾기 10개 초과 거부 |
@@ -35,7 +41,7 @@ CodeAtlas에서 얻은 교훈 적용: `Invoke` 스퓨리어스 예외는 삼키�
 | Theme_Toggle_SwitchesAndPersists | 테마 버튼 → 종료 시 설정에 Light 저장 |
 | Explorer_ShowsAncestorColumns_AndFolderSizes | 부모/조부모 열 내용, 폴더 크기(3 KB)·요약 줄, 상위 열 클릭 이동 |
 | Explorer_OpenFolderWithEnter_UpdatesPath | 목록에서 폴더 선택 + Enter → 하위 폴더 진입 |
-| PathBar_InvalidPath_ShowsInfoBar_AndKeepsPath | 존재하지 않는 경로 입력 → 현재 경로 유지 |
+| PathBar_InvalidPath_ShowsInfoBar_AndKeepsPath | 존재하지 않는 경로 입력 → 주소창이 입력값을 유지(고쳐 쓸 수 있도록. 4553801 이전에는 원래 경로로 복원했음) |
 | SyncMode_ExplorerToTerminal_ChangesTerminalPrompt | 양방향에서 즐겨찾기 이동 → 터미널 프롬프트가 새 폴더로 |
 | SyncMode_TerminalToExplorer_UpdatesPathBar | 터미널에 `cd` 입력 → 경로 표시줄 갱신 |
 | SyncMode_Off_DoesNotPropagate | 동기화 끄기 후 탐색기 이동이 터미널에 전파되지 않음 |
@@ -45,7 +51,9 @@ CodeAtlas에서 얻은 교훈 적용: `Invoke` 스퓨리어스 예외는 삼키�
 `Native.BringToFront`로 앱을 포그라운드로 만든다(안 하면 간헐 실패 — doc/04 3절). 목록은 UIA에서 `DataGrid/DataItem`으로 노출된다.
 
 앱은 UIA 식별을 위해 주요 요소에 `AutomationProperties.AutomationId`를 지정한다
-(`PathBar`, `SyncModeCombo`, `Favorite_1..10`, `FileList`, `Terminal`).
+(`PathBar`, `SyncModeCombo`, `Favorite_1..10`, `FileList`, `Terminal` 등, 전체 목록은 doc/05 7절).
+
+**아직 UI 테스트가 없는 기능**(MSTest 또는 수동 확인만): 터미널 선택/복사, 셸 선택(cmd), 설정 창, 언어 전환, 이름 검색, 미리보기 툴팁, 복사/이동/붙여넣기, 계산기/휴지통 버튼.
 터미널 텍스트는 `TerminalControl`이 UIA `ValuePattern`(읽기 전용 화면 텍스트)으로 노출한다.
 
 ## 3. 실행
@@ -58,4 +66,6 @@ CodeAtlas에서 얻은 교훈 적용: `Invoke` 스퓨리어스 예외는 삼키�
 2. **`Launch` 실패 시 프로세스 누수.** 창 대기 중 예외가 나면 호출 측 `using`이 아직 소유하기 전이라 앱이 남는다 → 시작 후 예외는 `Launch` 안에서 `Kill`한다. (실제로 실패 테스트마다 앱이 1개씩 쌓여 PC에 8개가 떠 있었다.)
 3. **메인 창은 `Process.MainWindowHandle` → `AutomationElement.FromHandle`로 얻는다.** 데스크톱 루트를 UIA로 훑는 방식은 최상위 창이 많을 때 느려져(테스트당 10~17초, 20초 대기 초과) 간헐 실패했다. 변경 후 테스트당 약 3초.
 4. 시작 직후 포커스는 터미널에 있으므로, 탐색기 단축키 테스트는 목록 요소에 먼저 `SetFocus` 한다.
-5. 진단 도구: `--dump [AutomationId]`(UIA 트리), `--probe-f2 [키]`(키 입력 후 최상위/자식 창과 앱 로그 출력).
+5. 진단 도구: `--dump [AutomationId]`(UIA 트리), `--probe-f2 [키]`(키 입력 후 최상위/자식 창과 앱 로그 출력), `--shot-about 경로.png`(정보 창만 캡처).
+6. **출력 경로 변경에 주의 (2026-10-15)**: 빌드 출력이 `bin\x64\Debug`인데 `run_ui_tests.ps1`과 `AppDriver.AppExePath`가 `bin\Debug`를 가리켜 19개가 모두 실패했다. 경로 규칙을 바꾸면 두 곳을 함께 고친다.
+7. **UI 테스트 기대값은 동작 변경 때 같이 갱신한다.** 주소창 오류 처리(입력값 유지)를 바꾼 뒤 테스트가 옛 동작을 기대해 실패했다.

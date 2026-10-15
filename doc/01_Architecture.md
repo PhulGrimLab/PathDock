@@ -6,16 +6,25 @@
 
 ```
 PathDock.App (WPF, net10.0-windows)
- ├─ Views/            MainWindow, FavoritesBar, FileExplorerView, SettingsDialog (XAML, code-behind 최소)
- ├─ Controls/         TerminalControl (커스텀 컨트롤: 화면 버퍼 렌더링 + 키 입력)
- ├─ ViewModels/       MainViewModel, FavoritesViewModel, ExplorerViewModel, TerminalViewModel
- └─ Services/         UiDispatcher 어댑터, 폴더 선택 대화상자
+ ├─ Views/            MainWindow, FavoritesBarView, NavButtonsView, SyncModeSelectorView, DrivePanelView,
+ │                    AncestorColumnView, FileListView, TerminalPanelView, StatusBarView,
+ │                    SettingsWindow, AboutWindow, InputDialog, ConfirmDialog (XAML, code-behind 최소; 상세 doc/05)
+ ├─ Controls/         PanelCard, DriveCard, FavoriteChip, UsageMeter, AddressBar, TerminalControl
+ ├─ ViewModels/       MainViewModel, ExplorerViewModel(+FileActions), TerminalViewModel,
+ │                    FavoriteSlotViewModel, DriveItemViewModel, FileItemViewModel
+ ├─ Localization/     LocSource ({loc:T} XAML 마크업 확장)
+ ├─ Themes/           Generic.xaml (커스텀 컨트롤 스타일)
+ └─ Services/         ThemeService, FontService, DialogService, FileClipboard, RecycleBinService, CalculatorLauncher,
+                      ImagePreviewService/TextPreviewService/PreviewCache, AppInfo
 PathDock.Core (net10.0, UI 비의존 → 단위 테스트 용이)
  ├─ Paths/            PathNormalizer
  ├─ Settings/         AppSettings, SettingsService (JSON)
- ├─ Explorer/         ExplorerService (목록 열거, 이력)
+ ├─ Explorer/         ExplorerService(목록 열거, 이력), DriveService, FolderSizeCalculator/Cache, FileSorter,
+ │                    FileOperations(이름 변경·새 폴더·복사·이동·휴지통), FileCategory, SizeFormatter, TextPreview, ImagePreviewTypes
  ├─ Sync/             SyncMode, PathSyncService (중재, 루프 방지, 대기 정책)
- ├─ Terminal/         ConPtySession, VtParser, ScreenBuffer, TerminalSession(셸 통합·상태)
+ ├─ Terminal/         ConPtySession, VtParser, ScreenBuffer, TerminalSession(셸 통합·상태), TerminalShell, TerminalColorScheme
+ ├─ Monitoring/       SystemMonitor
+ ├─ Localization/     Loc (한국어/영어 문구 선택)
  └─ Logging/          AsyncFileLogger
 ```
 
@@ -34,22 +43,28 @@ PathDock.Core (net10.0, UI 비의존 → 단위 테스트 용이)
 | `FolderSizeCalculator` | 폴더 재귀 크기/파일·폴더 수 집계(취소 가능, 링크 미추적, 접근 불가는 Incomplete) |
 | `DriveService` | 드라이브 목록과 용량(총/여유) 조회. 준비 안 된 드라이브는 용량 0으로 표시 |
 | `ExplorerService` | 폴더 열거(폴더 우선 정렬), 접근 불가 처리, 뒤로/앞으로/위로 이력 |
-| `SettingsService` | 즐겨찾기(최대 10), 동기화 모드, 창 위치/크기, 분할 높이 JSON 저장/복원 |
+| `SettingsService` | 즐겨찾기(최대 10), 동기화 모드, 창 위치/크기, 분할 높이, 테마/글자 크기/터미널 셸·색/언어 JSON 저장/복원 (항목은 doc/00 4절) |
+| `FileOperations` | 이름 검증·변경, 새 폴더, 복사/이동(이름 충돌 시 "- 복사"), 휴지통 삭제. 상태 없음 |
+| `FileSorter` / `FileCategory` | 정렬(폴더 우선·자연 정렬) / 확장자 → 파일 종류 분류 |
+| `TerminalThemes` | 터미널 테마 5종과 사용자 지정 색 해석(`Find`/`Resolve`) |
+| `Loc` | 화면 문구 `Loc.T(한국어, English)`, 영어 단수/복수, 언어 변경 이벤트 |
+| `ThemeService` (App) | 다크/라이트/고대비 적용, 주소 표시줄·드라이브 패널 배경색, 밝은 테마 보조 글자색 대비 보정 |
 | `PathSyncService` | 모드 적용, 출처(Origin) 구분, 동일 경로 무시, 터미널 Busy 시 보류 |
 | `ConPtySession` | `CreatePseudoConsole` + PowerShell 프로세스, 입출력 스트림, 크기 조절 |
 | `VtParser` / `ScreenBuffer` | VT 시퀀스 해석(커서, 지우기, SGR 색, OSC) → 셀 격자 |
-| `TerminalSession` | ConPTY+파서+버퍼 묶음, Idle/Busy·cwd 상태, 셸 통합 스크립트(창 제목 `PD:n:경로` 마커, doc/02 3절), 보류 이동 |
+| `TerminalSession` | ConPTY+파서+버퍼 묶음, Idle/Busy·cwd 상태, 셸 통합(PowerShell은 prompt 훅, cmd는 `PROMPT` 문자열로 창 제목 `PD:…` 마커, doc/02 3절), 보류 이동 |
 
-## 3. 컨트롤 적용 계획 (WpfControlSamples 참조)
+## 3. 컨트롤 적용 (WpfControlSamples 참조)
+
+초기 계획에서 많이 바뀌었다. 현재 화면은 자체 커스텀 컨트롤(`PanelCard`, `DriveCard`, `FavoriteChip`, `UsageMeter`, `AddressBar`)과
+뷰로 구성되며 상세는 [05_UI_Design.md](./05_UI_Design.md). 아래는 WPF-UI를 그대로 쓰는 부분이다.
 
 | 용도 | 사용 컨트롤 | 출처 |
 |---|---|---|
 | 창 | `ui:FluentWindow` + `ui:TitleBar` | wpfui |
-| 즐겨찾기 버튼 | `ui:Button`(Icon + 짧은 이름), 컨텍스트 메뉴 | wpfui |
-| 동기화 모드 | `ComboBox` (wpfui 스타일 자동 적용) | wpfui |
-| 알림 | `ui:InfoBar` (경로 없음/권한 없음/대기 중) | wpfui |
-| 드라이브 패널 | `ui:Button` 카드 + `ProgressBar`(사용량, 90% 이상 경고색), 현재 드라이브 강조 | wpfui |
-| 파일 목록 | `ListView` + `GridView` (이름/수정일/크기) | wpfui 스타일 |
+| 동기화 모드/설정 콤보 | `ComboBox` (wpfui 스타일 자동 적용) | wpfui |
+| 알림 | `ui:InfoBar` (경로 없음/권한 없음/대기 중, 종류별 색, 성공은 자동 닫힘) | wpfui |
+| 파일 목록 | `ListView` + `GridView` (이름/수정일/크기/하위 항목) | wpfui 스타일 |
 | 터미널 | **자체 `TerminalControl`** (`FrameworkElement`, `OnRender`) | 자체 구현 |
 | 분할 | `GridSplitter` | WPF |
 

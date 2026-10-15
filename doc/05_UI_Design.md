@@ -10,7 +10,7 @@
 | 띠 | 배경 | 내용 |
 |---|---|---|
 | 즐겨찾기 | 기본 배경 + 강조색 16% 덧칠(푸른 톤) | 번호 칩 10칸(왼쪽), 경로 동기화 모드(오른쪽) |
-| 탐색기 | 기본 배경(`SolidBackgroundFillColorBase`) | 이동 버튼 + 주소 표시줄, 드라이브 · 조부모 · 부모 · 현재 폴더 카드 |
+| 탐색기 | 기본 배경(`SolidBackgroundFillColorBase`) | 이동 버튼 + 주소 표시줄, 드라이브(**네이비 배경**, 6절) · 조부모 · 부모 · 현재 폴더 카드 |
 | 터미널 | 보조 배경(`...Secondary`) | 터미널 카드 |
 | 상태 표시줄 | 3차 배경 | 동기화 요약, CPU/GPU/메모리 미터 |
 
@@ -39,6 +39,10 @@
 - **글자 크기**: 본문 12, 보조 11(미터/용량 문구), 주소 표시줄 13. 목록·콤보·머리글은 명시적으로 12로 맞췄다(WPF-UI 기본 14보다 한 단계 작게).
 - **선명한 경계**: 카드 테두리는 `ControlStrongStrokeColorDefault`(강한 선), 카드 머리글은 색이 다른 띠 + 아래 구분선.
 - **주소 표시줄**: 배경/테두리는 바깥 Border 하나만 그린다(안쪽 TextBox는 템플릿을 `ScrollViewer`로 줄여 이중 배경 제거).
+- **즐겨찾기 배치**: 한 줄에 다 들어가면 한 줄, 아니면 5칸씩 두 줄. Tab은 즐겨찾기 줄을 한 번에 통과하고 방향키로 칸을 옮긴다.
+- **알림 막대**: 탐색기 위에 겹쳐 표시(레이아웃이 밀리지 않음), 종류별 색, 성공은 5초 뒤 자동 닫힘.
+- **화면 글자 크기/언어/고대비**: 글자 크기(`PdFontSize`, 설정 창 슬라이더)와 한국어/English는 즉시 반영, 고대비 모드는 시스템 색을 따른다. 글자가 커지면 최소 창 크기가 커진다.
+- **미리보기 툴팁**: 이미지(0.4초 호버, 가로 240px 이하 + 해상도·크기)와 텍스트/소스 파일(앞 20줄)을 파일 목록에서 보여준다(`PreviewCache` 공용 캐시).
 
 ## 2. 커스텀 컨트롤 (`Controls/` + `Themes/Generic.xaml`)
 
@@ -62,13 +66,16 @@
 | `FavoritesBarView` | MainViewModel | 칩 줄(빈 칸은 "+ 등록"), 우클릭 메뉴(등록/비우기) |
 | `NavButtonsView` | ExplorerViewModel | 이동 버튼 4개(놓인 열 폭을 채움) |
 | `SyncModeSelectorView` | MainViewModel | 경로 동기화 콤보(즐겨찾기 띠 오른쪽) |
-| `DrivePanelView` | MainViewModel | `DriveCard` 목록 |
+| `DrivePanelView` | MainViewModel | `DriveCard` 목록, 패널 배경은 `PdDrivePanelBackgroundBrush`(네이비) |
 | `AncestorColumnView` | AncestorColumnViewModel | 조부모/부모 열이 **같은 뷰를 재사용**, 선택 항목 왼쪽 강조 막대 |
-| `FileListView` | ExplorerViewModel | 종류별 아이콘/색, 정렬 머리글(▲▼), 요약 줄, 단축키·우클릭 메뉴 |
-| `TerminalPanelView` | TerminalViewModel | 셸 상태를 머리글에 표시 |
+| `FileListView` | ExplorerViewModel | 종류별 아이콘/색, 정렬 머리글(▲▼), 이름 검색 입력칸(Ctrl+F), 요약 줄, 미리보기 툴팁, 단축키·우클릭 메뉴(이름 변경/삭제/새 폴더/복사/잘라내기/붙여넣기) |
+| `TerminalPanelView` | TerminalViewModel | 셸 상태, 도움말·내용 저장·화면 지우기·접기 버튼을 머리글에 표시 |
 | `StatusBarView` | MainViewModel | 동기화 요약 + `UsageMeter` 3개 |
+| `SettingsWindow` | MainViewModel | 언어, 글자 크기(화면/터미널), 터미널 셸·테마·글자색/배경색(미리보기), 시작 시 마지막 경로, 즐겨찾기 초기화 |
 | `AboutWindow` | (AppInfo) | 정보 창 |
-| `InputDialog` | - | 이름 변경/새 폴더 입력 |
+| `InputDialog` / `ConfirmDialog` | - | 이름 변경/새 폴더 입력 / 자체 확인 창(삭제, 여러 줄 붙여넣기, 휴지통 비우기 등) |
+
+제목 표시줄(`MainWindow`): 로고(정보 창) + 버전·빌드 날짜, 시계, 계산기(Ctrl+Alt+C, 이미 떠 있으면 앞으로), 휴지통 비우기(Ctrl+Alt+E, 항목 수/용량 확인 후), 설정, 테마 전환.
 
 ## 4. 정보 창 (`AboutWindow`)
 
@@ -86,9 +93,15 @@
 ## 6. 테마
 
 - 다크(기본)/라이트. 제목 표시줄 오른쪽 버튼으로 전환, 선택은 `settings.json`의 `Theme`에 저장되어 다음 실행에 복원(`ThemeService`, 창 생성 전에 적용).
-- 터미널 화면은 셸 색상 체계 보존을 위해 두 테마 모두 어둡게 유지한다.
+- 터미널 화면 색은 UI 테마와 별개로 터미널 테마 5종/사용자 지정 색으로 정한다(기본은 어두운 배경).
+- 주소 표시줄(슬레이트 블루 `#1E2F45`/`#E6EFFA`)과 드라이브 패널(네이비 `#1B2433`/`#E8EEF7`)은 주변 카드와 구분되도록 테마별 고정색을 쓴다.
+  `App.xaml`에 다크 기본값을 두고 `ThemeService`가 테마 전환·고대비 때 `PdAddressBar*`, `PdDrivePanelBackgroundBrush`를 갱신한다(고대비는 시스템 색).
+- 밝은 테마에서는 보조 글자색(`TextFillColorSecondary/Tertiary`)을 대비 4.5:1 이상으로 덮어쓴다.
 
 ## 7. 접근성/자동화 식별자
 
 기존 ID 유지(주소 표시줄 `PathBar`는 안쪽 TextBox가 가짐): `FavoritesBar`, `Favorite_1..10`, `PathBar`, `SyncModeCombo`, `FileList`, `Terminal`, `TerminalStatus`, `FolderSummary`, `Drive_<문자>`, `AncestorColumn_1/2`, `InfoBar`.
 신규: `AboutButton`, `ThemeButton`, `Meter_Cpu/Gpu/Memory`(이름: "CPU 12%" 등), `SyncSummary`, 정보 창(`AboutVersionTextBlock`, `AboutEnvironmentTextBlock`, `AboutCopyButton`, `AboutLogsButton`, `AboutCloseButton`).
+이후 추가: 제목 표시줄 `CalculatorButton`, `EmptyRecycleBinButton`, `SettingsButton`, `ClockText`, `VersionLabel` / 탐색 `BackButton`, `ForwardButton`, `UpButton`, `RefreshButton`, `FilterBox`, `ImagePreview`, `TextPreview` /
+터미널 `TerminalClearButton`, `TerminalSaveButton`, `TerminalCollapseButton`, `TerminalHelp` / 설정 창(`LanguageCombo`, `UiFontSizeSlider`, `TerminalFontSizeSlider`, `TerminalShellCombo`, `TerminalThemeCombo`,
+`TerminalForegroundBox`, `TerminalBackgroundBox`, `TerminalColorError`, `StartAtLastPathCheck`, `Reset*Button`, `SettingsCloseButton`) / 대화상자(`InputBox`, `InputOk`, `InputCancel`, `InputError`, `ConfirmMessage`, `ConfirmYes`, `ConfirmNo`).
