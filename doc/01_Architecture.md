@@ -9,7 +9,7 @@ PathDock.App (WPF, net10.0-windows)
  ├─ Views/            MainWindow, FavoritesBarView, NavButtonsView, SyncModeSelectorView, DrivePanelView,
  │                    AncestorColumnView, FileListView, TerminalPanelView, StatusBarView,
  │                    SettingsWindow, AboutWindow, InputDialog, ConfirmDialog (XAML, code-behind 최소; 상세 doc/05)
- ├─ Controls/         PanelCard, DriveCard, FavoriteChip, UsageMeter, AddressBar, TerminalControl(+TerminalRenderer, TerminalKeyMap)
+ ├─ Controls/         PanelCard, DriveCard, FavoriteChip, UsageMeter, AddressBar, TerminalControl(+TerminalRenderer, TerminalKeyMap), AlertHost(알림 막대 접근성)
  ├─ ViewModels/       MainViewModel(조립)+InfoBar/Usage/Drives/Favorites/SettingsViewModel, ExplorerViewModel(+FileActions), TerminalViewModel(+TerminalTab: 탭별 세션·상태),
  │                    FavoriteSlotViewModel, DriveItemViewModel, FileItemViewModel
  ├─ Localization/     LocSource ({loc:T} XAML 마크업 확장)

@@ -253,6 +253,8 @@ var tests = new List<(string Name, Action Body)>
         // 4553801 이후: 오류 시 주소창은 복원하지 않고 입력한 경로를 그대로 둔다(고쳐 쓸 수 있도록).
         Thread.Sleep(1500);
         if (app.PathBarText() != bad) throw new TestFailedException($"잘못된 경로 입력 후 주소창이 입력값을 유지하지 않음: '{app.PathBarText()}'");
+        // 알림 막대는 화면 낭독기에도 읽혀야 한다(AlertHost가 UI Automation에 노출): AutomationId "InfoBar"의 이름이 알림 문구.
+        app.WaitUntil(() => app.Exists("InfoBar") && app.Find("InfoBar").Current.Name.Contains("no_such_folder", StringComparison.OrdinalIgnoreCase), "알림 막대가 UI Automation에 노출되지 않음", 8000);
     }),
 
     ("SyncMode_ExplorerToTerminal_ChangesTerminalPrompt", () =>

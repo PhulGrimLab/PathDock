@@ -245,6 +245,6 @@
 - 전체 실행: MSTest 206/206, UI 33개. 한 번의 전체 실행에서 3건이 실패했으나 **개별 3회 반복에서 모두 통과** - 13번 함정(포커스 간섭)으로 판단.
 
 ### 알려진 사항 / 후보
-- **알림 막대(InfoBar)가 UI Automation에 노출되지 않는다**: 화면에는 정상 표시되지만 AutomationId·텍스트로 찾을 수 없어 UI 테스트를 만들지 못했다 → 화면 낭독기(접근성) 개선 후보(`AutomationProperties.LiveSetting` 등).
+- **알림 막대(InfoBar) 접근성 (해결, 2026-10-16)**: `ui:InfoBar`가 자동화 요소를 만들지 않아 화면 낭독기가 알림을 읽지 못했다 → `AlertHost`(ContentControl)로 감싸 문구를 Name으로 노출하고 문구 변경 시 LiveRegionChanged(Assertive)를 발생시킨다. 알림이 닫히면 자동화 트리에서 숨는다. UI 테스트 `PathBar_InvalidPath_*`가 확인(바인딩을 빼면 실패함을 확인).
 - 남은 고복잡도: `DrawRow` 23, `FileList_KeyDown` 18(키 매핑 표로 바꿀 후보), `TryEnterState` 16, `App.OnStartup`·`ConPtySession.Start`·`MainViewModel` 생성자(유지보수성 낮음).
 - 보류: 같은 배경색 셀 사각형 합치기(출력 픽셀이 달라질 수 있음), `SystemMonitor` 샘플당 704KB 할당, 이동마다 드라이브 재조회, `App`/`SplashHost` `IDisposable`.

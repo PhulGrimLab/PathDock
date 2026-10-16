@@ -131,11 +131,12 @@
         </Border>
 
         <!-- 알림은 탐색기 아래쪽에 겹쳐 띄운다(화면이 밀리지 않고, 주소창과 이동 버튼을 가리지 않음) -->
-        <ui:InfoBar Grid.Row="3" VerticalAlignment="Bottom" Panel.ZIndex="10" Margin="12,0,12,14"
-                    Title="{Binding Info.Title}" Severity="{Binding Info.Severity}" IsClosable="True"
-                    Message="{Binding Info.Message}"
-                    IsOpen="{Binding Info.HasInfo, Mode=OneWay}"
-                    AutomationProperties.AutomationId="InfoBar" />
+        <ctl:AlertHost Grid.Row="3" VerticalAlignment="Bottom" Panel.ZIndex="10" Margin="12,0,12,14"
+                       AlertText="{Binding Info.Message}" AutomationProperties.AutomationId="InfoBar">
+            <ui:InfoBar Title="{Binding Info.Title}" Severity="{Binding Info.Severity}" IsClosable="True"
+                        Message="{Binding Info.Message}"
+                        IsOpen="{Binding Info.HasInfo, Mode=OneWay}" />
+        </ctl:AlertHost>
 
         <!-- 탐색기 띠 -->
         <Border Grid.Row="3" Padding="12,10,12,10"
