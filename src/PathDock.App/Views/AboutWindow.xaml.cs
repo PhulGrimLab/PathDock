@@ -80,7 +80,9 @@ public partial class AboutWindow : FluentWindow
     {
         string dir = AppInfo.LogDirectory;
         Directory.CreateDirectory(dir);
-        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{dir}\"") { UseShellExecute = true })?.Dispose();
+        // 전체 경로로 실행한다: 이름만 주면 앱 폴더 등에서 같은 이름의 파일을 먼저 찾을 수 있다(이 앱은 관리자 권한).
+        string explorer = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+        Process.Start(new ProcessStartInfo(explorer, $"\"{dir}\"") { UseShellExecute = true })?.Dispose();
     }
 
     private void OnMailClick(object sender, RoutedEventArgs e)

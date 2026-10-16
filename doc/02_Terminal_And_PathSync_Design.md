@@ -13,7 +13,7 @@
 ## 2. ConPTY
 
 - `CreatePseudoConsole(size, hInRead, hOutWrite, 0)` + `STARTUPINFOEX`의 `PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE`로
-  `powershell.exe -NoLogo -NoExit -ExecutionPolicy Bypass -File <셸 통합 스크립트>`를 실행(`ConPtySession`).
+  `powershell.exe -NoLogo -NoExit -ExecutionPolicy Bypass -Command "<셸 통합 한 줄 명령>"`을 실행(`ConPtySession`). 스크립트 파일을 만들지 않는다(8.1절).
 - 출력 읽기: 전용 스레드가 파이프를 읽어 `VtParser.Feed(bytes)` (UTF-8 디코더 상태 유지).
 - 입력: 키 입력을 VT 시퀀스(방향키 `ESC[A` 등, Ctrl 조합 제어문자)로 변환해 파이프에 쓴다(`TerminalControl`).
 - 크기: 컨트롤 크기 → 열/행 계산 → `ResizePseudoConsole`.
@@ -23,7 +23,7 @@
 
 1. **STARTF_USESTDHANDLES(핸들 0)를 반드시 지정한다.** 호스트 프로세스의 표준 출력이 리다이렉트되어 있으면(테스트 호스트,
    CI) 자식 PowerShell이 의사 콘솔 대신 호스트의 파이프로 출력하고 곧바로 종료한다. GUI 앱에서는 드러나지 않아 통합 테스트로 발견했다.
-2. **`-EncodedCommand`를 쓰지 않는다.** PowerShell 5.1이 `#< CLIXML` 진행 정보를 화면에 쏟아낸다 → 임시 `.ps1`을 `-File`로 실행.
+2. **`-EncodedCommand`를 쓰지 않는다.** PowerShell 5.1이 `#< CLIXML` 진행 정보를 화면에 쏟아낸다. 한때 임시 `.ps1`을 `-File`로 실행했으나, 관리자 권한 앱이 사용자 쓰기 가능한 임시 폴더의 파일을 실행하면 권한 상승에 악용될 수 있어 지금은 파일 없이 `-Command`로 직접 넘긴다(8.1절).
 3. ConPTY는 시작 시 `ESC[?9001h`(win32-input-mode) 등을 보내지만 무시해도 동작한다. 응답이 필요한 질의(`ESC[6n`, `ESC[c`)는
    `VtParser.Reply`로 답한다.
 
@@ -92,7 +92,7 @@ OSC 0/2(제목, 셸 통합 마커 `PD:n:경로` 포함), 9;9, 133;A(pwsh 7 대�
 
 - **선택/복사**: 마우스 드래그로 선택, 더블클릭은 단어 선택. 선택이 있으면 Ctrl+C는 복사(없으면 인터럽트), Ctrl+Shift+C는 항상 복사.
   우클릭은 선택이 있으면 복사, 없으면 붙여넣기. 선택 영역은 새 출력으로 화면이 스크롤되면 같이 따라 움직인다.
-- **붙여넣기**: 여러 줄이면 실행 전에 확인 창을 띄운다.
+- **붙여넣기**: 줄바꿈(Enter)이 하나라도 있으면(끝의 줄바꿈 하나뿐인 한 줄도) 실행 전에 앞 5줄을 보여주는 확인 창을 띄운다. 탭과 Enter 외의 제어 문자(ESC 등)는 제거한다(`PasteGuard`).
 - **색**: 테마 5종(`TerminalThemes`) + 사용자 지정 글자/배경색(`#RRGGBB`, 잘못된 형식은 테마 값 사용). 설정 창에서 미리보기와 함께 즉시 반영.
 - **머리글 버튼**: 내용 저장(스크롤백 포함, 저장 창에서 경로/이름/확장자 선택), 화면 지우기(대기 중이면 셸의 `clear`/`cls`, 실행 중이면 직접 지움 — 스크롤백 포함), 사용법 도움말, 접기/펼치기.
 - 한계: 마우스 입력을 터미널 안 프로그램(vim 등)에 전달하지 않는다. 리사이즈 시 줄바꿈 재배치는 하지 않는다.
@@ -112,3 +112,13 @@ OSC 0/2(제목, 셸 통합 마커 `PD:n:경로` 포함), 9;9, 133;A(pwsh 7 대�
 - **단축키**: Ctrl+Shift+T/W, Ctrl+Tab/Ctrl+Shift+Tab. 터미널이 키를 셸로 보내기 전에 `MainWindow.OnPreviewKeyDown`에서 먼저 가로챈다.
 - **제목**: `TerminalTabTitle.Build` = "PowerShell · 폴더" / "cmd · 폴더"(경로 모르면 셸 이름만, 루트는 `C:`).
 - 한계: 탭은 저장하지 않는다(재시작하면 탭 1개). 탭 순서 바꾸기(드래그)와 탭 이름 직접 지정은 없다. `Save`/`Clear`/상태 표시는 선택된 탭에만 적용된다.
+
+## 8.1 보안 설계 메모 (2026-10-16 리뷰 반영)
+
+이 앱은 항상 관리자 권한으로 실행된다(테스트·실행에 필요 - 사용자 결정). 그래서 사용자 쓰기 가능한 위치나 터미널 출력(신뢰할 수 없는 입력)이 관리자 권한 동작으로 이어지지 않게 다음을 지킨다.
+
+- **셸 신호는 토큰이 있는 창 제목 마커만 믿는다.** 토큰이 설정된 세션(PowerShell/cmd 모두)에서는 OSC 9;9(경로)와 OSC 133;A(프롬프트)를 무시한다. 이 둘은 토큰으로 인증할 수 없어, 화면에 출력된 내용(파일, 원격 출력)만으로 경로(UNC `\evil\share` 포함 - `Directory.Exists`만으로 NTLM 인증이 나간다)와 프롬프트 신호를 위조해 탐색기 이동이나 `Set-Location` 주입을 일으킬 수 있었다.
+- **셸 통합을 파일로 두지 않는다.** `BuildShellIntegrationCommand`가 만든 한 줄(ASCII, 큰따옴표 없음)을 `-Command`로 넘긴다. 이전에는 `%TEMP%\PathDock\*.ps1`을 만들어 실행했는데, 같은 사용자의 일반 권한 프로세스가 그 파일을 바꿔치기할 수 있었다.
+- **cmd는 현재 폴더에서 명령을 찾지 않는다.** 환경 변수 `NoDefaultCurrentDirectoryInExePath=1`을 cmd 자식 프로세스에만 덧붙인다(`ConPtySession`의 환경 블록, 이 앱의 환경은 안 바꿈). 탐색기에서 폴더를 열면 cmd가 자동으로 그 폴더로 이동하므로, 악성 폴더의 `git.exe` 같은 파일이 평범한 명령 대신 관리자 권한으로 실행되는 것을 막는다. `.\이름`으로 명시한 실행은 그대로 된다.
+- **파서 자원 제한**: CSI 파라미터는 32개까지, 스크롤/역스크롤 횟수는 영역 높이까지(`ESC[65535S` 반복이 파서 락을 오래 잡아 UI를 멈추던 문제).
+- **붙여넣기 확인**은 끝의 줄바꿈도 실행으로 본다(`PasteGuard`).

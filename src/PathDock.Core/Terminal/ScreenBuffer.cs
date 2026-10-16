@@ -198,6 +198,8 @@ public sealed class ScreenBuffer
     /// <summary>스크롤 영역을 n줄 위로 민다. 전체 화면(주 화면)이면 밀려난 줄을 스크롤백에 보관한다.</summary>
     public void ScrollUp(int n)
     {
+        // 영역 높이 이상 밀어도 결과는 같다(전부 밀려남). 시퀀스의 횟수(최대 65535)를 그대로 반복하면 짧은 입력으로 파서 락을 오래 잡는다.
+        n = Math.Min(n, _bottom - _top + 1);
         for (int k = 0; k < n; k++)
         {
             Cell[] removed = _screen[_top];
@@ -221,6 +223,7 @@ public sealed class ScreenBuffer
 
     public void ScrollDown(int n)
     {
+        n = Math.Min(n, _bottom - _top + 1);
         for (int k = 0; k < n; k++)
         {
             for (int i = _bottom; i > _top; i--)

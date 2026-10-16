@@ -13,6 +13,7 @@ public sealed class VtParser
     private enum State { Ground, Escape, EscapeIntermediate, Csi, Osc, StringIgnore }
 
     private const int MaxOscLength = 4096;
+    private const int MaxParams = 32;
     private const int DefaultParam = 0;
 
     private readonly ScreenBuffer _b;
@@ -212,7 +213,7 @@ public sealed class VtParser
         }
         else if (c == ';' || c == ':')
         {
-            _params.Add(_curParam < 0 ? DefaultParam : _curParam);
+            AddParam(_curParam < 0 ? DefaultParam : _curParam);
             _curParam = -1;
         }
         else if (c is '?' or '>' or '<' or '=')
@@ -227,7 +228,7 @@ public sealed class VtParser
         {
             if (_curParam >= 0 || _params.Count > 0)
             {
-                _params.Add(_curParam < 0 ? DefaultParam : _curParam);
+                AddParam(_curParam < 0 ? DefaultParam : _curParam);
             }
             else
             {
@@ -247,6 +248,15 @@ public sealed class VtParser
         else
         {
             _state = State.Ground;
+        }
+    }
+
+    /// <summary>파라미터를 추가한다. 개수에 상한을 둔다: ';'만 수백만 개 이어진 시퀀스로 메모리를 쌓지 못하게(초과분은 버린다).</summary>
+    private void AddParam(int value)
+    {
+        if (_params.Count < MaxParams)
+        {
+            _params.Add(value);
         }
     }
 
@@ -484,13 +494,15 @@ public sealed class VtParser
                 }
                 break;
             case "9":
-                if (payload.StartsWith("9;", StringComparison.Ordinal))
+                // 토큰을 요구하는 세션에서는 무시한다: OSC 9;9/133은 토큰으로 인증할 수 없어, 화면에 출력된 내용(파일, 원격 출력)만으로
+                // 경로(UNC 포함)나 프롬프트 신호를 위조할 수 있다. 앱의 셸 통합은 이 시퀀스를 쓰지 않는다(창 제목 마커만 사용).
+                if (MarkerToken is null && payload.StartsWith("9;", StringComparison.Ordinal))
                 {
                     CwdReported?.Invoke(payload[2..].Trim('"'));
                 }
                 break;
             case "133":
-                if (payload.StartsWith('A'))
+                if (MarkerToken is null && payload.StartsWith('A'))
                 {
                     PromptShown?.Invoke();
                 }

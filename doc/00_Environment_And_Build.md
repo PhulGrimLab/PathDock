@@ -12,7 +12,7 @@
 | 타깃 | `net10.0-windows` (WPF) |
 | 패턴 | MVVM — `CommunityToolkit.Mvvm` 8.4.x (Source Generator) |
 | UI 컨트롤 | `WPF-UI` 4.3.0 (FluentWindow, Button, Card, InfoBar, SymbolIcon 등) + 자체 커스텀 컨트롤 |
-| 테스트 | MSTest(로직, 112개) + 자체 콘솔 하네스(UI Automation 25개, 실제 프로세스 구동) |
+| 테스트 | MSTest(로직, 197개) + 자체 콘솔 하네스(UI Automation 26개, 실제 프로세스 구동) |
 | 솔루션 | `PathDock.slnx` (SDK-style 이므로 VS2019 제약 없음 — CodeAtlas와 다름) |
 | 플랫폼 | x64 고정(`Directory.Build.props`). 출력은 `bin\x64\<구성>\net10.0-windows` |
 | 실행 권한 | `app.manifest`의 `requireAdministrator` — 앱은 항상 관리자 권한으로 실행된다 |
@@ -59,3 +59,5 @@ PS> .\doc\run_ui_tests.ps1 -SkipBuild -Tests <이름...>
   태그 번호가 빌드 버전이며 `-`가 들어가면 프리릴리스. 수동 실행(workflow_dispatch)은 빌드·테스트만 확인한다.
   저장소 변수 `SIGNPATH_ORGANIZATION_ID`가 있을 때만 SignPath Foundation으로 서명한다(없으면 서명 없이 릴리스).
 - UI 테스트는 데스크톱 세션이 필요해 워크플로에서 돌리지 않는다.
+
+> **보안 메모**: 앱이 관리자 권한으로 실행되므로 설정·캐시·로그는 링크(정션/심볼릭 링크)가 된 폴더나 파일에는 저장하지 않는다(링크를 따라 엉뚱한 곳에 쓰는 것을 막기 위해). `%APPDATA%\PathDock`를 링크로 옮겨 쓰고 있다면 환경 변수 `PATHDOCK_DATA_DIR`에 실제 폴더를 지정한다. 시작할 때 `%TEMP%\PathDock`의 오래된 `shell-integration-*.ps1`(이전 버전이 남긴 파일)은 자동으로 지운다.

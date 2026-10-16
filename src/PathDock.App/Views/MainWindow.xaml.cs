@@ -53,6 +53,7 @@ public partial class MainWindow : FluentWindow
         };
         ApplyTerminalCollapsed();
         Closing += OnClosing;
+        Application.Current.SessionEnding += (_, _) => _sessionEnding = true;
         Loaded += (_, _) => TerminalPanel.FocusTerminal();
         StartClock();
     }
@@ -218,8 +219,23 @@ public partial class MainWindow : FluentWindow
             && top < SystemParameters.VirtualScreenHeight + SystemParameters.VirtualScreenTop - OffscreenMarginBottom;
     }
 
+    private bool _sessionEnding;
+
     private void OnClosing(object? sender, CancelEventArgs e)
     {
+        // 실행 중인 명령이 있으면 종료 전에 확인한다(앱을 닫으면 모든 탭의 셸과 그 작업이 끝난다). Windows 로그오프/종료 중에는 묻지 않는다.
+        int running = _vm.Terminal.RunningTabCount;
+        if (running > 0 && !_sessionEnding)
+        {
+            string message = Loc.T(
+                $"명령이 실행 중인 터미널 탭이 {running}개 있습니다. 종료하면 그 작업이 모두 끝납니다. 종료할까요?",
+                $"{running} terminal tab(s) have a command running. Exiting will end all of them. Exit anyway?");
+            if (!ConfirmDialog.Ask(this, Loc.T("종료 확인", "Confirm exit"), message))
+            {
+                e.Cancel = true;
+                return;
+            }
+        }
         var s = _vm.Settings;
         s.WindowMaximized = WindowState == WindowState.Maximized;
         Rect bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;

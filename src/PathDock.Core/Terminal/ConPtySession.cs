@@ -39,8 +39,31 @@ public sealed class ConPtySession : IDisposable
         _onExit = onExit;
     }
 
-    /// <summary>의사 콘솔을 만들고 <paramref name="commandLine"/>을 실행한다. 실패 시 Win32Exception.</summary>
-    public void Start(string commandLine, string? workingDirectory, int cols, int rows, uint flags = 0)
+    /// <summary>현재 프로세스의 환경 변수에 <paramref name="extra"/>를 덮어쓴 환경 블록(유니코드, 이름순, 이중 NUL 종료)을 만든다.</summary>
+    internal static string BuildEnvironmentBlock(IReadOnlyDictionary<string, string> extra)
+    {
+        var vars = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (System.Collections.DictionaryEntry e in Environment.GetEnvironmentVariables())
+        {
+            vars[(string)e.Key] = (string?)e.Value ?? string.Empty;
+        }
+        foreach (KeyValuePair<string, string> kv in extra)
+        {
+            vars[kv.Key] = kv.Value;
+        }
+        var sb = new System.Text.StringBuilder();
+        foreach (KeyValuePair<string, string> kv in vars)
+        {
+            sb.Append(kv.Key).Append('=').Append(kv.Value).Append('\0');
+        }
+        return sb.Append('\0').ToString();
+    }
+
+    /// <summary>
+    /// 의사 콘솔을 만들고 <paramref name="commandLine"/>을 실행한다. 실패 시 Win32Exception.
+    /// <paramref name="extraEnvironment"/>가 있으면 현재 환경에 덮어써서 자식 프로세스에 준다(이 앱의 환경은 바꾸지 않는다).
+    /// </summary>
+    public void Start(string commandLine, string? workingDirectory, int cols, int rows, uint flags = 0, IReadOnlyDictionary<string, string>? extraEnvironment = null)
     {
         if (!CreatePipe(out SafeFileHandle inRead, out SafeFileHandle inWrite, IntPtr.Zero, 0)
             || !CreatePipe(out SafeFileHandle outRead, out SafeFileHandle outWrite, IntPtr.Zero, 0))
@@ -74,10 +97,22 @@ public sealed class ConPtySession : IDisposable
         }
         si.lpAttributeList = _attrList;
 
-        if (!CreateProcessW(null, commandLine, IntPtr.Zero, IntPtr.Zero, false,
-                ExtendedStartupInfoPresent | CreateUnicodeEnvironment, IntPtr.Zero, workingDirectory, ref si, out ProcessInformation pi))
+        IntPtr env = extraEnvironment is null ? IntPtr.Zero : Marshal.StringToHGlobalUni(BuildEnvironmentBlock(extraEnvironment));
+        ProcessInformation pi;
+        try
         {
-            throw new Win32Exception(Marshal.GetLastWin32Error(), "CreateProcess 실패: " + commandLine);
+            if (!CreateProcessW(null, commandLine, IntPtr.Zero, IntPtr.Zero, false,
+                    ExtendedStartupInfoPresent | CreateUnicodeEnvironment, env, workingDirectory, ref si, out pi))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "CreateProcess 실패: " + commandLine);
+            }
+        }
+        finally
+        {
+            if (env != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(env);
+            }
         }
         _hProcess = pi.hProcess;
         _hThread = pi.hThread;

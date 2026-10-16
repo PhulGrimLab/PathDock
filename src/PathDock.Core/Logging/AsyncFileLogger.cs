@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using PathDock.Core.Paths;
 
 namespace PathDock.Core.Logging;
 
@@ -64,6 +65,10 @@ public sealed class AsyncFileLogger : ILog, IDisposable
     {
         try
         {
+            if (SafeIo.IsReparsePoint(_dir))
+            {
+                return; // 링크로 바뀐 폴더 안의 파일은 지우지 않는다.
+            }
             DateTime limit = DateTime.Now.AddDays(-RetentionDays);
             foreach (string file in Directory.EnumerateFiles(_dir, "pathdock-*.log"))
             {
@@ -91,6 +96,11 @@ public sealed class AsyncFileLogger : ILog, IDisposable
                 string file = Path.Combine(_dir, $"pathdock-{DateTime.Now:yyyyMMdd}.log");
                 if (file != currentFile)
                 {
+                    // 로그 폴더나 파일이 링크로 바뀌어 있으면 쓰지 않는다(관리자 권한 앱이 링크를 따라 엉뚱한 파일에 덧붙이지 않도록). 로그는 버린다.
+                    if (SafeIo.IsReparsePoint(_dir) || SafeIo.IsReparsePoint(file))
+                    {
+                        continue;
+                    }
                     writer?.Dispose();
                     writer = new StreamWriter(new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.ReadWrite)) { AutoFlush = true };
                     currentFile = file;

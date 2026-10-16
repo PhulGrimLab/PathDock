@@ -4,7 +4,7 @@
 
 ## 1. PathDock.Tests (MSTest, net10.0-windows)
 
-현재 **112개**(2026-10-15 전부 통과). 파일: `CoreLogicTests.cs`(핵심 로직 다수), `TerminalSessionTests.cs`(ConPTY 통합), `TerminalTabTitleTests.cs`(탭 제목 규칙), `TerminalThemeTests.cs`,
+현재 **197개**(2026-10-16 전부 통과, Core 줄 커버리지 91.8% / 분기 88.0%). 파일: `CoreLogicTests.cs`(핵심 로직 다수), `TerminalSessionTests.cs`(ConPTY 통합), `TerminalTabTitleTests.cs`(탭 제목 규칙), `TerminalSecurityTests.cs`·`HardeningTests.cs`(보안 회귀), `TerminalParserTests.cs`(VT 파서·화면 버퍼), `SettingsRobustnessTests.cs`(손상된 설정), `TerminalThemeTests.cs`,
 `LocTests.cs`(언어), `TextPreviewerTests.cs`, `ImagePreviewTypesTests.cs`.
 
 | 영역 | 주요 케이스 |
@@ -13,6 +13,10 @@
 | 터미널 테마/언어/미리보기 | 테마 조회·사용자 색 덮어쓰기·잘못된 색 문자열, `Loc.T`/`Plural`/OS 언어 판정, 텍스트 미리보기(인코딩·바이너리 생략), 이미지 형식 판별 |
 | 터미널 탭 제목 | 셸 이름만(경로 모름), 마지막 폴더 이름(후행 `\` 유무), 한글 경로, 드라이브 루트 `C:`, UNC 공유 이름 |
 | 터미널 통합(추가) | 명령 프롬프트(cmd)에서 cwd 보고·요청/사용자 이동 추적, 토큰이 있는 셸 마커만 인정(위조 마커 무시), 로그의 제어 문자 제거, 스크롤백 포함 전체 텍스트 |
+| 보안 회귀(TerminalSecurityTests) | 토큰 세션이 OSC 9;9/133 위조(UNC 경로·프롬프트)를 무시(파서 + 실제 셸), CSI 파라미터 32개 상한, 큰 스크롤 횟수 상한(시간), 붙여넣기 확인(끝 줄바꿈·제어 문자 제거·미리보기), 셸 통합이 한 줄 ASCII 명령이고 임시 스크립트 파일을 만들지 않음, cmd가 현재 폴더의 실행 파일을 먼저 실행하지 않음(환경 변수는 테스트 안에서 지워 환경과 무관) |
+| 보안 회귀 2(HardeningTests) | 링크(정션/심볼릭 링크) 폴더·파일을 따라가지 않는 설정/캐시/로그 쓰기, 느린 UNC 경로 확인이 시간 제한 안에 돌아옴(실제로 응답 없는 주소 사용), 링크로 자기 안 복사 거부(실제 경로 비교)와 건너뛴 링크 알림, 예약 장치 이름(CON/NUL/COM1/con.txt 등) 거부와 비슷한 이름 허용, 이전 버전 임시 스크립트 정리(오래된 것만) |
+| VT 파서·화면 버퍼(TerminalParserTests) | 커서 이동/저장·복원/탭/백스페이스, 역방향 이동, 화면·줄 지우기 모드, 글자·줄 삽입/삭제, 스크롤 영역과 스크롤백(2000줄 상한), 대체 화면 저장·복원, **크기 변경**(줄 줄이기 시 스크롤백으로 이동, 넓히기·좁히기, 0 크기, 대체 화면 중 변경), SGR(16/256/트루컬러/속성/잘못된 형식), 장치 질의 응답, 모드, DCS/APC/OSC(OSC 52 무시, 길이 상한), 셸 마커, 바이트 단위 입력 동일성, 퍼징(300 시드, 임의 시퀀스+크기 변경에도 예외 없음) |
+| 손상된 설정(SettingsRobustnessTests) | `Favorites: null`/`[null]`/null 문자열/터무니없는 숫자/NaN이 있어도 시작이 막히지 않음(null은 기본값, 숫자는 범위 안으로), 정상 설정은 그대로 |
 | PathNormalizer | 후행 `\`, 드라이브 대소문자, 공백/한글, UNC, 상대경로, `..` |
 | ExplorerService | 폴더 우선 정렬, 접근 불가 폴더, 뒤로/앞으로/위로, 존재하지 않는 경로 |
 | SettingsService | 저장/복원, 손상된 JSON → 기본값, 즐겨찾기 10개 초과 거부 |
@@ -26,7 +30,7 @@
 실제 `PathDock.App.exe`를 `PATHDOCK_DATA_DIR`(임시 폴더)로 격리해 띄우고 `System.Windows.Automation`으로 조작한다.
 CodeAtlas에서 얻은 교훈 적용: `Invoke` 스퓨리어스 예외는 삼키고 상태 변화로 판정, 새 창/대화상자는 `EnumWindows`로 탐색.
 
-| 테스트 (구현됨, 25개) | 검증 |
+| 테스트 (구현됨, 26개) | 검증 |
 |---|---|
 | Favorites_Click_NavigatesExplorer | 즐겨찾기 1·2 클릭 → 경로 표시줄이 해당 폴더로 |
 | Drives_ShowSystemDriveUsage_AndClickNavigatesToRoot | 드라이브 패널에 시스템 드라이브가 표시되고 클릭하면 루트로 이동 |
@@ -48,6 +52,7 @@ CodeAtlas에서 얻은 교훈 적용: `Invoke` 스퓨리어스 예외는 삼키�
 | SyncMode_Off_DoesNotPropagate | 동기화 끄기 후 탐색기 이동이 터미널에 전파되지 않음 |
 | Startup_ShowsLoadingPopup_AndClosesAboutOneSecondAfterMainWindow | 시작하면 로딩 팝업("PathDock Loading")이 먼저 뜨고, 메인 창이 뜬 시점에도 아직 보이며, 메인 창 표시 후 0.7~5초 사이에 닫히고 메인 창은 남음 |
 | Startup_LoadingPopup_BarKeepsMovingAndStatusLineChanges | 팝업이 떠 있는 동안(메인 창이 뜨기 전 초기화 구간) 실제 화면의 진행 막대가 계속 다른 그림이고(3종 이상), "지금 하는 일" 문구가 단계별로 3번 이상 바뀌며 마지막이 "준비 완료". 문구는 UI Automation으로 읽는다(Win32 STATIC `1003`). 막대 타이머를 느리게 하는 결함 주입에서 실패함을 확인 |
+| Exit_WithRunningCommand_AsksConfirm_NoKeepsRunning_YesExits | 명령이 실행 중일 때 닫기를 요청하면 확인 창: 아니오=앱 유지, 예=종료 |
 | Tabs_AddAndClose_LastTabCannotBeClosed | 탭 1개일 때 닫기 버튼 없음 → `+`로 2번째 탭 생성(셸 시작, 닫기 버튼 표시) → 닫으면 다시 1개 |
 | Tabs_AreIndependent_AndSelectingTabFollowsInExplorer | 새 탭은 탐색기 폴더에서 시작, 둘째 탭 `cd`는 탐색기가 따라감, 첫 탭 선택 시 탐색기가 첫 탭 폴더로 복귀하고 첫 탭 화면에 둘째 탭 프롬프트가 없음, 탭 제목에 폴더 이름 |
 | Tabs_KeyboardShortcuts_NewSwitchClose | Ctrl+Shift+T 새 탭, Ctrl+Tab / Ctrl+Shift+Tab 전환(처음↔끝 순환), Ctrl+Shift+W 닫기(마지막 탭은 유지) |
@@ -80,3 +85,5 @@ CodeAtlas에서 얻은 교훈 적용: `Invoke` 스퓨리어스 예외는 삼키�
 9. **DPI 인식 없이는 창 좌표/캡처가 틀린다 (2026-10-16).** 배율이 100%가 아닌 PC(이 PC는 125%)에서 DPI 비인식 프로세스(PowerShell, 기본 .NET 콘솔)가 `GetWindowRect`/`PrintWindow`/`CopyFromScreen`을 쓰면 창이 축소된 크기로 읽혀 **창의 왼쪽 위 일부만** 캡처된다 - 아래쪽의 진행 막대가 통째로 빠져 "안 움직인다"는 잘못된 결론이 나왔다(실제로 앞선 WPF 팝업 판정이 이 영향을 받았다). 하네스는 시작할 때 `Native.EnableDpiAwareness()`를 부르고, 측정 스크립트도 `SetProcessDpiAwarenessContext(-4)`를 먼저 호출한다.
 10. **스스로 타이머로 그리는 창의 애니메이션은 `PrintWindow`로 판정할 수 없다.** `PrintWindow`는 그 시점에 창을 다시 그리게 해서 타이머가 멈춰도 매번 다른 그림이 나온다(결함 주입이 통과해 발견). 실제 화면(`CopyFromScreen`, `Native.CaptureChecksum`)을 읽고, 검사 간격에 무작위 편차를 줘 애니메이션 주기와 겹치는 현상(aliasing)을 피한다. 판정 신뢰는 반드시 **결함 주입으로 실패하는지** 확인한다.
 11. **`Process.CloseMainWindow`/`MainWindowHandle`은 시작 직후 로딩 팝업을 메인 창으로 오인한다.** 시작하자마자 닫는 테스트(`FolderSizeCache_*`, `Settings_*`)가 팝업만 닫아 "앱이 정상 종료하지 않음"으로 실패했다 → `AppDriver.CloseGracefully`는 제목으로 찾은 메인 창에 WM_CLOSE를 보낸다.
+12. **변이 검사로 테스트의 실효를 확인한다 (2026-10-16).** 파서/버퍼 테스트는 코드를 일부러 망가뜨려도 실패하는지 확인했다(탭 폭, 줄 삭제 경계, 크기 변경 커서 보정, SGR 22, 커서 위치 보고, 지우기 모드 1, 스크롤 영역 검증, 스크롤백 상한, 역방향 인덱스 - 9개 모두 실패로 잡힘). 변이를 넣었다 되돌릴 때는 파일 인코딩(BOM)까지 원본과 바이트 단위로 같은지 확인한다(한 번 BOM이 붙어 해시가 달라진 적이 있다).
+13. **간헐 실패: "앱 창을 포그라운드로 만들지 못함".** 다른 창이 활성이거나 Windows의 포그라운드 전환 제한에 걸리면 UI 테스트가 가끔 실패한다(코드 문제 아님, 다시 실행하면 통과). UI 테스트 중에는 다른 작업을 하지 않는다.

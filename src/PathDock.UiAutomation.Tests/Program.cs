@@ -391,6 +391,30 @@ var tests = new List<(string Name, Action Body)>
         }
     }),
 
+    ("Exit_WithRunningCommand_AsksConfirm_NoKeepsRunning_YesExits", () =>
+    {
+        string a = MakeDir("pdA_exit");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        app.TypeInTerminal("Start-Sleep -Seconds 120{ENTER}");
+        app.WaitUntil(() => app.Find("TerminalStatus").Current.Name.Contains("실행 중"), $"명령 실행 상태가 되지 않음: '{app.Find("TerminalStatus").Current.Name}'");
+
+        app.RequestClose();
+        app.AnswerConfirm("종료 확인", false);
+        Thread.Sleep(1000);
+        if (app.HasExited)
+        {
+            throw new TestFailedException("종료 확인 창에서 아니오를 눌렀는데 앱이 종료됨");
+        }
+        app.Find("Terminal"); // 창이 그대로 살아 있어야 한다.
+
+        app.RequestClose();
+        app.AnswerConfirm("종료 확인", true);
+        if (!app.WaitForExit(15000))
+        {
+            throw new TestFailedException("종료 확인 창에서 예를 눌렀는데 앱이 종료되지 않음");
+        }
+    }),
+
     ("Tabs_AddAndClose_LastTabCannotBeClosed", () =>
     {
         string a = MakeDir("pdA_tabadd");

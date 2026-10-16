@@ -35,10 +35,34 @@ public partial class App : Application
         string dataDir = SettingsService.ResolveDataDir();
         _logger = new AsyncFileLogger(dataDir);
         _logger.Info($"시작 시간: OnStartup 진입 - 프로세스 시작 후 {SinceProcessStartMs()}ms");
+        // UI 스레드의 처리되지 않은 예외: 기록하고 알린 뒤 계속 실행한다(그냥 두면 앱이 종료되어 열어 둔 터미널 작업이 모두 끝난다).
         DispatcherUnhandledException += (_, args) =>
         {
             _logger.Error($"처리되지 않은 예외: {args.Exception}");
+            args.Handled = true;
+            _viewModel?.ReportUnexpectedError(args.Exception);
         };
+        // 다른 스레드의 처리되지 않은 예외는 프로세스가 종료된다: 기록하고, 이번 세션의 설정(즐겨찾기 등)을 마지막으로 저장해 본다.
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            _logger.Error($"치명적 예외: {args.ExceptionObject}");
+            try
+            {
+                _viewModel?.SaveSettings();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"종료 직전 설정 저장 실패: {ex.Message}"); // 이미 종료 중이므로 더 할 수 있는 것이 없다.
+            }
+        };
+        // 기다리지 않은 작업(백그라운드 크기 계산 등)의 예외: 기록하고 넘긴다.
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            _logger.Warn($"관찰되지 않은 작업 예외: {args.Exception.GetBaseException().Message}");
+            args.SetObserved();
+        };
+        // 이전 버전이 임시 폴더에 남긴 셸 통합 스크립트를 정리한다(지금은 만들지 않는다).
+        _ = Task.Run(() => PathDock.Core.Terminal.LegacyTempCleanup.Run());
 
         var settings = new SettingsService(dataDir, _logger);
         // 테마는 창이 만들어지기 전에 적용해야 첫 화면부터 올바른 색으로 그려진다.

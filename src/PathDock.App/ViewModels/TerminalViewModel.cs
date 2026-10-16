@@ -38,6 +38,9 @@ public sealed partial class TerminalViewModel : ObservableObject, IPathSyncTarge
     [ObservableProperty]
     private TerminalTab _selectedTab;
 
+    /// <summary>명령이 실행 중인 탭 수(앱을 종료하면 그 작업이 모두 끝나므로 종료 전에 확인하는 데 쓴다).</summary>
+    public int RunningTabCount => Tabs.Count(t => t.Status == TerminalTabStatus.Running);
+
     /// <summary>탭이 둘 이상이면 닫기 버튼을 보여준다(마지막 탭은 닫을 수 없다).</summary>
     public bool HasMultipleTabs => Tabs.Count > 1;
 

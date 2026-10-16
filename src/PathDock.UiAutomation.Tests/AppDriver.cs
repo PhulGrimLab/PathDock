@@ -346,6 +346,20 @@ public sealed class AppDriver : IDisposable
         return list.FindFirst(TreeScope.Descendants, new PropertyCondition(AutomationElement.NameProperty, name)) is not null;
     }
 
+    /// <summary>메인 창에 닫기를 요청만 한다(종료를 기다리지 않는다). 종료 확인 창이 뜨는 경우를 시험할 때 쓴다.</summary>
+    public void RequestClose()
+    {
+        IntPtr main = Native.FindWindowByTitle(_process.Id, MainWindowTitle);
+        if (main == IntPtr.Zero || !Native.RequestClose(main))
+        {
+            _process.CloseMainWindow();
+        }
+    }
+
+    public bool HasExited => _process.HasExited;
+
+    public bool WaitForExit(int timeoutMs) => _process.WaitForExit(timeoutMs);
+
     /// <summary>창을 정상 종료(설정 저장 경로를 타도록 CloseMainWindow)하고 종료를 기다린다.</summary>
     public void CloseGracefully()
     {

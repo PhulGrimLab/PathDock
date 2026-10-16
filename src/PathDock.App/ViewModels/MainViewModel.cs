@@ -383,7 +383,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         try
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("calc.exe") { UseShellExecute = true })?.Dispose();
+            // 전체 경로로 실행한다(이름만 주면 앱 폴더 등에서 같은 이름의 파일을 먼저 찾을 수 있다 - 이 앱은 관리자 권한).
+            string calc = Path.Combine(Environment.SystemDirectory, "calc.exe");
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(calc) { UseShellExecute = true })?.Dispose();
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
@@ -591,10 +593,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    private static readonly TimeSpan StartPathCheckTimeout = TimeSpan.FromSeconds(2);
+
     private string ResolveStartPath()
     {
         string? last = PathNormalizer.Normalize(Settings.LastPath);
-        if (Settings.StartAtLastPath && last is not null && Directory.Exists(last))
+        // 마지막 경로가 꺼진 네트워크 공유면 확인이 OS 시간 제한까지(수십 초) UI 스레드를 막으므로 2초만 기다린다(그 안에 답이 없으면 사용자 폴더로 시작).
+        if (Settings.StartAtLastPath && last is not null && SafeIo.DirectoryExistsWithTimeout(last, StartPathCheckTimeout))
         {
             return last;
         }
@@ -648,6 +653,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         slot.Path = current;
         slot.Name = Path.GetFileName(current) is { Length: > 0 } n ? n : current;
         _log.Info($"즐겨찾기 등록 #{slot.Index}: {current}");
+        SaveSettings(); // 종료 때만 저장하면 비정상 종료 시 이번 세션의 즐겨찾기 변경이 사라진다.
     }
 
     /// <summary>즐겨찾기 표시 이름을 바꾼다(경로는 그대로). 같은 이름의 폴더를 구분할 때 쓴다.</summary>
@@ -661,6 +667,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (name is not null)
         {
             slot.Name = name;
+            SaveSettings();
         }
     }
 
@@ -675,6 +682,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         FavoriteSlotViewModel other = Favorites[to];
         (slot.Name, other.Name) = (other.Name, slot.Name);
         (slot.Path, other.Path) = (other.Path, slot.Path);
+        SaveSettings();
     }
 
     private void ClearFavorite(FavoriteSlotViewModel slot)
@@ -682,6 +690,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         slot.Path = string.Empty;
         slot.Name = string.Empty;
         _log.Info($"즐겨찾기 삭제 #{slot.Index}");
+        SaveSettings();
+    }
+
+    /// <summary>
+    /// 처리되지 않은 예외를 사용자에게 알린다(앱은 계속 실행). 예외는 호출 측(App)이 이미 로그에 남겼다.
+    /// 상태가 어긋났을 수 있으므로 알림에 로그 확인을 안내한다.
+    /// </summary>
+    public void ReportUnexpectedError(Exception ex)
+    {
+        InfoMessage = Loc.T(
+            $"예기치 않은 오류가 발생했지만 계속 실행합니다. 문제가 반복되면 로그를 확인하세요: {ex.Message}",
+            $"An unexpected error occurred, but the app keeps running. If it keeps happening, check the log: {ex.Message}");
     }
 
     /// <summary>창 종료 시 호출: 현재 상태를 설정에 반영해 저장한다.</summary>

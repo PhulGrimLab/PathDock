@@ -682,18 +682,22 @@ public sealed class TerminalControl : FrameworkElement
     {
         if (Clipboard.ContainsText())
         {
-            // 줄바꿈은 Enter(\r)로 통일한다.
-            string text = Clipboard.GetText().Replace("\r\n", "\r").Replace('\n', '\r');
-            int lines = text.TrimEnd('\r').Count(ch => ch == '\r') + 1;
-            if (lines > 1)
+            // 줄바꿈은 Enter(\r)로 통일하고 눈에 안 보이는 제어 문자는 제거한다(PasteGuard).
+            string text = PasteGuard.Normalize(Clipboard.GetText());
+            if (text.Length == 0)
             {
-                // 여러 줄은 줄마다 명령으로 실행되므로 한 번 확인한다(우클릭 실수 방지).
-                string first = text.Split('\r')[0];
-                string preview = first.Length > 60 ? first[..60] + "…" : first;
+                return;
+            }
+            if (PasteGuard.RunsCommands(text))
+            {
+                // 줄바꿈(Enter)이 하나라도 있으면 붙여넣는 즉시 명령이 실행된다(끝의 줄바꿈 하나뿐인 한 줄도 마찬가지) - 내용을 보여주고 확인한다.
+                int lines = PasteGuard.LineCount(text);
+                string preview = PasteGuard.Preview(text, 5, 80, out int hidden);
+                string more = hidden > 0 ? Loc.T($"\n… 외 {hidden}줄", $"\n… and {hidden} more line(s)") : string.Empty;
                 string message = Loc.T(
-                    $"{lines}줄을 터미널에 붙여넣습니다. 줄바꿈마다 명령이 바로 실행됩니다.\n\n첫 줄: {preview}\n\n계속할까요?",
-                    $"{lines} lines will be pasted into the terminal. Each line break runs a command immediately.\n\nFirst line: {preview}\n\nContinue?");
-                if (!PathDock.App.Views.ConfirmDialog.Ask(Window.GetWindow(this), Loc.T("여러 줄 붙여넣기", "Paste multiple lines"), message))
+                    $"{lines}줄을 터미널에 붙여넣습니다. 줄바꿈마다 명령이 바로 실행됩니다.\n\n{preview}{more}\n\n계속할까요?",
+                    $"{lines} line(s) will be pasted into the terminal. Each line break runs a command immediately.\n\n{preview}{more}\n\nContinue?");
+                if (!PathDock.App.Views.ConfirmDialog.Ask(Window.GetWindow(this), Loc.T("붙여넣기 확인", "Confirm paste"), message))
                 {
                     return;
                 }

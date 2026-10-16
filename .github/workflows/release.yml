@@ -7,6 +7,7 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
+# 액션은 태그가 아닌 커밋 SHA로 고정한다(태그는 옮길 수 있어, 공급망 공격으로 릴리스 빌드에 코드가 끼어들 수 있다). 올릴 때는 새 SHA를 확인하고 주석의 버전도 함께 고친다.
 permissions:
   contents: write # 릴리스 생성에 필요
 
@@ -19,9 +20,9 @@ jobs:
       #   변수 SIGNPATH_ORGANIZATION_ID, SIGNPATH_PROJECT_SLUG, SIGNPATH_POLICY_SLUG 와 시크릿 SIGNPATH_API_TOKEN 을 추가한다.
       SIGNPATH_ORG: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 10.0.x
 
@@ -30,6 +31,11 @@ jobs:
         shell: pwsh
         run: |
           if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            # 태그 이름은 이후 단계의 명령줄에 들어가므로 형식을 엄격히 검증한다(스크립트 주입 방지: 예 v1.0;calc).
+            if ($env:GITHUB_REF_NAME -notmatch '^v\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$') {
+              Write-Host '::error::tag must look like v1.2.3 or v1.2.3-beta.1'
+              exit 1
+            }
             $version = $env:GITHUB_REF_NAME.TrimStart('v')
           } else {
             $version = '0.0.0-manual'
@@ -45,20 +51,22 @@ jobs:
 
       # Release 빌드는 끝나면 자동으로 단일 파일 publish까지 실행해 publish\Release\PathDock.App.exe 를 만든다.
       - name: Build (single-file exe)
-        run: dotnet build src/PathDock.App -c Release -p:Version=${{ steps.ver.outputs.numeric }}
+        env:
+          NUMERIC_VERSION: ${{ steps.ver.outputs.numeric }}
+        run: dotnet build src/PathDock.App -c Release -p:Version=$env:NUMERIC_VERSION
 
       # 서명 전 exe를 아티팩트로 올리면 SignPath가 이를 받아 서명한다(서명은 SignPath 쪽에서 승인 정책에 따라 진행).
       - name: Upload unsigned exe
         id: unsigned
         if: ${{ env.SIGNPATH_ORG != '' && github.ref_type == 'tag' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: unsigned-exe
           path: publish/Release/PathDock.App.exe
 
       - name: Sign with SignPath
         if: ${{ env.SIGNPATH_ORG != '' && github.ref_type == 'tag' }}
-        uses: signpath/github-action-submit-signing-request@v1
+        uses: signpath/github-action-submit-signing-request@ced31329c0317e779dad2eec2a7c3bb46ea1343e # v1.3
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
@@ -71,8 +79,10 @@ jobs:
       - name: Package
         id: pkg
         shell: pwsh
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          $name = "PathDock-v${{ steps.ver.outputs.version }}-win-x64"
+          $name = "PathDock-v$($env:VERSION)-win-x64"
           New-Item -ItemType Directory -Force dist | Out-Null
           # 서명된 exe가 있으면 그것을, 없으면 서명하지 않은 exe를 쓴다.
           $exe = if (Test-Path signed\PathDock.App.exe) { 'signed\PathDock.App.exe' } else { 'publish\Release\PathDock.App.exe' }
@@ -85,7 +95,7 @@ jobs:
           }
           Get-Content dist\SHA256SUMS.txt
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: PathDock-win-x64
           path: dist/*
@@ -95,8 +105,9 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           $flags = @()
-          if ('${{ steps.ver.outputs.version }}' -match '-') { $flags += '--prerelease' }
+          if ($env:VERSION -match '-') { $flags += '--prerelease' }
           $assets = Get-ChildItem dist | ForEach-Object { $_.FullName }
           gh release create $env:GITHUB_REF_NAME @assets --title "PathDock $env:GITHUB_REF_NAME" --generate-notes --verify-tag @flags
