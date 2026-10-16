@@ -90,8 +90,13 @@ public partial class MainWindow : FluentWindow
     /// <summary>제목 표시줄 시계를 시작한다. 창과 수명이 같고, 창이 닫히면 멈춘다.</summary>
     private void StartClock()
     {
-        var timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(250) };
-        timer.Tick += (_, _) => UpdateClock();
+        var timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(50) };
+        // 초가 바뀌는 순간에 맞춰 깨어난다(250ms마다 깨어 같은 글자를 확인하던 것보다 유휴 깨움이 1/4).
+        timer.Tick += (_, _) =>
+        {
+            UpdateClock();
+            timer.Interval = TimeSpan.FromMilliseconds(1000 - DateTime.Now.Millisecond + 5);
+        };
         Closed += (_, _) => timer.Stop();
         UpdateClock();
         timer.Start();

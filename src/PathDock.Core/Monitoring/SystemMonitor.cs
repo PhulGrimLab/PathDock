@@ -22,6 +22,7 @@ public sealed class SystemMonitor : IDisposable
     private const string GpuCounter = "Utilization Percentage";
 
     private readonly object _lock = new();
+    private readonly ManualResetEventSlim _gpuReady = new(false);
     private readonly ILog _log;
     private readonly Timer? _timer;
     private ulong _prevIdle, _prevKernel, _prevUser;
@@ -39,7 +40,18 @@ public sealed class SystemMonitor : IDisposable
     {
         _log = log;
         ReadCpuTimes(out _prevIdle, out _prevKernel, out _prevUser);
-        InitGpu();
+        // GPU 카운터의 첫 읽기는 수 초 걸리므로 시작을 막지 않게 백그라운드에서 한다. Sample은 끝날 때까지 기다린다(첫 값에만 영향).
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                InitGpu();
+            }
+            finally
+            {
+                _gpuReady.Set();
+            }
+        });
         if (intervalMs > 0)
         {
             _timer = new Timer(_ => Tick(), null, FirstDelayMs, intervalMs);
@@ -88,6 +100,7 @@ public sealed class SystemMonitor : IDisposable
     /// <summary>직전 측정 이후의 사용률을 계산해 반환한다(첫 호출은 생성 시점부터의 증분).</summary>
     public SystemUsage Sample()
     {
+        _gpuReady.Wait();
         lock (_lock)
         {
             double cpu = SampleCpu();
