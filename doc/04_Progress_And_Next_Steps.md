@@ -15,8 +15,8 @@
 
 ## 2. 테스트 현황 (모두 통과)
 
-- `doc/run_tests.ps1`: MSTest **197개** (2026-10-16 실행, 전부 통과; 보안 회귀 44개, 파서 테스트 등 41개 포함). Core 줄 커버리지 91.8%, 분기 88.0%. 10/12 시점 77개에서 이미지/텍스트 미리보기, 터미널 테마, 언어(Loc), 터미널 세션, 탭 제목(4개) 등이 추가됨.
-- `doc/run_ui_tests.ps1`: UI Automation **26개** (2026-10-16 실행, 전부 통과). 아래 11절의 하네스 수정 2건, 15절의 탭 테스트 4개, 16절의 시작 팝업 테스트 2개 포함.
+- `doc/run_tests.ps1`: MSTest **206개** (2026-10-16 실행, 전부 통과; 보안 회귀 44개, 파서 테스트 등 41개 포함). Core 줄 커버리지 91.8%, 분기 88.0%. 10/12 시점 77개에서 이미지/텍스트 미리보기, 터미널 테마, 언어(Loc), 터미널 세션, 탭 제목(4개) 등이 추가됨.
+- `doc/run_ui_tests.ps1`: UI Automation **33개** (2026-10-16 실행, 전부 통과). 아래 11절의 하네스 수정 2건, 15절의 탭 테스트 4개, 16절의 시작 팝업 테스트 2개 포함.
 
 ## 3. 이번 개발에서 실측으로 발견·수정한 문제 (회귀 테스트 있음)
 
@@ -212,9 +212,39 @@
 | P/Invoke DLL 검색 경로 | 두 어셈블리에 `DefaultDllImportSearchPaths(System32)` - 분석기 CA5392가 **120개 → 0개**(관리자 권한 앱의 DLL 검색 순서 가로채기 방지; kernel32/user32는 원래 보호되는 DLL이라 실제 위험은 낮았음) |
 | 파서·버퍼 테스트 부족 | `TerminalParserTests` 40여 개(커서, 지우기, 삽입/삭제, 스크롤 영역, 스크롤백, 대체 화면, 크기 변경, SGR, 장치 질의, 모드, OSC/DCS, 바이트 단위 입력, 퍼징). 코드를 망가뜨리는 변이 9개를 모두 테스트가 잡음 |
 
-### 남은 개선 후보(구조 변경이라 따로 계획)
+### 남은 개선 후보(구조 변경이라 따로 계획 → 1~3은 19절에서 진행함)
 1. **`MainViewModel` 분리**: 설정 창 속성(글꼴·테마·언어·터미널 색/셸), 상태 표시줄 사용량, 즐겨찾기를 각각의 ViewModel로. `new WpfDialogService()`가 직접 박혀 있어 단위 테스트가 불가능한 구조이기도 함(ViewModel은 MSTest 대상 밖).
 2. **`TerminalControl` 분리**: 렌더링 / 입력 변환 / 선택·클립보드. 렌더링이 화면 락을 잡은 채 프레임마다 객체를 새로 만드는 점(락 밖에서 그리기, 같은 색 배경 합치기)도 함께.
 3. **복잡한 메서드 정리**: `DispatchCsi`·`EscapeState`·`ApplySgr`의 표 기반 분기, `FileList_KeyDown`의 키 매핑 표, `App.OnStartup`·`ConPtySession.Start` 쪼개기. 이제 파서 테스트(99%)가 있어 안전하게 바꿀 수 있다.
 4. 낮음: `TerminalControl._brushes`(색마다 브러시)에 상한, `SystemMonitor` 할당(샘플당 704KB) 줄이기, 이동할 때마다 드라이브 정보 재조회, 이탤릭 분기 죽은 코드, `App`/`SplashHost`의 `IDisposable` 정리.
 - 확인했지만 문제 없던 것: 폴더 열거/경로 비교 성능, 파서 처리량, `cmd` 세션 종료 시 자식 프로세스 정리. 제외: UI 목록 갱신 비용은 측정하지 못했다(헤드리스 불가).
+
+## 19. 구조 변경 (2026-10-16)
+
+18절의 남은 후보 1~3을 진행했다. 동작은 바꾸지 않는 것이 원칙이고, 바꾸기 전에 안전망(테스트)을 먼저 늘렸다.
+
+### 한 일
+| 항목 | 내용 |
+|---|---|
+| 파서 메서드 정리 | `VtParser`의 `Process`/`EscapeState`/`CsiState`/`DispatchCsi`/`ApplySgr`/`DispatchOsc`를 역할별 작은 메서드로 분리(커서·편집·스크롤·상태 CSI, SGR 속성/기본 색, 제목·CWD·프롬프트 OSC). 의미 불변, 파서 테스트 통과 |
+| `TerminalControl` 분리 | 선택 로직 → Core `TerminalSelection`(WPF 비의존, 단위 테스트 9개), 키 변환 → `TerminalKeyMap`, 그리기 → `TerminalRenderer`(+`TerminalFrame`). **락 안에서는 화면 복사만 하고 그리기는 락 밖**에서 하며, 브러시 캐시는 4096개 상한 후 비움 |
+| `MainViewModel` 분리 | `InfoBarViewModel`(알림 막대), `UsageViewModel`(CPU/GPU/메모리), `DrivesViewModel`, `FavoritesViewModel`, `SettingsViewModel`(설정 창 속성 전부). `MainViewModel`은 조립·초기화·저장·동기화·테마 전환·제목 표시줄 명령만 남음. 생성자에 `IDialogService? dialogs = null` 추가(테스트에서 대체 가능) |
+| 뷰 바인딩 경로 | `Usage`(상태 표시줄 미터), `Favorites.Slots`, `Drives.Items`, `Info.*`(알림 막대), 설정 창 DataContext = `Preferences` |
+
+### 지표 전/후
+| 지표 | 전 | 후 |
+|---|---|---|
+| 순환 복잡도 경고(기준 8 초과) | 34건, 최대 36 | 22건, 최대 23(`DrawRow`) |
+| 유지보수성 경고(기준 55 미만) | 약 41건 | 약 21건 |
+| 결합도 | `MainViewModel` 82, `TerminalControl` 71 | 둘 다 기준(70) 이하. 새로 `App.OnStartup`이 목록에 올라옴 |
+| 테스트 | MSTest 197 + UI 26 | MSTest 206 + UI 33 |
+
+### 검증
+- **렌더링**: 리팩터링 전 화면(터미널 색 샘플 출력)을 기준 이미지로 저장해 두고 분리 후 같은 화면과 비교 → **0픽셀 차이**.
+- **새 UI 테스트 7개**(설정 창: 언어 즉시 전환·저장, 셸 변경 시 재시작, 글꼴 크기, 터미널 색 오류/초기화, 테마·사용자 색, 마지막 경로 시작, 즐겨찾기 초기화). 분리 *전* 코드에서 먼저 통과시킨 뒤 분리 후에도 통과.
+- 전체 실행: MSTest 206/206, UI 33개. 한 번의 전체 실행에서 3건이 실패했으나 **개별 3회 반복에서 모두 통과** - 13번 함정(포커스 간섭)으로 판단.
+
+### 알려진 사항 / 후보
+- **알림 막대(InfoBar)가 UI Automation에 노출되지 않는다**: 화면에는 정상 표시되지만 AutomationId·텍스트로 찾을 수 없어 UI 테스트를 만들지 못했다 → 화면 낭독기(접근성) 개선 후보(`AutomationProperties.LiveSetting` 등).
+- 남은 고복잡도: `DrawRow` 23, `FileList_KeyDown` 18(키 매핑 표로 바꿀 후보), `TryEnterState` 16, `App.OnStartup`·`ConPtySession.Start`·`MainViewModel` 생성자(유지보수성 낮음).
+- 보류: 같은 배경색 셀 사각형 합치기(출력 픽셀이 달라질 수 있음), `SystemMonitor` 샘플당 704KB 할당, 이동마다 드라이브 재조회, `App`/`SplashHost` `IDisposable`.

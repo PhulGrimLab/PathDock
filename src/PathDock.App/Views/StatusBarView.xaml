@@ -25,7 +25,8 @@
                        AutomationProperties.AutomationId="SyncSummary" />
         </Grid>
 
-        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+        <!-- 미터는 UsageViewModel(MainViewModel.Usage)을 DataContext로 쓴다 -->
+        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" DataContext="{Binding Usage}">
             <ctl:UsageMeter Label="CPU" Value="{Binding CpuPercent}" ValueText="{Binding CpuText}"
                             AutomationProperties.AutomationId="Meter_Cpu"
                             AutomationProperties.Name="{Binding CpuText, StringFormat=CPU {0}}" />

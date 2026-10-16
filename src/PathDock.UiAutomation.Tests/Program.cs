@@ -391,6 +391,111 @@ var tests = new List<(string Name, Action Body)>
         }
     }),
 
+    ("Settings_Language_English_SwitchesImmediately_AndPersists", () =>
+    {
+        string a = MakeDir("pdA_setlang");
+        using var app = AppDriver.Launch(NewDataDir(null, "Bidirectional", a));
+        app.OpenSettings();
+        app.SelectComboItemByIndex("LanguageCombo", 1);
+        app.WaitUntil(() => app.SelectedSyncModeName() == "Both ways", $"영어로 바뀌지 않음: '{app.SelectedSyncModeName()}'");
+        app.CloseSettings();
+        app.CloseGracefully();
+        if (!app.ReadSettingsJson().Contains("\"Language\": \"en\""))
+        {
+            throw new TestFailedException("언어 설정이 저장되지 않음:\n" + app.ReadSettingsJson());
+        }
+    }),
+
+    ("Settings_TerminalShell_CommandPrompt_RestartsTerminal_AndPersists", () =>
+    {
+        string a = MakeDir("pdA_setshell");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        app.OpenSettings();
+        app.SelectComboItemByIndex("TerminalShellCombo", 1);
+        app.CloseSettings();
+        app.WaitUntil(() => { string t = app.TerminalText(); return t.Contains("pdA_setshell>") && !t.Contains("PS "); }, $"명령 프롬프트로 다시 시작하지 않음:\n{app.TerminalText()}", 25000);
+        app.CloseGracefully();
+        if (!app.ReadSettingsJson().Contains("\"TerminalShell\": \"CommandPrompt\""))
+        {
+            throw new TestFailedException("셸 설정이 저장되지 않음:\n" + app.ReadSettingsJson());
+        }
+    }),
+
+    ("Settings_FontSizes_Persist", () =>
+    {
+        string a = MakeDir("pdA_setfont");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        app.OpenSettings();
+        app.SetSlider("UiFontSizeSlider", 16);
+        app.SetSlider("TerminalFontSizeSlider", 18);
+        app.CloseSettings();
+        app.CloseGracefully();
+        string json = app.ReadSettingsJson();
+        if (!json.Contains("\"UiFontSize\": 16") || !json.Contains("\"TerminalFontSize\": 18"))
+        {
+            throw new TestFailedException("글자 크기가 저장되지 않음:\n" + json);
+        }
+    }),
+
+    ("Settings_TerminalColors_InvalidColorShowsError_ResetClearsIt", () =>
+    {
+        string a = MakeDir("pdA_setcolor");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        app.OpenSettings();
+        app.SetText("TerminalForegroundBox", "zzz");
+        app.WaitUntil(() => app.Exists("TerminalColorError"), "잘못된 색 안내가 보이지 않음");
+        app.Click("ResetTerminalColorsButton");
+        app.WaitUntil(() => !app.Exists("TerminalColorError"), "기본 색으로 되돌렸는데 안내가 남음");
+        app.CloseSettings();
+    }),
+
+    ("Settings_TerminalTheme_AndCustomColor_Persist", () =>
+    {
+        string a = MakeDir("pdA_settheme");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        app.OpenSettings();
+        app.SelectComboItemByIndex("TerminalThemeCombo", 1);
+        app.SetText("TerminalForegroundBox", "#112233");
+        app.CloseSettings();
+        app.CloseGracefully();
+        string json = app.ReadSettingsJson();
+        if (json.Contains("\"TerminalTheme\": \"Campbell\"") || !json.Contains("\"TerminalForeground\": \"#112233\""))
+        {
+            throw new TestFailedException("터미널 테마/글자색이 저장되지 않음:\n" + json);
+        }
+    }),
+
+    ("Settings_StartAtLastPath_Toggle_Persists", () =>
+    {
+        string a = MakeDir("pdA_setstart");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        app.OpenSettings();
+        if (!app.IsChecked("StartAtLastPathCheck"))
+        {
+            throw new TestFailedException("기본값은 마지막 폴더에서 시작(켜짐)이어야 함");
+        }
+        app.Toggle("StartAtLastPathCheck");
+        app.CloseSettings();
+        app.CloseGracefully();
+        if (!app.ReadSettingsJson().Contains("\"StartAtLastPath\": false"))
+        {
+            throw new TestFailedException("시작 폴더 설정이 저장되지 않음:\n" + app.ReadSettingsJson());
+        }
+    }),
+
+    ("Settings_ResetFavorites_ClearsRegisteredSlots", () =>
+    {
+        string a = MakeDir("pdA_resetfav");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        app.Click("Favorite_1");
+        app.WaitUntil(() => app.Find("Favorite_1").Current.Name.Contains("pdA_resetfav"), "즐겨찾기가 등록되지 않음");
+        app.OpenSettings();
+        app.Click("ResetFavoritesButton");
+        app.AnswerConfirm("즐겨찾기 초기화", true);
+        app.WaitUntil(() => !app.Find("Favorite_1").Current.Name.Contains("pdA_resetfav"), "초기화했는데 즐겨찾기가 남음");
+        app.CloseSettings();
+    }),
+
     ("Exit_WithRunningCommand_AsksConfirm_NoKeepsRunning_YesExits", () =>
     {
         string a = MakeDir("pdA_exit");

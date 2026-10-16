@@ -108,5 +108,5 @@
 
 ## 빌드 · 실행 · 테스트
 - 실행: `dotnet run --project src/PathDock.App`
-- 테스트: `doc\run_tests.ps1` (MSTest 197개), `doc\run_ui_tests.ps1` (UI Automation 26개, 실행 중 마우스/키보드 금지)
+- 테스트: `doc\run_tests.ps1` (MSTest 206개), `doc\run_ui_tests.ps1` (UI Automation 33개, 실행 중 마우스/키보드 금지)
 - 배포: Release 빌드 시 `publish\Release\PathDock.App.exe` 단일 파일이 만들어집니다. `v*` 태그를 푸시하면 GitHub Actions가 테스트 → 빌드 → GitHub Release를 만듭니다.

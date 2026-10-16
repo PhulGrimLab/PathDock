@@ -35,12 +35,12 @@ public partial class MainWindow : FluentWindow
         UpdateVersionLabel();
         Loc.LanguageChanged += UpdateVersionLabel;
         Closed += (_, _) => Loc.LanguageChanged -= UpdateVersionLabel;
-        ApplyMinSize(vm.UiFontSize);
-        vm.PropertyChanged += (_, e) =>
+        ApplyMinSize(vm.Preferences.UiFontSize);
+        vm.Preferences.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(MainViewModel.UiFontSize))
+            if (e.PropertyName == nameof(SettingsViewModel.UiFontSize))
             {
-                ApplyMinSize(vm.UiFontSize);
+                ApplyMinSize(vm.Preferences.UiFontSize);
             }
         };
         RestoreWindowState();
@@ -120,7 +120,7 @@ public partial class MainWindow : FluentWindow
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
         {
-            _vm.InfoMessage = Loc.T($"달력을 열 수 없습니다: {ex.Message}", $"Could not open the calendar: {ex.Message}");
+            _vm.Info.Show(Loc.T($"달력을 열 수 없습니다: {ex.Message}", $"Could not open the calendar: {ex.Message}"));
         }
     }
 

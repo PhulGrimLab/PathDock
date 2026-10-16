@@ -8,7 +8,7 @@
     <ctl:PanelCard Header="{loc:T '드라이브', 'Drives'}" Symbol="HardDrive20" ContentPadding="6"
                    Background="{DynamicResource PdDrivePanelBackgroundBrush}">
         <ScrollViewer VerticalScrollBarVisibility="Auto" AutomationProperties.AutomationId="DriveList">
-            <ItemsControl ItemsSource="{Binding Drives}" Focusable="False">
+            <ItemsControl ItemsSource="{Binding Drives.Items}" Focusable="False">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="{x:Type vm:DriveItemViewModel}">
                         <ctl:DriveCard Title="{Binding Title}"

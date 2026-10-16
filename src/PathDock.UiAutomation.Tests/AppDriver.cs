@@ -166,6 +166,66 @@ public sealed class AppDriver : IDisposable
         try { expand.Collapse(); } catch (InvalidOperationException) { }
     }
 
+    /// <summary>콤보박스(AutomationId)의 index번째 항목을 선택한다(항목 이름이 언어/설정에 따라 바뀌는 콤보에 쓴다).</summary>
+    public void SelectComboItemByIndex(string comboId, int index)
+    {
+        AutomationElement combo = Find(comboId);
+        var expand = (ExpandCollapsePattern)combo.GetCurrentPattern(ExpandCollapsePattern.Pattern);
+        expand.Expand();
+        AutomationElement? item = null;
+        WaitUntil(() =>
+        {
+            AutomationElementCollection items = combo.FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem));
+            item = items.Count > index ? items[index] : null;
+            return item is not null;
+        }, DefaultTimeoutMs, $"콤보박스 항목 없음: {comboId}[{index}]");
+        ((SelectionItemPattern)item!.GetCurrentPattern(SelectionItemPattern.Pattern)).Select();
+        try { expand.Collapse(); } catch (InvalidOperationException) { }
+    }
+
+    /// <summary>슬라이더(AutomationId)의 값을 설정한다.</summary>
+    public void SetSlider(string sliderId, double value)
+    {
+        ((RangeValuePattern)Find(sliderId).GetCurrentPattern(RangeValuePattern.Pattern)).SetValue(value);
+    }
+
+    /// <summary>입력칸(AutomationId)에 글자를 넣는다.</summary>
+    public void SetText(string textBoxId, string value)
+    {
+        ((ValuePattern)Find(textBoxId).GetCurrentPattern(ValuePattern.Pattern)).SetValue(value);
+    }
+
+    /// <summary>화면의 어떤 글자 요소에 <paramref name="fragment"/>가 들어 있는지(알림 막대처럼 AutomationId로 못 찾는 문구 확인용).</summary>
+    public bool AnyTextContains(string fragment)
+    {
+        foreach (AutomationElement e in Window.FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Text)))
+        {
+            if (e.Current.Name.Contains(fragment, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>체크박스(AutomationId)의 현재 선택 상태.</summary>
+    public bool IsChecked(string checkBoxId) =>
+        ((TogglePattern)Find(checkBoxId).GetCurrentPattern(TogglePattern.Pattern)).Current.ToggleState == ToggleState.On;
+
+    public void Toggle(string checkBoxId)
+    {
+        ((TogglePattern)Find(checkBoxId).GetCurrentPattern(TogglePattern.Pattern)).Toggle();
+    }
+
+    /// <summary>제목 표시줄의 설정 버튼으로 설정 창을 연다(모달).</summary>
+    public void OpenSettings() => Click("SettingsButton");
+
+    /// <summary>설정 창을 닫는다.</summary>
+    public void CloseSettings() => Click("SettingsCloseButton");
+
+    /// <summary>앱이 종료된 뒤 데이터 폴더의 settings.json 내용.</summary>
+    public string ReadSettingsJson() => File.ReadAllText(Path.Combine(DataDir, "settings.json"));
+
     public string SelectedSyncModeName()
     {
         var sel = (SelectionPattern)Find("SyncModeCombo").GetCurrentPattern(SelectionPattern.Pattern);

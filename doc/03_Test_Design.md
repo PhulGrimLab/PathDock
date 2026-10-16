@@ -4,7 +4,7 @@
 
 ## 1. PathDock.Tests (MSTest, net10.0-windows)
 
-현재 **197개**(2026-10-16 전부 통과, Core 줄 커버리지 91.8% / 분기 88.0%). 파일: `CoreLogicTests.cs`(핵심 로직 다수), `TerminalSessionTests.cs`(ConPTY 통합), `TerminalTabTitleTests.cs`(탭 제목 규칙), `TerminalSecurityTests.cs`·`HardeningTests.cs`(보안 회귀), `TerminalParserTests.cs`(VT 파서·화면 버퍼), `SettingsRobustnessTests.cs`(손상된 설정), `TerminalThemeTests.cs`,
+현재 **206개**(2026-10-16 전부 통과, Core 줄 커버리지 91.8% / 분기 88.0%). 파일: `CoreLogicTests.cs`(핵심 로직 다수), `TerminalSessionTests.cs`(ConPTY 통합), `TerminalTabTitleTests.cs`(탭 제목 규칙), `TerminalSecurityTests.cs`·`HardeningTests.cs`(보안 회귀), `TerminalParserTests.cs`(VT 파서·화면 버퍼), `SettingsRobustnessTests.cs`(손상된 설정), `TerminalThemeTests.cs`,
 `LocTests.cs`(언어), `TextPreviewerTests.cs`, `ImagePreviewTypesTests.cs`.
 
 | 영역 | 주요 케이스 |
@@ -30,7 +30,7 @@
 실제 `PathDock.App.exe`를 `PATHDOCK_DATA_DIR`(임시 폴더)로 격리해 띄우고 `System.Windows.Automation`으로 조작한다.
 CodeAtlas에서 얻은 교훈 적용: `Invoke` 스퓨리어스 예외는 삼키고 상태 변화로 판정, 새 창/대화상자는 `EnumWindows`로 탐색.
 
-| 테스트 (구현됨, 26개) | 검증 |
+| 테스트 (구현됨, 33개) | 검증 |
 |---|---|
 | Favorites_Click_NavigatesExplorer | 즐겨찾기 1·2 클릭 → 경로 표시줄이 해당 폴더로 |
 | Drives_ShowSystemDriveUsage_AndClickNavigatesToRoot | 드라이브 패널에 시스템 드라이브가 표시되고 클릭하면 루트로 이동 |
@@ -87,3 +87,5 @@ CodeAtlas에서 얻은 교훈 적용: `Invoke` 스퓨리어스 예외는 삼키�
 11. **`Process.CloseMainWindow`/`MainWindowHandle`은 시작 직후 로딩 팝업을 메인 창으로 오인한다.** 시작하자마자 닫는 테스트(`FolderSizeCache_*`, `Settings_*`)가 팝업만 닫아 "앱이 정상 종료하지 않음"으로 실패했다 → `AppDriver.CloseGracefully`는 제목으로 찾은 메인 창에 WM_CLOSE를 보낸다.
 12. **변이 검사로 테스트의 실효를 확인한다 (2026-10-16).** 파서/버퍼 테스트는 코드를 일부러 망가뜨려도 실패하는지 확인했다(탭 폭, 줄 삭제 경계, 크기 변경 커서 보정, SGR 22, 커서 위치 보고, 지우기 모드 1, 스크롤 영역 검증, 스크롤백 상한, 역방향 인덱스 - 9개 모두 실패로 잡힘). 변이를 넣었다 되돌릴 때는 파일 인코딩(BOM)까지 원본과 바이트 단위로 같은지 확인한다(한 번 BOM이 붙어 해시가 달라진 적이 있다).
 13. **간헐 실패: "앱 창을 포그라운드로 만들지 못함".** 다른 창이 활성이거나 Windows의 포그라운드 전환 제한에 걸리면 UI 테스트가 가끔 실패한다(코드 문제 아님, 다시 실행하면 통과). UI 테스트 중에는 다른 작업을 하지 않는다.
+14. **렌더링 리팩터링은 기준 화면과 픽셀 비교한다 (2026-10-16).** `TerminalControl` 분리 전에 색 샘플을 출력한 화면을 기준 이미지로 저장하고, 분리 후 같은 화면과 비교해 0픽셀 차이를 확인했다. 터미널 렌더링을 건드리는 변경은 같은 방법으로 확인한다(DPI 인식 필수, 9번 참고).
+15. **설정 창 UI 테스트 7개와 `TerminalSelectionTests` 9개 추가.** 구조 변경(`MainViewModel`→하위 ViewModel) 전에 안전망으로 먼저 작성. 알림 막대(InfoBar)는 UI Automation에 노출되지 않아 UI 테스트로 확인할 수 없다(접근성 개선 후보, 04 문서 19절).
