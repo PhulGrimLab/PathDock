@@ -17,6 +17,9 @@
 
 ## 사용 방법
 
+### 시작
+실행하면 준비되는 동안 작은 **"로딩 중..." 팝업**이 먼저 나타납니다. 계속 흐르는 진행 막대와 함께 "지금 무엇을 하는지"(`테마와 글꼴 적용 중...` → `폴더 크기 캐시 불러오는 중...` → `화면 구성 중...` → `터미널 시작 중...` → `준비 완료`)가 한 줄로 갱신되고, 메인 화면이 표시된 뒤 약 1초 후에 사라집니다. 팝업이 뜨기 전 잠깐(런타임 로딩 구간)은 화면에 아무것도 보이지 않을 수 있습니다.
+
 ### 화면 구성
 ```
 [제목 표시줄]  로고(정보) · 버전  ……  시계  계산기  휴지통  설정  테마
@@ -103,5 +106,5 @@
 
 ## 빌드 · 실행 · 테스트
 - 실행: `dotnet run --project src/PathDock.App`
-- 테스트: `doc\run_tests.ps1` (MSTest 112개), `doc\run_ui_tests.ps1` (UI Automation 23개, 실행 중 마우스/키보드 금지)
+- 테스트: `doc\run_tests.ps1` (MSTest 112개), `doc\run_ui_tests.ps1` (UI Automation 25개, 실행 중 마우스/키보드 금지)
 - 배포: Release 빌드 시 `publish\Release\PathDock.App.exe` 단일 파일이 만들어집니다. `v*` 태그를 푸시하면 GitHub Actions가 테스트 → 빌드 → GitHub Release를 만듭니다.

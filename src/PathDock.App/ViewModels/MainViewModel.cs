@@ -465,14 +465,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         return $"CPU {u.CpuPercent:0}% | GPU {FormatGpu(u.GpuPercent)} | {Loc.T("메모리", "Memory")} {SizeFormatter.Format(u.MemoryUsedBytes)} / {SizeFormatter.Format(u.MemoryTotalBytes)} ({u.MemoryPercent:0}%)";
     }
 
-    public MainViewModel(SettingsService settingsService, FolderSizeCache sizeCache, ILog log)
+    /// <param name="progress">시작 중 로딩 팝업에 보여줄 "지금 하는 일" 문구를 받는 콜백(선택, UI 스레드에서 호출).</param>
+    public MainViewModel(SettingsService settingsService, FolderSizeCache sizeCache, ILog log, Action<string>? progress = null)
     {
         _settingsService = settingsService;
         _sizeCache = sizeCache;
         _log = log;
         Settings = settingsService.Load();
 
+        progress?.Invoke(Loc.T("폴더 크기 캐시 불러오는 중...", "Loading folder size cache..."));
         _sizeCache.Load();
+        progress?.Invoke(Loc.T("탐색기와 터미널 준비 중...", "Preparing explorer and terminal..."));
         Explorer = new ExplorerViewModel(log, _sizeCache, _dialogs);
         Terminal = new TerminalViewModel(log, _dialogs) { StartDirectoryProvider = () => Explorer.CurrentPath };
         _isDarkTheme = Services.ThemeService.Normalize(Settings.Theme) == Services.ThemeService.Dark;
@@ -530,10 +533,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>시작 경로(마지막 경로 → 사용자 폴더)로 탐색기를 열고 터미널을 같은 경로에서 시작한다.</summary>
-    public void Initialize()
+    public void Initialize(Action<string>? progress = null)
     {
         string start = ResolveStartPath();
+        progress?.Invoke(Loc.T("폴더 목록 읽는 중...", "Reading folder contents..."));
         Explorer.NavigateTo(start, ChangeOrigin.Sync);
+        progress?.Invoke(Loc.T("터미널 시작 중...", "Starting terminal..."));
         Terminal.Start(Explorer.CurrentPath ?? start, Settings.TerminalShell);
         _terminalStarted = true;
         _ = RefreshDrivesAsync();

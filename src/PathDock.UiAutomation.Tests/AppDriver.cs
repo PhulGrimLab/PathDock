@@ -29,6 +29,9 @@ public sealed class AppDriver : IDisposable
     public static string AppExePath => Path.GetFullPath(Path.Combine(
         AppContext.BaseDirectory, "..", "..", "..", "..", "..", "PathDock.App", "bin", "x64", "Debug", "net10.0-windows", "PathDock.App.exe"));
 
+    public const string MainWindowTitle = "PathDock";
+    public const string SplashWindowTitle = "PathDock Loading";
+
     /// <summary>앱을 시작하고 메인 창과 첫 프롬프트(터미널)가 뜰 때까지 기다린다.</summary>
     public static AppDriver Launch(string dataDir)
     {
@@ -44,12 +47,13 @@ public sealed class AppDriver : IDisposable
             // 데스크톱 전체를 UIA로 훑으면 최상위 창이 많을 때 매우 느리고 불안정하므로, 프로세스의 메인 창 핸들에서 바로 요소를 얻는다.
             WaitUntil(() =>
             {
-                p.Refresh();
-                if (p.MainWindowHandle == IntPtr.Zero)
+                // 메인 창 제목은 "PathDock". 시작 중 로딩 팝업("PathDock Loading")이 먼저 뜨므로 Process.MainWindowHandle 대신 제목으로 찾는다.
+                IntPtr hwnd = Native.FindWindowByTitle(p.Id, MainWindowTitle);
+                if (hwnd == IntPtr.Zero)
                 {
                     return false;
                 }
-                window = AutomationElement.FromHandle(p.MainWindowHandle);
+                window = AutomationElement.FromHandle(hwnd);
                 return true;
             }, DefaultTimeoutMs, p.HasExited ? $"앱이 시작 직후 종료됨(코드 {p.ExitCode})" : "메인 창이 뜨지 않음");
             var driver = new AppDriver(p, dataDir, window!);
@@ -345,7 +349,12 @@ public sealed class AppDriver : IDisposable
     /// <summary>창을 정상 종료(설정 저장 경로를 타도록 CloseMainWindow)하고 종료를 기다린다.</summary>
     public void CloseGracefully()
     {
-        _process.CloseMainWindow();
+        // 시작 직후에는 로딩 팝업이 떠 있을 수 있어 Process.CloseMainWindow 대신 메인 창을 제목으로 찾아 닫는다.
+        IntPtr main = Native.FindWindowByTitle(_process.Id, MainWindowTitle);
+        if (main == IntPtr.Zero || !Native.RequestClose(main))
+        {
+            _process.CloseMainWindow();
+        }
         if (!_process.WaitForExit(15000))
         {
             throw new TestFailedException("앱이 정상 종료하지 않음");

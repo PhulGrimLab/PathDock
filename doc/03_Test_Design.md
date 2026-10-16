@@ -26,7 +26,7 @@
 실제 `PathDock.App.exe`를 `PATHDOCK_DATA_DIR`(임시 폴더)로 격리해 띄우고 `System.Windows.Automation`으로 조작한다.
 CodeAtlas에서 얻은 교훈 적용: `Invoke` 스퓨리어스 예외는 삼키고 상태 변화로 판정, 새 창/대화상자는 `EnumWindows`로 탐색.
 
-| 테스트 (구현됨, 23개) | 검증 |
+| 테스트 (구현됨, 25개) | 검증 |
 |---|---|
 | Favorites_Click_NavigatesExplorer | 즐겨찾기 1·2 클릭 → 경로 표시줄이 해당 폴더로 |
 | Drives_ShowSystemDriveUsage_AndClickNavigatesToRoot | 드라이브 패널에 시스템 드라이브가 표시되고 클릭하면 루트로 이동 |
@@ -46,6 +46,8 @@ CodeAtlas에서 얻은 교훈 적용: `Invoke` 스퓨리어스 예외는 삼키�
 | SyncMode_ExplorerToTerminal_ChangesTerminalPrompt | 양방향에서 즐겨찾기 이동 → 터미널 프롬프트가 새 폴더로 |
 | SyncMode_TerminalToExplorer_UpdatesPathBar | 터미널에 `cd` 입력 → 경로 표시줄 갱신 |
 | SyncMode_Off_DoesNotPropagate | 동기화 끄기 후 탐색기 이동이 터미널에 전파되지 않음 |
+| Startup_ShowsLoadingPopup_AndClosesAboutOneSecondAfterMainWindow | 시작하면 로딩 팝업("PathDock Loading")이 먼저 뜨고, 메인 창이 뜬 시점에도 아직 보이며, 메인 창 표시 후 0.7~5초 사이에 닫히고 메인 창은 남음 |
+| Startup_LoadingPopup_BarKeepsMovingAndStatusLineChanges | 팝업이 떠 있는 동안(메인 창이 뜨기 전 초기화 구간) 실제 화면의 진행 막대가 계속 다른 그림이고(3종 이상), "지금 하는 일" 문구가 단계별로 3번 이상 바뀌며 마지막이 "준비 완료". 문구는 UI Automation으로 읽는다(Win32 STATIC `1003`). 막대 타이머를 느리게 하는 결함 주입에서 실패함을 확인 |
 | Tabs_AddAndClose_LastTabCannotBeClosed | 탭 1개일 때 닫기 버튼 없음 → `+`로 2번째 탭 생성(셸 시작, 닫기 버튼 표시) → 닫으면 다시 1개 |
 | Tabs_AreIndependent_AndSelectingTabFollowsInExplorer | 새 탭은 탐색기 폴더에서 시작, 둘째 탭 `cd`는 탐색기가 따라감, 첫 탭 선택 시 탐색기가 첫 탭 폴더로 복귀하고 첫 탭 화면에 둘째 탭 프롬프트가 없음, 탭 제목에 폴더 이름 |
 | Tabs_KeyboardShortcuts_NewSwitchClose | Ctrl+Shift+T 새 탭, Ctrl+Tab / Ctrl+Shift+Tab 전환(처음↔끝 순환), Ctrl+Shift+W 닫기(마지막 탭은 유지) |
@@ -73,4 +75,8 @@ CodeAtlas에서 얻은 교훈 적용: `Invoke` 스퓨리어스 예외는 삼키�
 4. 시작 직후 포커스는 터미널에 있으므로, 탐색기 단축키 테스트는 목록 요소에 먼저 `SetFocus` 한다.
 5. 진단 도구: `--dump [AutomationId]`(UIA 트리), `--probe-f2 [키]`(키 입력 후 최상위/자식 창과 앱 로그 출력), `--shot-about 경로.png`(정보 창만 캡처).
 6. **출력 경로 변경에 주의 (2026-10-15)**: 빌드 출력이 `bin\x64\Debug`인데 `run_ui_tests.ps1`과 `AppDriver.AppExePath`가 `bin\Debug`를 가리켜 19개가 모두 실패했다. 경로 규칙을 바꾸면 두 곳을 함께 고친다.
+8. **메인 창은 제목("PathDock")으로 찾는다 (2026-10-16).** 시작 중 로딩 팝업이 같은 프로세스의 먼저 뜬 최상위 창이라 `Process.MainWindowHandle`이 팝업을 가리킬 수 있다 → `Native.FindWindowByTitle`(EnumWindows)로 제목이 정확히 일치하는 창을 찾는다. 팝업 제목은 `AppDriver.SplashWindowTitle`("PathDock Loading").
 7. **UI 테스트 기대값은 동작 변경 때 같이 갱신한다.** 주소창 오류 처리(입력값 유지)를 바꾼 뒤 테스트가 옛 동작을 기대해 실패했다.
+9. **DPI 인식 없이는 창 좌표/캡처가 틀린다 (2026-10-16).** 배율이 100%가 아닌 PC(이 PC는 125%)에서 DPI 비인식 프로세스(PowerShell, 기본 .NET 콘솔)가 `GetWindowRect`/`PrintWindow`/`CopyFromScreen`을 쓰면 창이 축소된 크기로 읽혀 **창의 왼쪽 위 일부만** 캡처된다 - 아래쪽의 진행 막대가 통째로 빠져 "안 움직인다"는 잘못된 결론이 나왔다(실제로 앞선 WPF 팝업 판정이 이 영향을 받았다). 하네스는 시작할 때 `Native.EnableDpiAwareness()`를 부르고, 측정 스크립트도 `SetProcessDpiAwarenessContext(-4)`를 먼저 호출한다.
+10. **스스로 타이머로 그리는 창의 애니메이션은 `PrintWindow`로 판정할 수 없다.** `PrintWindow`는 그 시점에 창을 다시 그리게 해서 타이머가 멈춰도 매번 다른 그림이 나온다(결함 주입이 통과해 발견). 실제 화면(`CopyFromScreen`, `Native.CaptureChecksum`)을 읽고, 검사 간격에 무작위 편차를 줘 애니메이션 주기와 겹치는 현상(aliasing)을 피한다. 판정 신뢰는 반드시 **결함 주입으로 실패하는지** 확인한다.
+11. **`Process.CloseMainWindow`/`MainWindowHandle`은 시작 직후 로딩 팝업을 메인 창으로 오인한다.** 시작하자마자 닫는 테스트(`FolderSizeCache_*`, `Settings_*`)가 팝업만 닫아 "앱이 정상 종료하지 않음"으로 실패했다 → `AppDriver.CloseGracefully`는 제목으로 찾은 메인 창에 WM_CLOSE를 보낸다.

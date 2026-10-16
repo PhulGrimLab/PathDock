@@ -15,7 +15,7 @@ PathDock.App (WPF, net10.0-windows)
  ├─ Localization/     LocSource ({loc:T} XAML 마크업 확장)
  ├─ Themes/           Generic.xaml (커스텀 컨트롤 스타일)
  └─ Services/         ThemeService, FontService, DialogService, FileClipboard, RecycleBinService, CalculatorLauncher,
-                      ImagePreviewService/TextPreviewService/PreviewCache, AppInfo
+                      ImagePreviewService/TextPreviewService/PreviewCache, AppInfo, SplashHost(시작 로딩 팝업, 순수 Win32)
 PathDock.Core (net10.0, UI 비의존 → 단위 테스트 용이)
  ├─ Paths/            PathNormalizer
  ├─ Settings/         AppSettings, SettingsService (JSON)

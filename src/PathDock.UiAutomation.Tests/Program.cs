@@ -6,6 +6,7 @@ using PathDock.UiAutomation.Tests;
 // 실행 중에는 SendKeys를 쓰므로 마우스/키보드를 건드리지 않는다.
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
+Native.EnableDpiAwareness(); // 창 좌표/캡처를 실제 픽셀로 읽기 위해(배율이 100%가 아닌 PC에서 필수)
 
 string root = Path.Combine("C:\\", "pd_ui_tests", Guid.NewGuid().ToString("N")[..6]);
 Directory.CreateDirectory(root);
@@ -281,6 +282,112 @@ var tests = new List<(string Name, Action Body)>
         if (app.TerminalText().Contains("pdB_off>"))
         {
             throw new TestFailedException("동기화 끄기인데 터미널이 이동함:\n" + app.TerminalText());
+        }
+    }),
+
+    ("Startup_ShowsLoadingPopup_AndClosesAboutOneSecondAfterMainWindow", () =>
+    {
+        string data = NewDataDir(null, "Off", MakeDir("pdA_splash"));
+        var psi = new System.Diagnostics.ProcessStartInfo(AppDriver.AppExePath) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(AppDriver.AppExePath)! };
+        psi.Environment["PATHDOCK_DATA_DIR"] = data;
+        using System.Diagnostics.Process p = System.Diagnostics.Process.Start(psi) ?? throw new TestFailedException("앱을 시작하지 못함");
+        try
+        {
+            // 1) 로딩 팝업이 가장 먼저 뜬다.
+            AppDriver.WaitUntil(() => Native.FindWindowByTitle(p.Id, AppDriver.SplashWindowTitle) != IntPtr.Zero, 30000, "로딩 팝업이 뜨지 않음");
+            // 2) 메인 창이 뜬다. 이 시점(폴링 오차 100ms)에도 팝업은 아직 보여야 한다(메인 창이 그려진 뒤 1초 더 유지).
+            AppDriver.WaitUntil(() => Native.FindWindowByTitle(p.Id, AppDriver.MainWindowTitle) != IntPtr.Zero, 30000, "메인 창이 뜨지 않음");
+            var sinceMain = System.Diagnostics.Stopwatch.StartNew();
+            if (Native.FindWindowByTitle(p.Id, AppDriver.SplashWindowTitle) == IntPtr.Zero)
+            {
+                throw new TestFailedException("메인 창이 뜨자마자 로딩 팝업이 이미 사라짐(메인 창이 그려진 뒤 1초 유지되어야 함)");
+            }
+            // 3) 곧 사라진다. 메인 창을 처음 본 뒤 0.7초 미만이면 너무 일찍, 5초를 넘기면 너무 늦게 닫힌 것이다.
+            AppDriver.WaitUntil(() => Native.FindWindowByTitle(p.Id, AppDriver.SplashWindowTitle) == IntPtr.Zero, 5000, "로딩 팝업이 메인 창 표시 후 5초가 지나도 닫히지 않음");
+            long closedAfterMs = sinceMain.ElapsedMilliseconds;
+            if (closedAfterMs < 700)
+            {
+                throw new TestFailedException($"로딩 팝업이 메인 창 표시 후 {closedAfterMs}ms 만에 닫힘(약 1초 유지되어야 함)");
+            }
+            // 4) 메인 창은 계속 떠 있다.
+            if (Native.FindWindowByTitle(p.Id, AppDriver.MainWindowTitle) == IntPtr.Zero)
+            {
+                throw new TestFailedException("로딩 팝업이 닫힌 뒤 메인 창이 보이지 않음");
+            }
+        }
+        finally
+        {
+            try { p.Kill(true); } catch (InvalidOperationException) { }
+        }
+    }),
+
+    ("Startup_LoadingPopup_BarKeepsMovingAndStatusLineChanges", () =>
+    {
+        string data = NewDataDir(null, "Off", MakeDir("pdA_splashbar"));
+        var psi = new System.Diagnostics.ProcessStartInfo(AppDriver.AppExePath) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(AppDriver.AppExePath)! };
+        psi.Environment["PATHDOCK_DATA_DIR"] = data;
+        using System.Diagnostics.Process p = System.Diagnostics.Process.Start(psi) ?? throw new TestFailedException("앱을 시작하지 못함");
+        try
+        {
+            IntPtr splash = IntPtr.Zero;
+            AppDriver.WaitUntil(() => (splash = Native.FindWindowByTitle(p.Id, AppDriver.SplashWindowTitle)) != IntPtr.Zero, 30000, "로딩 팝업이 뜨지 않음");
+            AutomationElement splashElement = AutomationElement.FromHandle(splash);
+
+            // 팝업이 떠 있는 동안 진행 막대 구간의 화면 지문과 "지금 하는 일" 문구를 계속 모은다.
+            // 메인 창이 뜨기 전(앱 UI 스레드가 초기화로 바쁜 구간)에 모은 지문만 막대 애니메이션 판정에 쓴다 - 팝업이 UI 스레드와 같은 스레드면 이때 멈춘다.
+            var barFrames = new HashSet<long>();
+            int framesWhileBusy = 0;
+            var statuses = new List<string>();
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (sw.Elapsed < TimeSpan.FromSeconds(20) && Native.FindWindowByTitle(p.Id, AppDriver.SplashWindowTitle) != IntPtr.Zero)
+            {
+                bool mainShown = Native.FindWindowByTitle(p.Id, AppDriver.MainWindowTitle) != IntPtr.Zero;
+                if (!mainShown)
+                {
+                    barFrames.Add(Native.CaptureChecksum(splash, 0.86, 0.95));
+                    framesWhileBusy++;
+                }
+                try
+                {
+                    AutomationElement? status = splashElement.FindFirst(TreeScope.Descendants, new PropertyCondition(AutomationElement.AutomationIdProperty, "1003")); // 팝업의 "지금 하는 일" 줄(Win32 STATIC 컨트롤 ID)
+                    string text = status?.Current.Name ?? string.Empty;
+                    if (text.Length > 0 && (statuses.Count == 0 || statuses[^1] != text))
+                    {
+                        statuses.Add(text);
+                    }
+                }
+                catch (ElementNotAvailableException)
+                {
+                    break; // 팝업이 닫힘.
+                }
+                // 검사 간격이 애니메이션 주기(1.2초)의 약수와 맞으면 항상 같은 위치만 찍혀 멈춘 것처럼 보이므로 간격에 편차를 둔다.
+                Thread.Sleep(Random.Shared.Next(20, 160));
+            }
+            if (sw.Elapsed >= TimeSpan.FromSeconds(20))
+            {
+                throw new TestFailedException("로딩 팝업이 20초가 지나도 닫히지 않음");
+            }
+            if (framesWhileBusy < 5)
+            {
+                throw new TestFailedException($"초기화 구간에서 모은 화면이 너무 적어 판정할 수 없음({framesWhileBusy}장)");
+            }
+            if (barFrames.Count < 3)
+            {
+                throw new TestFailedException($"초기화 중 진행 막대가 움직이지 않음: {framesWhileBusy}장 중 서로 다른 화면 {barFrames.Count}개");
+            }
+            if (statuses.Count < 3)
+            {
+                throw new TestFailedException($"'지금 하는 일' 문구가 단계별로 바뀌지 않음: [{string.Join(" → ", statuses)}]");
+            }
+            if (statuses[^1] != "준비 완료")
+            {
+                throw new TestFailedException($"마지막 문구가 '준비 완료'가 아님: [{string.Join(" → ", statuses)}]");
+            }
+            Console.WriteLine($"      (막대 화면 {barFrames.Count}종/{framesWhileBusy}장, 문구: {string.Join(" → ", statuses)})");
+        }
+        finally
+        {
+            try { p.Kill(true); } catch (InvalidOperationException) { }
         }
     }),
 
