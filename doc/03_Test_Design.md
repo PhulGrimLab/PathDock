@@ -4,7 +4,7 @@
 
 ## 1. PathDock.Tests (MSTest, net10.0-windows)
 
-현재 **206개**(2026-10-16 전부 통과, Core 줄 커버리지 91.8% / 분기 88.0%). 파일: `CoreLogicTests.cs`(핵심 로직 다수), `TerminalSessionTests.cs`(ConPTY 통합), `TerminalTabTitleTests.cs`(탭 제목 규칙), `TerminalSecurityTests.cs`·`HardeningTests.cs`(보안 회귀), `TerminalParserTests.cs`(VT 파서·화면 버퍼), `SettingsRobustnessTests.cs`(손상된 설정), `TerminalThemeTests.cs`,
+현재 **208개**(2026-10-16 전부 통과, Core 줄 커버리지 91.8% / 분기 88.0%). 파일: `CoreLogicTests.cs`(핵심 로직 다수), `TerminalSessionTests.cs`(ConPTY 통합), `TerminalTabTitleTests.cs`(탭 제목 규칙), `TerminalSecurityTests.cs`·`HardeningTests.cs`(보안 회귀), `TerminalParserTests.cs`(VT 파서·화면 버퍼), `SettingsRobustnessTests.cs`(손상된 설정), `TerminalThemeTests.cs`,
 `LocTests.cs`(언어), `TextPreviewerTests.cs`, `ImagePreviewTypesTests.cs`.
 
 | 영역 | 주요 케이스 |

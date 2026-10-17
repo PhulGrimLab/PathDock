@@ -1,14 +1,17 @@
 using System.IO;
 using System.Windows.Media.Imaging;
 using PathDock.Core.Explorer;
+using PathDock.Core.Localization;
 
 namespace PathDock.App.Services;
 
 /// <summary>목록 툴팁에 보여줄 이미지 미리보기. Image는 고정(Freeze)되어 어느 스레드에서나 쓸 수 있다.</summary>
-public sealed record ImagePreview(BitmapSource Image, int PixelWidth, int PixelHeight, long FileBytes)
+public sealed record ImagePreview(BitmapSource Image, int PixelWidth, int PixelHeight, long FileBytes, int PageCount = 0)
 {
-    /// <summary>예: "1920×1080 · 239.2 KB".</summary>
-    public string InfoText => $"{PixelWidth}×{PixelHeight} · {SizeFormatter.Format(FileBytes)}";
+    /// <summary>예: "1920×1080 · 239.2 KB". PDF는 "7쪽 · 1.2 MB".</summary>
+    public string InfoText => PageCount > 0
+        ? Loc.T($"{PageCount:N0}쪽 · {SizeFormatter.Format(FileBytes)}", $"{Loc.Plural(PageCount, "page", "pages")} · {SizeFormatter.Format(FileBytes)}")
+        : $"{PixelWidth}×{PixelHeight} · {SizeFormatter.Format(FileBytes)}";
 }
 
 /// <summary>

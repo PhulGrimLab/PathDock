@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     PathDock.App을 실제 프로세스로 구동하는 UI Automation 테스트를 빌드부터 실행까지 진행한다.
 .DESCRIPTION
@@ -14,7 +14,8 @@ param([switch]$SkipBuild, [string[]]$Tests)
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $Project = Join-Path $RepoRoot "src\PathDock.UiAutomation.Tests\PathDock.UiAutomation.Tests.csproj"
-$Harness = Join-Path $RepoRoot "src\PathDock.UiAutomation.Tests\bin\x64\Debug\net10.0-windows\PathDock.UiAutomation.Tests.exe"
+# 대상 프레임워크/플랫폼 폴더 이름이 바뀌어도 가장 최근에 빌드된 하네스를 찾는다.
+$HarnessRoot = Join-Path $RepoRoot "src\PathDock.UiAutomation.Tests\bin"
 
 Get-Process -Name "PathDock.App" -ErrorAction SilentlyContinue | ForEach-Object {
     try { Stop-Process -Id $_.Id -Force -ErrorAction Stop } catch {}
@@ -23,5 +24,7 @@ if (-not $SkipBuild) {
     & dotnet build $Project
     if ($LASTEXITCODE -ne 0) { throw "빌드 실패" }
 }
-& $Harness @Tests
+$Harness = Get-ChildItem $HarnessRoot -Recurse -Filter "PathDock.UiAutomation.Tests.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+if (-not $Harness) { throw "하네스 exe를 찾을 수 없습니다. -SkipBuild 없이 다시 실행하세요." }
+& $Harness.FullName @Tests
 exit $LASTEXITCODE

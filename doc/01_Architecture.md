@@ -5,7 +5,7 @@
 ## 1. 계층
 
 ```
-PathDock.App (WPF, net10.0-windows)
+PathDock.App (WPF, net10.0-windows10.0.19041.0)
  ├─ Views/            MainWindow, FavoritesBarView, NavButtonsView, SyncModeSelectorView, DrivePanelView,
  │                    AncestorColumnView, FileListView, TerminalPanelView, StatusBarView,
  │                    SettingsWindow, AboutWindow, InputDialog, ConfirmDialog (XAML, code-behind 최소; 상세 doc/05)
@@ -15,12 +15,12 @@ PathDock.App (WPF, net10.0-windows)
  ├─ Localization/     LocSource ({loc:T} XAML 마크업 확장)
  ├─ Themes/           Generic.xaml (커스텀 컨트롤 스타일)
  └─ Services/         ThemeService, FontService, DialogService, FileClipboard, RecycleBinService, CalculatorLauncher,
-                      ImagePreviewService/TextPreviewService/PreviewCache, AppInfo, SplashHost(시작 로딩 팝업, 순수 Win32)
+                      ImagePreviewService/PdfPreviewService/TextPreviewService/PreviewCache, UnelevatedLauncher(문서를 일반 권한으로 열기), AppInfo, SplashHost(시작 로딩 팝업, 순수 Win32)
 PathDock.Core (net10.0, UI 비의존 → 단위 테스트 용이)
  ├─ Paths/            PathNormalizer
  ├─ Settings/         AppSettings, SettingsService (JSON)
  ├─ Explorer/         ExplorerService(목록 열거, 이력), DriveService, FolderSizeCalculator/Cache, FileSorter,
- │                    FileOperations(이름 변경·새 폴더·복사·이동·휴지통), FileCategory, SizeFormatter, TextPreview, ImagePreviewTypes
+ │                    FileOperations(이름 변경·새 폴더·복사·이동·휴지통), FileCategory, SizeFormatter, TextPreview, ImagePreviewTypes, LaunchPolicy
  ├─ Sync/             SyncMode, PathSyncService (중재, 루프 방지, 대기 정책)
  ├─ Terminal/         ConPtySession, VtParser, ScreenBuffer, TerminalSession(셸 통합·상태), TerminalShell, TerminalColorScheme
  ├─ Monitoring/       SystemMonitor

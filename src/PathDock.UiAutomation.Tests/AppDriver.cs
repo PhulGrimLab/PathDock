@@ -25,12 +25,34 @@ public sealed class AppDriver : IDisposable
         Window = window;
     }
 
-    /// <summary>앱 실행 파일 위치(하네스 출력 폴더 기준 상대 경로).</summary>
-    public static string AppExePath => Path.GetFullPath(Path.Combine(
-        AppContext.BaseDirectory, "..", "..", "..", "..", "..", "PathDock.App", "bin", "x64", "Debug", "net10.0-windows", "PathDock.App.exe"));
 
     public const string MainWindowTitle = "PathDock";
     public const string SplashWindowTitle = "PathDock Loading";
+
+    /// <summary>앱 실행 파일 위치. 하네스 출력 폴더에서 위로 올라가며 src 아래의 PathDock.App 빌드 결과(플랫폼/대상 프레임워크 폴더 이름이 바뀌어도 찾도록 후보를 확인)를 찾는다.</summary>
+    public static string AppExePath
+    {
+        get
+        {
+            string[] candidates =
+            {
+                @"bin\x64\Debug\net10.0-windows10.0.19041.0", @"bin\Debug\net10.0-windows10.0.19041.0",
+                @"bin\x64\Debug\net10.0-windows", @"bin\Debug\net10.0-windows",
+            };
+            for (DirectoryInfo? dir = new(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+            {
+                foreach (string candidate in candidates)
+                {
+                    string exe = Path.Combine(dir.FullName, "PathDock.App", candidate, "PathDock.App.exe");
+                    if (File.Exists(exe))
+                    {
+                        return exe;
+                    }
+                }
+            }
+            throw new FileNotFoundException("PathDock.App.exe(Debug 빌드)를 찾을 수 없습니다. 먼저 솔루션을 빌드하세요.");
+        }
+    }
 
     /// <summary>앱을 시작하고 메인 창과 첫 프롬프트(터미널)가 뜰 때까지 기다린다.</summary>
     public static AppDriver Launch(string dataDir)
