@@ -29,6 +29,86 @@ internal static class Native
         bmp.Save(pngPath, System.Drawing.Imaging.ImageFormat.Png);
     }
 
+    [DllImport("user32.dll")] private static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    /// <summary>창에 닫기 요청(WM_CLOSE)을 보낸다. <c>Process.CloseMainWindow</c>는 시작 직후 떠 있는 로딩 팝업을 메인 창으로 오인할 수 있어 쓰지 않는다.</summary>
+    public static bool RequestClose(IntPtr hwnd) => PostMessage(hwnd, 0x0010, IntPtr.Zero, IntPtr.Zero);
+
+    [DllImport("user32.dll")] private static extern bool SetProcessDpiAwarenessContext(IntPtr context);
+
+    /// <summary>
+    /// 이 프로세스를 모니터별 DPI 인식으로 만든다. 안 하면 배율이 100%가 아닌 PC에서 GetWindowRect/PrintWindow가 창을 축소된 크기로 읽어
+    /// 캡처가 창의 왼쪽 위 일부만 찍힌다(막대가 있는 아래쪽이 빠져 "안 움직인다"고 잘못 판정). 다른 창을 만들기 전에 한 번 호출한다.
+    /// </summary>
+    public static void EnableDpiAwareness() => SetProcessDpiAwarenessContext(new IntPtr(-4)); // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsProc proc, IntPtr lParam);
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int maxCount);
+
+    /// <summary>
+    /// 해당 프로세스의 보이는 최상위 창 중 제목이 정확히 일치하는 첫 창의 핸들(없으면 0).
+    /// 시작 중 로딩 팝업이 같은 프로세스의 먼저 뜬 창이라 <c>Process.MainWindowHandle</c>은 믿을 수 없어 제목으로 찾는다.
+    /// </summary>
+    public static IntPtr FindWindowByTitle(int processId, string title)
+    {
+        IntPtr found = IntPtr.Zero;
+        var sb = new System.Text.StringBuilder(256);
+        EnumWindows((hWnd, _) =>
+        {
+            GetWindowThreadProcessId(hWnd, out uint pid);
+            if (pid != (uint)processId || !IsWindowVisible(hWnd))
+            {
+                return true;
+            }
+            sb.Clear();
+            GetWindowText(hWnd, sb, sb.Capacity);
+            if (sb.ToString() == title)
+            {
+                found = hWnd;
+                return false;
+            }
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
+
+    /// <summary>
+    /// 창을 그려 가로 전체, 세로 [topFraction, bottomFraction) 구간의 픽셀 지문(체크섬)을 돌려준다. 같은 화면이면 같은 값 - 애니메이션이 움직이는지 판정하는 데 쓴다.
+    /// 창 크기를 알 수 없으면 0.
+    /// </summary>
+    public static long CaptureChecksum(IntPtr hwnd, double topFraction, double bottomFraction)
+    {
+        if (!GetWindowRect(hwnd, out Rect r))
+        {
+            return 0;
+        }
+        int w = r.Right - r.Left, h = r.Bottom - r.Top;
+        if (w <= 0 || h <= 0)
+        {
+            return 0;
+        }
+        // 실제 화면(CopyFromScreen)을 읽는다. PrintWindow는 창을 그 시점에 다시 그리게 해서, 스스로 타이머로 그리는 창은
+        // 타이머가 멈춰도 매번 다른 그림이 나와 "움직인다"고 잘못 판정한다. 팝업은 최상단이라 다른 창에 가려지지 않는다.
+        using var bmp = new System.Drawing.Bitmap(w, h);
+        using (var g = System.Drawing.Graphics.FromImage(bmp))
+        {
+            g.CopyFromScreen(r.Left, r.Top, 0, 0, new System.Drawing.Size(w, h));
+        }
+        long sum = 17;
+        for (int y = (int)(h * topFraction); y < (int)(h * bottomFraction); y++)
+        {
+            for (int x = 0; x < w; x++)
+            {
+                sum = unchecked(sum * 31 + bmp.GetPixel(x, y).ToArgb());
+            }
+        }
+        return sum;
+    }
+
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hWnd, int cmd);

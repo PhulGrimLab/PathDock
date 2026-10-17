@@ -13,6 +13,7 @@ public sealed class VtParser
     private enum State { Ground, Escape, EscapeIntermediate, Csi, Osc, StringIgnore }
 
     private const int MaxOscLength = 4096;
+    private const int MaxParams = 32;
     private const int DefaultParam = 0;
 
     private readonly ScreenBuffer _b;
@@ -68,11 +69,7 @@ public sealed class VtParser
                 EscapeState(c);
                 break;
             case State.EscapeIntermediate:
-                // 문자 집합 지정(ESC ( B 등): 마지막 한 글자를 소비하고 끝.
-                if (c >= 0x30)
-                {
-                    _state = State.Ground;
-                }
+                EscapeIntermediateState(c);
                 break;
             case State.Csi:
                 CsiState(c);
@@ -81,19 +78,34 @@ public sealed class VtParser
                 OscState(c);
                 break;
             case State.StringIgnore:
-                if (c == '\a')
-                {
-                    _state = State.Ground;
-                }
-                else if (c == '\x1b')
-                {
-                    _state = State.Escape;
-                }
-                else
-                {
-                    // DCS/APC 등 내용은 버린다.
-                }
+                StringIgnoreState(c);
                 break;
+        }
+    }
+
+    /// <summary>문자 집합 지정(ESC ( B 등): 마지막 한 글자를 소비하고 끝.</summary>
+    private void EscapeIntermediateState(char c)
+    {
+        if (c >= 0x30)
+        {
+            _state = State.Ground;
+        }
+    }
+
+    /// <summary>DCS/APC 등 문자열 시퀀스: BEL이나 ST(ESC \)를 만날 때까지 내용을 버린다.</summary>
+    private void StringIgnoreState(char c)
+    {
+        if (c == '\a')
+        {
+            _state = State.Ground;
+        }
+        else if (c == '\x1b')
+        {
+            _state = State.Escape;
+        }
+        else
+        {
+            // 내용은 버린다.
         }
     }
 
@@ -147,9 +159,27 @@ public sealed class VtParser
         }
     }
 
+    /// <summary>ESC 바로 다음 글자를 처리한다: 다른 상태로 들어가거나, 한 글자짜리 명령을 실행하거나, 제어 문자면 실행한다.</summary>
     private void EscapeState(char c)
     {
         _state = State.Ground;
+        if (TryEnterState(c) || TryEscapeCommand(c))
+        {
+            return;
+        }
+        if (c < 0x20)
+        {
+            Execute(c);
+        }
+        else
+        {
+            // '=' '>' '\\'(ST) 등: 의미 없음.
+        }
+    }
+
+    /// <summary>ESC 뒤 글자가 CSI/OSC/문자열/중간 문자 시퀀스의 시작이면 그 상태로 들어간다.</summary>
+    private bool TryEnterState(char c)
+    {
         switch (c)
         {
             case '[':
@@ -157,17 +187,17 @@ public sealed class VtParser
                 _curParam = -1;
                 _csiPrefix = '\0';
                 _state = State.Csi;
-                break;
+                return true;
             case ']':
                 _osc.Clear();
                 _state = State.Osc;
-                break;
+                return true;
             case 'P':
             case 'X':
             case '^':
             case '_':
                 _state = State.StringIgnore;
-                break;
+                return true;
             case '(':
             case ')':
             case '*':
@@ -176,77 +206,88 @@ public sealed class VtParser
             case '%':
             case ' ':
                 _state = State.EscapeIntermediate;
-                break;
-            case 'M': _b.ReverseIndex(); break;
-            case 'D': _b.LineFeed(); break;
-            case 'E': _b.CarriageReturn(); _b.LineFeed(); break;
-            case '7': _b.SaveCursor(); break;
-            case '8': _b.RestoreCursor(); break;
-            case 'c':
-                _b.EraseDisplay(2);
-                _b.MoveTo(0, 0);
-                _b.CurFg = 0;
-                _b.CurBg = 0;
-                _b.CurAttr = CellAttr.None;
-                break;
-            case '\x1b': _state = State.Escape; break;
+                return true;
+            case '\x1b':
+                _state = State.Escape;
+                return true;
             default:
-                if (c < 0x20)
-                {
-                    Execute(c);
-                }
-                else
-                {
-                    // '=' '>' '\\'(ST) 등: 의미 없음.
-                }
+                return false;
+        }
+    }
+
+    /// <summary>한 글자짜리 ESC 명령(인덱스, 커서 저장/복원, 전체 초기화).</summary>
+    private bool TryEscapeCommand(char c)
+    {
+        switch (c)
+        {
+            case 'M': _b.ReverseIndex(); return true;
+            case 'D': _b.LineFeed(); return true;
+            case 'E': _b.CarriageReturn(); _b.LineFeed(); return true;
+            case '7': _b.SaveCursor(); return true;
+            case '8': _b.RestoreCursor(); return true;
+            case 'c': FullReset(); return true;
+            default: return false;
+        }
+    }
+
+    /// <summary>ESC c: 화면을 지우고 커서와 글자 속성을 처음 상태로.</summary>
+    private void FullReset()
+    {
+        _b.EraseDisplay(2);
+        _b.MoveTo(0, 0);
+        ResetSgr();
+    }
+
+    /// <summary>CSI 안의 글자 하나: 숫자는 파라미터, ; :는 구분, ? > &lt; =는 접두, 0x40~0x7E는 끝 글자.</summary>
+    private void CsiState(char c)
+    {
+        switch (c)
+        {
+            case >= '0' and <= '9':
+                _curParam = Math.Min((_curParam < 0 ? 0 : _curParam) * 10 + (c - '0'), 65535);
+                break;
+            case ';' or ':':
+                AddParam(_curParam < 0 ? DefaultParam : _curParam);
+                _curParam = -1;
+                break;
+            case '?' or '>' or '<' or '=':
+                _csiPrefix = c;
+                break;
+            case >= (char)0x20 and <= (char)0x2F:
+                // 중간 문자(예: ESC [ 0 SP q): 값은 쓰지 않는다.
+                break;
+            case >= (char)0x40 and <= (char)0x7E:
+                FinishCsi(c);
+                break;
+            case '\x1b':
+                _state = State.Escape;
+                break;
+            case < (char)0x20:
+                Execute(c);
+                break;
+            default:
+                _state = State.Ground;
                 break;
         }
     }
 
-    private void CsiState(char c)
+    /// <summary>CSI의 끝 글자를 받았다: 마지막 파라미터를 확정하고 명령을 실행한다.</summary>
+    private void FinishCsi(char final)
     {
-        if (c >= '0' && c <= '9')
+        if (_curParam >= 0 || _params.Count > 0)
         {
-            _curParam = (_curParam < 0 ? 0 : _curParam) * 10 + (c - '0');
-            _curParam = Math.Min(_curParam, 65535);
+            AddParam(_curParam < 0 ? DefaultParam : _curParam);
         }
-        else if (c == ';' || c == ':')
+        DispatchCsi(final);
+        _state = State.Ground;
+    }
+
+    /// <summary>파라미터를 추가한다. 개수에 상한을 둔다: ';'만 수백만 개 이어진 시퀀스로 메모리를 쌓지 못하게(초과분은 버린다).</summary>
+    private void AddParam(int value)
+    {
+        if (_params.Count < MaxParams)
         {
-            _params.Add(_curParam < 0 ? DefaultParam : _curParam);
-            _curParam = -1;
-        }
-        else if (c is '?' or '>' or '<' or '=')
-        {
-            _csiPrefix = c;
-        }
-        else if (c >= 0x20 && c <= 0x2F)
-        {
-            // 중간 문자(예: ESC [ 0 SP q): 값은 쓰지 않는다.
-        }
-        else if (c >= 0x40 && c <= 0x7E)
-        {
-            if (_curParam >= 0 || _params.Count > 0)
-            {
-                _params.Add(_curParam < 0 ? DefaultParam : _curParam);
-            }
-            else
-            {
-                // 파라미터 없음.
-            }
-            DispatchCsi(c);
-            _state = State.Ground;
-        }
-        else if (c == '\x1b')
-        {
-            _state = State.Escape;
-        }
-        else if (c < 0x20)
-        {
-            Execute(c);
-        }
-        else
-        {
-            _state = State.Ground;
+            _params.Add(value);
         }
     }
 
@@ -255,6 +296,7 @@ public sealed class VtParser
         return index < _params.Count && _params[index] != 0 ? _params[index] : def;
     }
 
+    /// <summary>CSI 명령을 실행한다. 접두(? 등)가 있는 시퀀스는 모드 설정(h/l)과 장치 속성 질의(c)만 처리하고 나머지는 무시한다.</summary>
     private void DispatchCsi(char final)
     {
         if (_csiPrefix is '?' && final is 'h' or 'l')
@@ -270,38 +312,70 @@ public sealed class VtParser
         {
             return; // 그 밖의 사설 시퀀스는 무시.
         }
+        _ = DispatchCursorCsi(final) || DispatchEditCsi(final) || DispatchScrollCsi(final) || DispatchStatusCsi(final);
+    }
 
+    /// <summary>커서 이동과 저장/복원(A B C D E F G d H f s u). 처리했으면 true.</summary>
+    private bool DispatchCursorCsi(char final)
+    {
         switch (final)
         {
-            case 'A': _b.MoveBy(0, -P(0, 1)); break;
-            case 'B': _b.MoveBy(0, P(0, 1)); break;
-            case 'C': _b.MoveBy(P(0, 1), 0); break;
-            case 'D': _b.MoveBy(-P(0, 1), 0); break;
-            case 'E': _b.MoveTo(0, _b.CursorY + P(0, 1)); break;
-            case 'F': _b.MoveTo(0, _b.CursorY - P(0, 1)); break;
-            case 'G': _b.MoveTo(P(0, 1) - 1, _b.CursorY); break;
-            case 'd': _b.MoveTo(_b.CursorX, P(0, 1) - 1); break;
+            case 'A': _b.MoveBy(0, -P(0, 1)); return true;
+            case 'B': _b.MoveBy(0, P(0, 1)); return true;
+            case 'C': _b.MoveBy(P(0, 1), 0); return true;
+            case 'D': _b.MoveBy(-P(0, 1), 0); return true;
+            case 'E': _b.MoveTo(0, _b.CursorY + P(0, 1)); return true;
+            case 'F': _b.MoveTo(0, _b.CursorY - P(0, 1)); return true;
+            case 'G': _b.MoveTo(P(0, 1) - 1, _b.CursorY); return true;
+            case 'd': _b.MoveTo(_b.CursorX, P(0, 1) - 1); return true;
             case 'H':
-            case 'f': _b.MoveTo(P(1, 1) - 1, P(0, 1) - 1); break;
-            case 'J': _b.EraseDisplay(_params.Count > 0 ? _params[0] : 0); break;
-            case 'K': _b.EraseLine(_params.Count > 0 ? _params[0] : 0); break;
-            case 'L': _b.InsertLines(P(0, 1)); break;
-            case 'M': _b.DeleteLines(P(0, 1)); break;
-            case 'P': _b.DeleteChars(P(0, 1)); break;
-            case '@': _b.InsertChars(P(0, 1)); break;
-            case 'X': _b.EraseChars(P(0, 1)); break;
-            case 'S': _b.ScrollUp(P(0, 1)); break;
-            case 'T': _b.ScrollDown(P(0, 1)); break;
-            case 'r': _b.SetScrollRegion(P(0, 1) - 1, P(1, _b.Rows) - 1); break;
-            case 's': _b.SaveCursor(); break;
-            case 'u': _b.RestoreCursor(); break;
-            case 'm': ApplySgr(); break;
-            case 'n': ApplyDeviceStatus(); break;
+            case 'f': _b.MoveTo(P(1, 1) - 1, P(0, 1) - 1); return true;
+            case 's': _b.SaveCursor(); return true;
+            case 'u': _b.RestoreCursor(); return true;
+            default: return false;
+        }
+    }
+
+    /// <summary>지우기와 삽입/삭제(J K L M P @ X). 처리했으면 true.</summary>
+    private bool DispatchEditCsi(char final)
+    {
+        switch (final)
+        {
+            case 'J': _b.EraseDisplay(_params.Count > 0 ? _params[0] : 0); return true;
+            case 'K': _b.EraseLine(_params.Count > 0 ? _params[0] : 0); return true;
+            case 'L': _b.InsertLines(P(0, 1)); return true;
+            case 'M': _b.DeleteLines(P(0, 1)); return true;
+            case 'P': _b.DeleteChars(P(0, 1)); return true;
+            case '@': _b.InsertChars(P(0, 1)); return true;
+            case 'X': _b.EraseChars(P(0, 1)); return true;
+            default: return false;
+        }
+    }
+
+    /// <summary>스크롤과 스크롤 영역(S T r). 처리했으면 true.</summary>
+    private bool DispatchScrollCsi(char final)
+    {
+        switch (final)
+        {
+            case 'S': _b.ScrollUp(P(0, 1)); return true;
+            case 'T': _b.ScrollDown(P(0, 1)); return true;
+            case 'r': _b.SetScrollRegion(P(0, 1) - 1, P(1, _b.Rows) - 1); return true;
+            default: return false;
+        }
+    }
+
+    /// <summary>글자 속성(m)과 장치 질의(n, c). 처리했으면 true.</summary>
+    private bool DispatchStatusCsi(char final)
+    {
+        switch (final)
+        {
+            case 'm': ApplySgr(); return true;
+            case 'n': ApplyDeviceStatus(); return true;
             case 'c':
                 // 장치 속성 질의: VT100 + AVO로 응답. (ConPTY가 시작 시 물어본다.)
                 Reply?.Invoke(_csiPrefix == '>' ? "\x1b[>0;0;0c" : "\x1b[?1;0c");
-                break;
-            default: break;
+                return true;
+            default: return false;
         }
     }
 
@@ -345,29 +419,47 @@ public sealed class VtParser
         for (int i = 0; i < _params.Count; i++)
         {
             int p = _params[i];
-            switch (p)
+            if (p is 38 or 48)
             {
-                case 0: ResetSgr(); break;
-                case 1: _b.CurAttr |= CellAttr.Bold; break;
-                case 3: _b.CurAttr |= CellAttr.Italic; break;
-                case 4: _b.CurAttr |= CellAttr.Underline; break;
-                case 7: _b.CurAttr |= CellAttr.Inverse; break;
-                case 22: _b.CurAttr &= ~CellAttr.Bold; break;
-                case 23: _b.CurAttr &= ~CellAttr.Italic; break;
-                case 24: _b.CurAttr &= ~CellAttr.Underline; break;
-                case 27: _b.CurAttr &= ~CellAttr.Inverse; break;
-                case >= 30 and <= 37: _b.CurFg = Palette.Get(p - 30); break;
-                case 39: _b.CurFg = 0; break;
-                case >= 40 and <= 47: _b.CurBg = Palette.Get(p - 40); break;
-                case 49: _b.CurBg = 0; break;
-                case >= 90 and <= 97: _b.CurFg = Palette.Get(p - 90 + 8); break;
-                case >= 100 and <= 107: _b.CurBg = Palette.Get(p - 100 + 8); break;
-                case 38:
-                case 48:
-                    i = ApplyExtendedColor(i, p == 38);
-                    break;
-                default: break;
+                i = ApplyExtendedColor(i, p == 38); // 뒤따르는 파라미터를 함께 소비한다.
             }
+            else if (!TryApplySgrAttribute(p))
+            {
+                TryApplySgrBasicColor(p);
+            }
+        }
+    }
+
+    /// <summary>글자 속성 SGR(0 초기화, 1 굵게, 3 기울임, 4 밑줄, 7 반전과 각각의 해제 22 23 24 27). 처리했으면 true.</summary>
+    private bool TryApplySgrAttribute(int p)
+    {
+        switch (p)
+        {
+            case 0: ResetSgr(); return true;
+            case 1: _b.CurAttr |= CellAttr.Bold; return true;
+            case 3: _b.CurAttr |= CellAttr.Italic; return true;
+            case 4: _b.CurAttr |= CellAttr.Underline; return true;
+            case 7: _b.CurAttr |= CellAttr.Inverse; return true;
+            case 22: _b.CurAttr &= ~CellAttr.Bold; return true;
+            case 23: _b.CurAttr &= ~CellAttr.Italic; return true;
+            case 24: _b.CurAttr &= ~CellAttr.Underline; return true;
+            case 27: _b.CurAttr &= ~CellAttr.Inverse; return true;
+            default: return false;
+        }
+    }
+
+    /// <summary>16색 전경/배경 SGR(30~37, 40~47, 밝은 색 90~97, 100~107, 기본색 39, 49). 처리했으면 true.</summary>
+    private bool TryApplySgrBasicColor(int p)
+    {
+        switch (p)
+        {
+            case >= 30 and <= 37: _b.CurFg = Palette.Get(p - 30); return true;
+            case 39: _b.CurFg = 0; return true;
+            case >= 40 and <= 47: _b.CurBg = Palette.Get(p - 40); return true;
+            case 49: _b.CurBg = 0; return true;
+            case >= 90 and <= 97: _b.CurFg = Palette.Get(p - 90 + 8); return true;
+            case >= 100 and <= 107: _b.CurBg = Palette.Get(p - 100 + 8); return true;
+            default: return false;
         }
     }
 
@@ -474,29 +566,44 @@ public sealed class VtParser
         {
             case "0":
             case "2":
-                if (!TryDispatchShellMarker(payload))
-                {
-                    TitleChanged?.Invoke(payload);
-                }
-                else
-                {
-                    // 셸 통합 마커는 제목으로 보여주지 않는다.
-                }
+                HandleTitle(payload);
                 break;
             case "9":
-                if (payload.StartsWith("9;", StringComparison.Ordinal))
-                {
-                    CwdReported?.Invoke(payload[2..].Trim('"'));
-                }
+                HandleOscCwd(payload);
                 break;
             case "133":
-                if (payload.StartsWith('A'))
-                {
-                    PromptShown?.Invoke();
-                }
+                HandleOscPrompt(payload);
                 break;
             default:
-                break;
+                break; // OSC 52(클립보드 쓰기) 등 지원하지 않는 명령은 무시한다.
+        }
+    }
+
+    /// <summary>창 제목(OSC 0/2). 셸 통합 마커는 제목으로 보여주지 않고 경로/프롬프트 신호로 쓴다.</summary>
+    private void HandleTitle(string payload)
+    {
+        if (!TryDispatchShellMarker(payload))
+        {
+            TitleChanged?.Invoke(payload);
+        }
+    }
+
+    /// <summary>OSC 9;9;경로. 토큰을 요구하는 세션에서는 무시한다: 토큰으로 인증할 수 없어, 화면에 출력된 내용(파일, 원격 출력)만으로
+    /// 경로(UNC 포함)를 위조할 수 있다. 앱의 셸 통합은 이 시퀀스를 쓰지 않는다(창 제목 마커만 사용).</summary>
+    private void HandleOscCwd(string payload)
+    {
+        if (MarkerToken is null && payload.StartsWith("9;", StringComparison.Ordinal))
+        {
+            CwdReported?.Invoke(payload[2..].Trim('"'));
+        }
+    }
+
+    /// <summary>OSC 133;A(프롬프트 시작). OSC 9;9와 같은 이유로 토큰 세션에서는 무시한다.</summary>
+    private void HandleOscPrompt(string payload)
+    {
+        if (MarkerToken is null && payload.StartsWith('A'))
+        {
+            PromptShown?.Invoke();
         }
     }
 }

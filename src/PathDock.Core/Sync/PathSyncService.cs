@@ -41,6 +41,8 @@ public sealed record SyncWarning(string Message);
 /// </summary>
 public sealed class PathSyncService
 {
+    private static readonly TimeSpan UncCheckTimeout = TimeSpan.FromSeconds(3);
+
     private readonly IPathSyncTarget _explorer;
     private readonly IPathSyncTarget _terminal;
     private readonly ILog _log;
@@ -84,7 +86,11 @@ public sealed class PathSyncService
         }
 
         string? normalized = PathNormalizer.Normalize(path);
-        if (normalized is null || !Directory.Exists(normalized))
+        // 네트워크(UNC) 경로는 응답 없는 서버를 기다리는 동안 UI 스레드가 멈추므로 시간 제한을 둔다(그 안에 답이 없으면 "찾을 수 없음"으로 처리).
+        bool exists = normalized is not null && (SafeIo.IsUnc(normalized)
+            ? SafeIo.DirectoryExistsWithTimeout(normalized, UncCheckTimeout)
+            : Directory.Exists(normalized));
+        if (normalized is null || !exists)
         {
             _log.Warn($"sync {direction} 실패: 경로 없음 ({path})");
             Warning?.Invoke(new SyncWarning(Localization.Loc.T($"폴더를 찾을 수 없어 동기화하지 않았습니다: {path}", $"Not synced because the folder could not be found: {path}")));

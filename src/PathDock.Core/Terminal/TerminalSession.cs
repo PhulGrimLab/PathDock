@@ -13,20 +13,21 @@ namespace PathDock.Core.Terminal;
 public sealed class TerminalSession : IDisposable
 {
     /// <summary>
-    /// PowerShell 프롬프트 훅(doc/02 3절). 프롬프트가 그려질 때마다 창 제목을 "PD:토큰:번호:경로"로 바꿔 VtParser에 알린다.
-    /// 번호는 매번 증가하므로 경로가 같아도 conhost가 제목 변경을 다시 전달한다(= 프롬프트 대기 신호). ASCII만 사용(5.1 파일 인코딩 안전).
+    /// PowerShell 프롬프트 훅(doc/02 3절)을 한 줄 명령으로 만든다. 프롬프트가 그려질 때마다 창 제목을 "PD:토큰:번호:경로"로 바꿔 VtParser에 알린다.
+    /// 번호는 매번 증가하므로 경로가 같아도 conhost가 제목 변경을 다시 전달한다(= 프롬프트 대기 신호). ASCII만, 큰따옴표 없이 작성한다
+    /// (명령줄에 큰따옴표로 감싸 넘기므로). 스크립트 파일을 쓰지 않는다: 관리자 권한으로 도는 앱이 사용자 쓰기 가능한 임시 폴더의
+    /// 파일을 실행하면 같은 사용자의 일반 권한 프로세스가 그 파일을 바꿔치기해 권한을 얻을 수 있기 때문이다.
     /// </summary>
-    public const string ShellIntegrationScript = """
-        $global:__pdN = 0
-        $global:__pdOrigPrompt = $function:prompt
-        function global:prompt {
-            $p = ''
-            try { if ((Get-Location).Provider.Name -eq 'FileSystem') { $p = (Get-Location).ProviderPath } } catch {}
-            $global:__pdN++
-            $Host.UI.RawUI.WindowTitle = "PD:$($global:__pdT):$($global:__pdN):$p"
-            & $global:__pdOrigPrompt
-        }
-        """;
+    public static string BuildShellIntegrationCommand(string token) =>
+        $"$global:__pdT='{token}';$global:__pdN=0;$global:__pdOrigPrompt=$function:prompt;" +
+        "function global:prompt{$p='';try{if((Get-Location).Provider.Name -eq 'FileSystem'){$p=(Get-Location).ProviderPath}}catch{};" +
+        "$global:__pdN++;$Host.UI.RawUI.WindowTitle='PD:'+$global:__pdT+':'+$global:__pdN+':'+$p;& $global:__pdOrigPrompt}";
+
+    /// <summary>cmd 세션의 환경 변수 덧붙임: 명령 검색에서 현재 폴더를 제외한다(NoDefaultCurrentDirectoryInExePath).</summary>
+    public static readonly IReadOnlyDictionary<string, string> CmdHardeningEnvironment = new Dictionary<string, string>
+    {
+        ["NoDefaultCurrentDirectoryInExePath"] = "1",
+    };
 
     private readonly ILog _log;
     private readonly object _stateLock = new();
@@ -37,7 +38,6 @@ public sealed class TerminalSession : IDisposable
     private string? _pending;
     private string? _expectedCwd;
     private bool _disposed;
-    private string? _scriptPath;
     private TerminalShell _shell;
 
     public ScreenBuffer Screen { get; }
@@ -79,16 +79,12 @@ public sealed class TerminalSession : IDisposable
             StartCommandPrompt(workingDirectory);
             return;
         }
-        // -EncodedCommand는 PowerShell 5.1이 CLIXML을 출력해 화면이 오염되므로 임시 스크립트 파일을 -File로 실행한다.
-        string dir = Path.Combine(Path.GetTempPath(), "PathDock");
-        Directory.CreateDirectory(dir);
-        _scriptPath = Path.Combine(dir, $"shell-integration-{Environment.ProcessId}-{Guid.NewGuid():N}.ps1");
         // 토큰은 실행마다 새로 만든다: 셸에서 돌아가는 다른 프로그램이 같은 제목을 출력해 상태를 속이는 것을 막는다.
         string token = Guid.NewGuid().ToString("N");
         _parser.MarkerToken = token;
-        File.WriteAllText(_scriptPath, $"$global:__pdT = '{token}'\n" + ShellIntegrationScript);
         string powerShell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
-        string cmd = $"\"{powerShell}\" -NoLogo -NoExit -ExecutionPolicy Bypass -File \"{_scriptPath}\"";
+        // -EncodedCommand는 PowerShell 5.1이 CLIXML을 출력해 화면이 오염되므로 쓰지 않고, 스크립트 파일도 만들지 않고 -Command로 직접 넘긴다.
+        string cmd = $"\"{powerShell}\" -NoLogo -NoExit -ExecutionPolicy Bypass -Command \"{BuildShellIntegrationCommand(token)}\"";
         _log.Info($"터미널 시작: cwd={workingDirectory}");
         _pty.Start(cmd, workingDirectory, Screen.Cols, Screen.Rows);
     }
@@ -104,7 +100,9 @@ public sealed class TerminalSession : IDisposable
         string cmdExe = Path.Combine(Environment.SystemDirectory, "cmd.exe");
         string cmd = $"\"{cmdExe}\" /K prompt $E]0;PD:{token}:0:$P?$T$E\\$P$G";
         _log.Info($"터미널 시작(cmd): cwd={workingDirectory}");
-        _pty.Start(cmd, workingDirectory, Screen.Cols, Screen.Rows);
+        // cmd는 PATH보다 현재 폴더의 실행 파일을 먼저 찾는다. 탐색기에서 폴더를 열 때마다 cmd가 그 폴더로 이동하므로, 악성 폴더를 열기만 해도
+        // 이후 평범한 명령이 폴더 안의 같은 이름 파일로 바뀔 수 있다(이 앱은 관리자 권한) - 현재 폴더 검색을 끈다.
+        _pty.Start(cmd, workingDirectory, Screen.Cols, Screen.Rows, extraEnvironment: CmdHardeningEnvironment);
     }
 
     private void OnOutput(byte[] data, int count)
@@ -322,20 +320,5 @@ public sealed class TerminalSession : IDisposable
         }
         _disposed = true;
         _pty.Dispose();
-        if (_scriptPath is not null)
-        {
-            try
-            {
-                File.Delete(_scriptPath);
-            }
-            catch (IOException)
-            {
-                // 임시 파일 정리 실패는 무시한다(다음 실행의 고유 이름과 충돌하지 않음).
-            }
-        }
-        else
-        {
-            // 시작 전에 해제됨.
-        }
     }
 }

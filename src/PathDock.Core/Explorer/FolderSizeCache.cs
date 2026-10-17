@@ -207,9 +207,7 @@ public sealed class FolderSizeCache
         }
         try
         {
-            string tmp = _filePath + ".tmp";
-            File.WriteAllText(tmp, JsonSerializer.Serialize(snapshot));
-            File.Move(tmp, _filePath, overwrite: true);
+            SafeIo.WriteAllTextAtomic(_filePath, JsonSerializer.Serialize(snapshot)); // 링크를 따라가지 않는 안전한 교체 저장
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

@@ -71,9 +71,15 @@
                                                                FontFamily="Cascadia Mono, Consolas, D2Coding, Malgun Gothic"
                                                                Visibility="{Binding IsTextFile, Converter={StaticResource BoolToVis}}"
                                                                AutomationProperties.AutomationId="TextPreview" />
-                                                    <TextBlock Margin="0,4,0,0" HorizontalAlignment="Center"
-                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                               Text="{Binding PreviewInfo}" />
+                                                    <!-- 파일 정보 줄: 위 내용과 구분되도록 별도 배경 띠 + 위쪽 구분선 + 또렷한 글자색 -->
+                                                    <Border Margin="0,6,0,0" Padding="8,4"
+                                                            Background="{DynamicResource PdAddressBarBackgroundBrush}"
+                                                            BorderBrush="{DynamicResource PdAddressBarBorderBrush}" BorderThickness="0,1,0,0"
+                                                            AutomationProperties.AutomationId="PreviewInfoBand">
+                                                        <TextBlock HorizontalAlignment="Center" FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                                   Text="{Binding PreviewInfo}" />
+                                                    </Border>
                                                 </StackPanel>
                                             </ToolTip>
                                         </StackPanel.ToolTip>                                        <ui:SymbolIcon Margin="0,0,8,0" FontSize="16"

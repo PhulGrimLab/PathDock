@@ -3,8 +3,34 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:PathDock.App.Localization"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-             xmlns:ctl="clr-namespace:PathDock.App.Controls">
-    <!-- 터미널 패널: 머리글 오른쪽에 셸 상태와 접기/펼치기 버튼. DataContext: TerminalViewModel -->
+             xmlns:ctl="clr-namespace:PathDock.App.Controls"
+             xmlns:vm="clr-namespace:PathDock.App.ViewModels">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <!-- 탭 줄 버튼: 테두리 없는 투명 버튼, 마우스를 올리면 배경만 바뀐다. 포커스를 가져가지 않는다(터미널 입력 유지). -->
+        <Style x:Key="PdTabButtonStyle" TargetType="Button">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="FontSize" Value="{DynamicResource PdFontSize}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+    <!-- 터미널 패널: 머리글 오른쪽에 셸 상태와 접기/펼치기 버튼, 본문 위쪽에 탭 줄. DataContext: TerminalViewModel -->
     <ctl:PanelCard Header="{Binding Header}" Symbol="WindowConsole20">
         <ctl:PanelCard.HeaderTrailing>
             <StackPanel Orientation="Horizontal">
@@ -62,22 +88,85 @@
                 </ui:Button>
             </StackPanel>
         </ctl:PanelCard.HeaderTrailing>
-        <!-- 터미널은 테마와 무관하게 어두운 화면을 유지한다(셸 색상 체계 보존). 접으면 본문만 숨긴다(셸은 계속 실행). -->
-        <Border Background="#0C0C0C" Padding="8,6" ClipToBounds="True">
-            <Border.Style>
-                <Style TargetType="Border">
+        <!-- 탭 줄 + 터미널 화면. 접으면 본문 전체를 숨긴다(셸은 계속 실행). -->
+        <Grid>
+            <Grid.Style>
+                <Style TargetType="Grid">
                     <Style.Triggers>
                         <DataTrigger Binding="{Binding IsCollapsed}" Value="True">
                             <Setter Property="Visibility" Value="Collapsed" />
                         </DataTrigger>
                     </Style.Triggers>
                 </Style>
-            </Border.Style>
-            <ctl:TerminalControl x:Name="TerminalView" Session="{Binding Session}"
-                                 TerminalFontSize="{Binding FontSize}"
-                                 ColorScheme="{Binding ColorScheme}"
-                                 AutomationProperties.AutomationId="Terminal"
-                                 AutomationProperties.Name="{loc:T '터미널', 'Terminal'}" />
-        </Border>
+            </Grid.Style>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- 탭 줄: 탭 버튼들(가로 스크롤) + 새 탭(+) 버튼. 버튼은 포커스를 가져가지 않아 터미널 입력이 끊기지 않는다. -->
+            <Border Grid.Row="0" x:Name="TabStrip" Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                    BorderBrush="{DynamicResource ControlStrongStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Style="{StaticResource PdTabButtonStyle}" Padding="10,4"
+                            Command="{Binding NewTabCommand}"
+                            ToolTip="{loc:T '새 탭 (Ctrl+Shift+T)', 'New tab (Ctrl+Shift+T)'}"
+                            AutomationProperties.AutomationId="TerminalTabAdd"
+                            AutomationProperties.Name="{loc:T '새 터미널 탭', 'New terminal tab'}">
+                        <ui:SymbolIcon Symbol="Add20" FontSize="14" />
+                    </Button>
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Focusable="False">
+                        <ItemsControl ItemsSource="{Binding Tabs}" Focusable="False">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:TerminalTab}">
+                                    <Border x:Name="TabBorder" BorderThickness="0,0,0,2" BorderBrush="Transparent" Margin="0,0,1,0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button Style="{StaticResource PdTabButtonStyle}" Padding="10,4,4,4"
+                                                    MinWidth="70" MaxWidth="170"
+                                                    Command="{Binding DataContext.SelectTabCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="{Binding Cwd}"
+                                                    AutomationProperties.AutomationId="{Binding AutomationId}"
+                                                    AutomationProperties.Name="{Binding Title}">
+                                                <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                                            </Button>
+                                            <Button Style="{StaticResource PdTabButtonStyle}" Padding="4"
+                                                    Visibility="{Binding DataContext.HasMultipleTabs, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}"
+                                                    Command="{Binding DataContext.CloseTabCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="{loc:T '탭 닫기 (Ctrl+Shift+W)', 'Close tab (Ctrl+Shift+W)'}"
+                                                    AutomationProperties.AutomationId="{Binding CloseAutomationId}"
+                                                    AutomationProperties.Name="{loc:T '탭 닫기', 'Close tab'}">
+                                                <ui:SymbolIcon Symbol="Dismiss20" FontSize="12" />
+                                            </Button>
+                                        </StackPanel>
+                                    </Border>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                            <Setter TargetName="TabBorder" Property="BorderBrush" Value="{DynamicResource SystemAccentColorPrimaryBrush}" />
+                                            <Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource ControlFillColorTertiaryBrush}" />
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+            <!-- 터미널은 테마와 무관하게 어두운 화면을 유지한다(셸 색상 체계 보존). -->
+            <Border Grid.Row="1" Background="#0C0C0C" Padding="8,6" ClipToBounds="True">
+                <ctl:TerminalControl x:Name="TerminalView" Session="{Binding Session}"
+                                     TerminalFontSize="{Binding FontSize}"
+                                     ColorScheme="{Binding ColorScheme}"
+                                     AutomationProperties.AutomationId="Terminal"
+                                     AutomationProperties.Name="{loc:T '터미널', 'Terminal'}" />
+            </Border>
+        </Grid>
     </ctl:PanelCard>
 </UserControl>

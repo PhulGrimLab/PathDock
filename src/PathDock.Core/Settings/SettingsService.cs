@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using PathDock.Core.Logging;
+using PathDock.Core.Paths;
 using PathDock.Core.Sync;
 using PathDock.Core.Terminal;
 
@@ -100,12 +101,7 @@ public sealed class SettingsService
         }
         try
         {
-            AppSettings s = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_filePath), JsonOptions) ?? new AppSettings();
-            if (s.Favorites.Count > AppSettings.MaxFavorites)
-            {
-                s.Favorites = s.Favorites.Take(AppSettings.MaxFavorites).ToList();
-            }
-            return s;
+            return Sanitize(JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_filePath), JsonOptions) ?? new AppSettings());
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
@@ -114,14 +110,45 @@ public sealed class SettingsService
         }
     }
 
+    /// <summary>
+    /// 읽은 설정을 안전한 값으로 다듬는다. 파일이 손으로 편집되었거나 다른 프로그램이 바꿔 `"Favorites": null`, `[null]` 같은 값이 들어오면
+    /// 시작 때 NullReferenceException으로 앱이 뜨지 못하고(파일을 지울 때까지 반복), 터무니없이 큰 창 크기도 그대로 쓰이므로,
+    /// null은 기본값으로 바꾸고 숫자는 범위 안으로 맞춘다.
+    /// </summary>
+    public static AppSettings Sanitize(AppSettings s)
+    {
+        s.Favorites = (s.Favorites ?? new List<FavoriteEntry>())
+            .Where(f => f is not null)
+            .Select(f => new FavoriteEntry { Name = f.Name ?? string.Empty, Path = f.Path ?? string.Empty })
+            .Take(AppSettings.MaxFavorites)
+            .ToList();
+        s.LastPath ??= string.Empty;
+        s.Theme ??= "Dark";
+        s.TerminalTheme ??= TerminalColorScheme.DefaultKey;
+        s.TerminalForeground ??= string.Empty;
+        s.TerminalBackground ??= string.Empty;
+        s.Language ??= string.Empty;
+        s.WindowWidth = Within(s.WindowWidth, 200, 20000, 1100);
+        s.WindowHeight = Within(s.WindowHeight, 150, 20000, 750);
+        s.WindowLeft = s.WindowLeft is { } l && Math.Abs(l) <= 100000 ? l : null;
+        s.WindowTop = s.WindowTop is { } t && Math.Abs(t) <= 100000 ? t : null;
+        s.ExplorerRatio = Within(s.ExplorerRatio, 0, 1, 0.6);
+        s.UiFontSize = Within(s.UiFontSize, AppSettings.MinUiFontSize, AppSettings.MaxUiFontSize, AppSettings.DefaultUiFontSize);
+        s.TerminalFontSize = Within(s.TerminalFontSize, AppSettings.MinTerminalFontSize, AppSettings.MaxTerminalFontSize, AppSettings.DefaultTerminalFontSize);
+        return s;
+    }
+
+    /// <summary>유한한 값을 [min, max] 안으로 맞춘다. NaN/무한대는 <paramref name="fallback"/>.</summary>
+    private static double Within(double value, double min, double max, double fallback) =>
+        double.IsFinite(value) ? Math.Clamp(value, min, max) : fallback;
+
     /// <summary>설정을 저장한다. 실패해도 예외를 던지지 않고 로그만 남긴다(종료 흐름 보호).</summary>
     public void Save(AppSettings settings)
     {
         try
         {
-            string tmp = _filePath + ".tmp";
-            File.WriteAllText(tmp, JsonSerializer.Serialize(settings, JsonOptions));
-            File.Move(tmp, _filePath, overwrite: true);
+            // 링크를 따라가지 않는 안전한 교체 저장(관리자 권한 앱이 사용자 쓰기 가능한 폴더에 쓰므로).
+            SafeIo.WriteAllTextAtomic(_filePath, JsonSerializer.Serialize(settings, JsonOptions));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
         {

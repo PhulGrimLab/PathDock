@@ -35,12 +35,12 @@ public partial class MainWindow : FluentWindow
         UpdateVersionLabel();
         Loc.LanguageChanged += UpdateVersionLabel;
         Closed += (_, _) => Loc.LanguageChanged -= UpdateVersionLabel;
-        ApplyMinSize(vm.UiFontSize);
-        vm.PropertyChanged += (_, e) =>
+        ApplyMinSize(vm.Preferences.UiFontSize);
+        vm.Preferences.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(MainViewModel.UiFontSize))
+            if (e.PropertyName == nameof(SettingsViewModel.UiFontSize))
             {
-                ApplyMinSize(vm.UiFontSize);
+                ApplyMinSize(vm.Preferences.UiFontSize);
             }
         };
         RestoreWindowState();
@@ -53,6 +53,7 @@ public partial class MainWindow : FluentWindow
         };
         ApplyTerminalCollapsed();
         Closing += OnClosing;
+        Application.Current.SessionEnding += (_, _) => _sessionEnding = true;
         Loaded += (_, _) => TerminalPanel.FocusTerminal();
         StartClock();
     }
@@ -89,8 +90,13 @@ public partial class MainWindow : FluentWindow
     /// <summary>제목 표시줄 시계를 시작한다. 창과 수명이 같고, 창이 닫히면 멈춘다.</summary>
     private void StartClock()
     {
-        var timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(250) };
-        timer.Tick += (_, _) => UpdateClock();
+        var timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(50) };
+        // 초가 바뀌는 순간에 맞춰 깨어난다(250ms마다 깨어 같은 글자를 확인하던 것보다 유휴 깨움이 1/4).
+        timer.Tick += (_, _) =>
+        {
+            UpdateClock();
+            timer.Interval = TimeSpan.FromMilliseconds(1000 - DateTime.Now.Millisecond + 5);
+        };
         Closed += (_, _) => timer.Stop();
         UpdateClock();
         timer.Start();
@@ -119,8 +125,41 @@ public partial class MainWindow : FluentWindow
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
         {
-            _vm.InfoMessage = Loc.T($"달력을 열 수 없습니다: {ex.Message}", $"Could not open the calendar: {ex.Message}");
+            _vm.Info.Show(Loc.T($"달력을 열 수 없습니다: {ex.Message}", $"Could not open the calendar: {ex.Message}"));
         }
+    }
+
+    /// <summary>
+    /// 터미널 탭 단축키(Ctrl+Shift+T 새 탭, Ctrl+Shift+W 닫기, Ctrl+Tab / Ctrl+Shift+Tab 전환).
+    /// 터미널이 키를 셸로 보내기 전에 창에서 먼저 가로챈다(Preview). 처리한 뒤에는 입력이 이어지도록 포커스를 터미널로 준다.
+    /// </summary>
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        base.OnPreviewKeyDown(e);
+        ModifierKeys mods = Keyboard.Modifiers;
+        TerminalViewModel t = _vm.Terminal;
+        if (e.Key == Key.T && mods == (ModifierKeys.Control | ModifierKeys.Shift))
+        {
+            t.NewTabCommand.Execute(null);
+        }
+        else if (e.Key == Key.W && mods == (ModifierKeys.Control | ModifierKeys.Shift))
+        {
+            t.CloseTabCommand.Execute(null);
+        }
+        else if (e.Key == Key.Tab && mods == ModifierKeys.Control)
+        {
+            t.NextTabCommand.Execute(null);
+        }
+        else if (e.Key == Key.Tab && mods == (ModifierKeys.Control | ModifierKeys.Shift))
+        {
+            t.PreviousTabCommand.Execute(null);
+        }
+        else
+        {
+            return;
+        }
+        e.Handled = true;
+        TerminalPanel.FocusTerminal();
     }
 
     /// <summary>저장된 창 위치/크기/최대화/분할 비율을 복원한다(화면 밖이면 위치는 OS 기본값).</summary>
@@ -185,8 +224,23 @@ public partial class MainWindow : FluentWindow
             && top < SystemParameters.VirtualScreenHeight + SystemParameters.VirtualScreenTop - OffscreenMarginBottom;
     }
 
+    private bool _sessionEnding;
+
     private void OnClosing(object? sender, CancelEventArgs e)
     {
+        // 실행 중인 명령이 있으면 종료 전에 확인한다(앱을 닫으면 모든 탭의 셸과 그 작업이 끝난다). Windows 로그오프/종료 중에는 묻지 않는다.
+        int running = _vm.Terminal.RunningTabCount;
+        if (running > 0 && !_sessionEnding)
+        {
+            string message = Loc.T(
+                $"명령이 실행 중인 터미널 탭이 {running}개 있습니다. 종료하면 그 작업이 모두 끝납니다. 종료할까요?",
+                $"{running} terminal tab(s) have a command running. Exiting will end all of them. Exit anyway?");
+            if (!ConfirmDialog.Ask(this, Loc.T("종료 확인", "Confirm exit"), message))
+            {
+                e.Cancel = true;
+                return;
+            }
+        }
         var s = _vm.Settings;
         s.WindowMaximized = WindowState == WindowState.Maximized;
         Rect bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;

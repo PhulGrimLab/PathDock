@@ -5,9 +5,10 @@
              xmlns:ctl="clr-namespace:PathDock.App.Controls"
              xmlns:vm="clr-namespace:PathDock.App.ViewModels">
     <!-- 드라이브 목록: 사용량 막대 + 클릭 시 해당 드라이브 이동. DataContext: MainViewModel -->
-    <ctl:PanelCard Header="{loc:T '드라이브', 'Drives'}" Symbol="HardDrive20" ContentPadding="6">
+    <ctl:PanelCard Header="{loc:T '드라이브', 'Drives'}" Symbol="HardDrive20" ContentPadding="6"
+                   Background="{DynamicResource PdDrivePanelBackgroundBrush}">
         <ScrollViewer VerticalScrollBarVisibility="Auto" AutomationProperties.AutomationId="DriveList">
-            <ItemsControl ItemsSource="{Binding Drives}" Focusable="False">
+            <ItemsControl ItemsSource="{Binding Drives.Items}" Focusable="False">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="{x:Type vm:DriveItemViewModel}">
                         <ctl:DriveCard Title="{Binding Title}"

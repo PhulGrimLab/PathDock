@@ -6,6 +6,7 @@ using PathDock.UiAutomation.Tests;
 // 실행 중에는 SendKeys를 쓰므로 마우스/키보드를 건드리지 않는다.
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
+Native.EnableDpiAwareness(); // 창 좌표/캡처를 실제 픽셀로 읽기 위해(배율이 100%가 아닌 PC에서 필수)
 
 string root = Path.Combine("C:\\", "pd_ui_tests", Guid.NewGuid().ToString("N")[..6]);
 Directory.CreateDirectory(root);
@@ -247,8 +248,13 @@ var tests = new List<(string Name, Action Body)>
     {
         string a = MakeDir("pdA_bad");
         using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
-        app.TypePath(Path.Combine(a, "no_such_folder"));
-        app.WaitUntil(() => app.PathBarText() == a, $"잘못된 경로 후 경로가 복원되지 않음: '{app.PathBarText()}'");
+        string bad = Path.Combine(a, "no_such_folder");
+        app.TypePath(bad);
+        // 4553801 이후: 오류 시 주소창은 복원하지 않고 입력한 경로를 그대로 둔다(고쳐 쓸 수 있도록).
+        Thread.Sleep(1500);
+        if (app.PathBarText() != bad) throw new TestFailedException($"잘못된 경로 입력 후 주소창이 입력값을 유지하지 않음: '{app.PathBarText()}'");
+        // 알림 막대는 화면 낭독기에도 읽혀야 한다(AlertHost가 UI Automation에 노출): AutomationId "InfoBar"의 이름이 알림 문구.
+        app.WaitUntil(() => app.Exists("InfoBar") && app.Find("InfoBar").Current.Name.Contains("no_such_folder", StringComparison.OrdinalIgnoreCase), "알림 막대가 UI Automation에 노출되지 않음", 8000);
     }),
 
     ("SyncMode_ExplorerToTerminal_ChangesTerminalPrompt", () =>
@@ -279,6 +285,333 @@ var tests = new List<(string Name, Action Body)>
         {
             throw new TestFailedException("동기화 끄기인데 터미널이 이동함:\n" + app.TerminalText());
         }
+    }),
+
+    ("Startup_ShowsLoadingPopup_AndClosesAboutOneSecondAfterMainWindow", () =>
+    {
+        string data = NewDataDir(null, "Off", MakeDir("pdA_splash"));
+        var psi = new System.Diagnostics.ProcessStartInfo(AppDriver.AppExePath) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(AppDriver.AppExePath)! };
+        psi.Environment["PATHDOCK_DATA_DIR"] = data;
+        using System.Diagnostics.Process p = System.Diagnostics.Process.Start(psi) ?? throw new TestFailedException("앱을 시작하지 못함");
+        try
+        {
+            // 1) 로딩 팝업이 가장 먼저 뜬다.
+            AppDriver.WaitUntil(() => Native.FindWindowByTitle(p.Id, AppDriver.SplashWindowTitle) != IntPtr.Zero, 30000, "로딩 팝업이 뜨지 않음");
+            // 2) 메인 창이 뜬다. 이 시점(폴링 오차 100ms)에도 팝업은 아직 보여야 한다(메인 창이 그려진 뒤 1초 더 유지).
+            AppDriver.WaitUntil(() => Native.FindWindowByTitle(p.Id, AppDriver.MainWindowTitle) != IntPtr.Zero, 30000, "메인 창이 뜨지 않음");
+            var sinceMain = System.Diagnostics.Stopwatch.StartNew();
+            if (Native.FindWindowByTitle(p.Id, AppDriver.SplashWindowTitle) == IntPtr.Zero)
+            {
+                throw new TestFailedException("메인 창이 뜨자마자 로딩 팝업이 이미 사라짐(메인 창이 그려진 뒤 1초 유지되어야 함)");
+            }
+            // 3) 곧 사라진다. 메인 창을 처음 본 뒤 0.7초 미만이면 너무 일찍, 5초를 넘기면 너무 늦게 닫힌 것이다.
+            AppDriver.WaitUntil(() => Native.FindWindowByTitle(p.Id, AppDriver.SplashWindowTitle) == IntPtr.Zero, 5000, "로딩 팝업이 메인 창 표시 후 5초가 지나도 닫히지 않음");
+            long closedAfterMs = sinceMain.ElapsedMilliseconds;
+            if (closedAfterMs < 700)
+            {
+                throw new TestFailedException($"로딩 팝업이 메인 창 표시 후 {closedAfterMs}ms 만에 닫힘(약 1초 유지되어야 함)");
+            }
+            // 4) 메인 창은 계속 떠 있다.
+            if (Native.FindWindowByTitle(p.Id, AppDriver.MainWindowTitle) == IntPtr.Zero)
+            {
+                throw new TestFailedException("로딩 팝업이 닫힌 뒤 메인 창이 보이지 않음");
+            }
+        }
+        finally
+        {
+            try { p.Kill(true); } catch (InvalidOperationException) { }
+        }
+    }),
+
+    ("Startup_LoadingPopup_BarKeepsMovingAndStatusLineChanges", () =>
+    {
+        string data = NewDataDir(null, "Off", MakeDir("pdA_splashbar"));
+        var psi = new System.Diagnostics.ProcessStartInfo(AppDriver.AppExePath) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(AppDriver.AppExePath)! };
+        psi.Environment["PATHDOCK_DATA_DIR"] = data;
+        using System.Diagnostics.Process p = System.Diagnostics.Process.Start(psi) ?? throw new TestFailedException("앱을 시작하지 못함");
+        try
+        {
+            IntPtr splash = IntPtr.Zero;
+            AppDriver.WaitUntil(() => (splash = Native.FindWindowByTitle(p.Id, AppDriver.SplashWindowTitle)) != IntPtr.Zero, 30000, "로딩 팝업이 뜨지 않음");
+            AutomationElement splashElement = AutomationElement.FromHandle(splash);
+
+            // 팝업이 떠 있는 동안 진행 막대 구간의 화면 지문과 "지금 하는 일" 문구를 계속 모은다.
+            // 메인 창이 뜨기 전(앱 UI 스레드가 초기화로 바쁜 구간)에 모은 지문만 막대 애니메이션 판정에 쓴다 - 팝업이 UI 스레드와 같은 스레드면 이때 멈춘다.
+            var barFrames = new HashSet<long>();
+            int framesWhileBusy = 0;
+            var statuses = new List<string>();
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (sw.Elapsed < TimeSpan.FromSeconds(20) && Native.FindWindowByTitle(p.Id, AppDriver.SplashWindowTitle) != IntPtr.Zero)
+            {
+                bool mainShown = Native.FindWindowByTitle(p.Id, AppDriver.MainWindowTitle) != IntPtr.Zero;
+                if (!mainShown)
+                {
+                    barFrames.Add(Native.CaptureChecksum(splash, 0.86, 0.95));
+                    framesWhileBusy++;
+                }
+                try
+                {
+                    AutomationElement? status = splashElement.FindFirst(TreeScope.Descendants, new PropertyCondition(AutomationElement.AutomationIdProperty, "1003")); // 팝업의 "지금 하는 일" 줄(Win32 STATIC 컨트롤 ID)
+                    string text = status?.Current.Name ?? string.Empty;
+                    if (text.Length > 0 && (statuses.Count == 0 || statuses[^1] != text))
+                    {
+                        statuses.Add(text);
+                    }
+                }
+                catch (ElementNotAvailableException)
+                {
+                    break; // 팝업이 닫힘.
+                }
+                // 검사 간격이 애니메이션 주기(1.2초)의 약수와 맞으면 항상 같은 위치만 찍혀 멈춘 것처럼 보이므로 간격에 편차를 둔다.
+                Thread.Sleep(Random.Shared.Next(20, 160));
+            }
+            if (sw.Elapsed >= TimeSpan.FromSeconds(20))
+            {
+                throw new TestFailedException("로딩 팝업이 20초가 지나도 닫히지 않음");
+            }
+            if (framesWhileBusy < 5)
+            {
+                throw new TestFailedException($"초기화 구간에서 모은 화면이 너무 적어 판정할 수 없음({framesWhileBusy}장)");
+            }
+            if (barFrames.Count < 3)
+            {
+                throw new TestFailedException($"초기화 중 진행 막대가 움직이지 않음: {framesWhileBusy}장 중 서로 다른 화면 {barFrames.Count}개");
+            }
+            if (statuses.Count < 3)
+            {
+                throw new TestFailedException($"'지금 하는 일' 문구가 단계별로 바뀌지 않음: [{string.Join(" → ", statuses)}]");
+            }
+            if (statuses[^1] != "준비 완료")
+            {
+                throw new TestFailedException($"마지막 문구가 '준비 완료'가 아님: [{string.Join(" → ", statuses)}]");
+            }
+            Console.WriteLine($"      (막대 화면 {barFrames.Count}종/{framesWhileBusy}장, 문구: {string.Join(" → ", statuses)})");
+        }
+        finally
+        {
+            try { p.Kill(true); } catch (InvalidOperationException) { }
+        }
+    }),
+
+    ("Settings_Language_English_SwitchesImmediately_AndPersists", () =>
+    {
+        string a = MakeDir("pdA_setlang");
+        using var app = AppDriver.Launch(NewDataDir(null, "Bidirectional", a));
+        app.OpenSettings();
+        app.SelectComboItemByIndex("LanguageCombo", 1);
+        app.WaitUntil(() => app.SelectedSyncModeName() == "Both ways", $"영어로 바뀌지 않음: '{app.SelectedSyncModeName()}'");
+        app.CloseSettings();
+        app.CloseGracefully();
+        if (!app.ReadSettingsJson().Contains("\"Language\": \"en\""))
+        {
+            throw new TestFailedException("언어 설정이 저장되지 않음:\n" + app.ReadSettingsJson());
+        }
+    }),
+
+    ("Settings_TerminalShell_CommandPrompt_RestartsTerminal_AndPersists", () =>
+    {
+        string a = MakeDir("pdA_setshell");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        app.OpenSettings();
+        app.SelectComboItemByIndex("TerminalShellCombo", 1);
+        app.CloseSettings();
+        app.WaitUntil(() => { string t = app.TerminalText(); return t.Contains("pdA_setshell>") && !t.Contains("PS "); }, $"명령 프롬프트로 다시 시작하지 않음:\n{app.TerminalText()}", 25000);
+        app.CloseGracefully();
+        if (!app.ReadSettingsJson().Contains("\"TerminalShell\": \"CommandPrompt\""))
+        {
+            throw new TestFailedException("셸 설정이 저장되지 않음:\n" + app.ReadSettingsJson());
+        }
+    }),
+
+    ("Settings_FontSizes_Persist", () =>
+    {
+        string a = MakeDir("pdA_setfont");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        app.OpenSettings();
+        app.SetSlider("UiFontSizeSlider", 16);
+        app.SetSlider("TerminalFontSizeSlider", 18);
+        app.CloseSettings();
+        app.CloseGracefully();
+        string json = app.ReadSettingsJson();
+        if (!json.Contains("\"UiFontSize\": 16") || !json.Contains("\"TerminalFontSize\": 18"))
+        {
+            throw new TestFailedException("글자 크기가 저장되지 않음:\n" + json);
+        }
+    }),
+
+    ("Settings_TerminalColors_InvalidColorShowsError_ResetClearsIt", () =>
+    {
+        string a = MakeDir("pdA_setcolor");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        app.OpenSettings();
+        app.SetText("TerminalForegroundBox", "zzz");
+        app.WaitUntil(() => app.Exists("TerminalColorError"), "잘못된 색 안내가 보이지 않음");
+        app.Click("ResetTerminalColorsButton");
+        app.WaitUntil(() => !app.Exists("TerminalColorError"), "기본 색으로 되돌렸는데 안내가 남음");
+        app.CloseSettings();
+    }),
+
+    ("Settings_TerminalTheme_AndCustomColor_Persist", () =>
+    {
+        string a = MakeDir("pdA_settheme");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        app.OpenSettings();
+        app.SelectComboItemByIndex("TerminalThemeCombo", 1);
+        app.SetText("TerminalForegroundBox", "#112233");
+        app.CloseSettings();
+        app.CloseGracefully();
+        string json = app.ReadSettingsJson();
+        if (json.Contains("\"TerminalTheme\": \"Campbell\"") || !json.Contains("\"TerminalForeground\": \"#112233\""))
+        {
+            throw new TestFailedException("터미널 테마/글자색이 저장되지 않음:\n" + json);
+        }
+    }),
+
+    ("Settings_StartAtLastPath_Toggle_Persists", () =>
+    {
+        string a = MakeDir("pdA_setstart");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        app.OpenSettings();
+        if (!app.IsChecked("StartAtLastPathCheck"))
+        {
+            throw new TestFailedException("기본값은 마지막 폴더에서 시작(켜짐)이어야 함");
+        }
+        app.Toggle("StartAtLastPathCheck");
+        app.CloseSettings();
+        app.CloseGracefully();
+        if (!app.ReadSettingsJson().Contains("\"StartAtLastPath\": false"))
+        {
+            throw new TestFailedException("시작 폴더 설정이 저장되지 않음:\n" + app.ReadSettingsJson());
+        }
+    }),
+
+    ("Settings_ResetFavorites_ClearsRegisteredSlots", () =>
+    {
+        string a = MakeDir("pdA_resetfav");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        app.Click("Favorite_1");
+        app.WaitUntil(() => app.Find("Favorite_1").Current.Name.Contains("pdA_resetfav"), "즐겨찾기가 등록되지 않음");
+        app.OpenSettings();
+        app.Click("ResetFavoritesButton");
+        app.AnswerConfirm("즐겨찾기 초기화", true);
+        app.WaitUntil(() => !app.Find("Favorite_1").Current.Name.Contains("pdA_resetfav"), "초기화했는데 즐겨찾기가 남음");
+        app.CloseSettings();
+    }),
+
+    ("Exit_WithRunningCommand_AsksConfirm_NoKeepsRunning_YesExits", () =>
+    {
+        string a = MakeDir("pdA_exit");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        app.TypeInTerminal("Start-Sleep -Seconds 120{ENTER}");
+        app.WaitUntil(() => app.Find("TerminalStatus").Current.Name.Contains("실행 중"), $"명령 실행 상태가 되지 않음: '{app.Find("TerminalStatus").Current.Name}'");
+
+        app.RequestClose();
+        app.AnswerConfirm("종료 확인", false);
+        Thread.Sleep(1000);
+        if (app.HasExited)
+        {
+            throw new TestFailedException("종료 확인 창에서 아니오를 눌렀는데 앱이 종료됨");
+        }
+        app.Find("Terminal"); // 창이 그대로 살아 있어야 한다.
+
+        app.RequestClose();
+        app.AnswerConfirm("종료 확인", true);
+        if (!app.WaitForExit(15000))
+        {
+            throw new TestFailedException("종료 확인 창에서 예를 눌렀는데 앱이 종료되지 않음");
+        }
+    }),
+
+    ("Tabs_AddAndClose_LastTabCannotBeClosed", () =>
+    {
+        string a = MakeDir("pdA_tabadd");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        app.Find("TerminalTab_1");
+        if (app.Exists("TerminalTabClose_1"))
+        {
+            throw new TestFailedException("탭이 하나뿐인데 닫기 버튼이 보임");
+        }
+        app.Click("TerminalTabAdd");
+        app.WaitUntil(() => app.Exists("TerminalTab_2"), "새 탭이 만들어지지 않음");
+        app.WaitUntil(() => app.Exists("TerminalTabClose_1") && app.Exists("TerminalTabClose_2"), "탭이 둘일 때 닫기 버튼이 보이지 않음");
+        app.WaitUntil(() => app.TerminalText().Contains("pdA_tabadd>"), $"새 탭의 셸이 시작되지 않음:\n{app.TerminalText()}", 25000);
+        app.Click("TerminalTabClose_2");
+        app.WaitUntil(() => !app.Exists("TerminalTab_2"), "탭이 닫히지 않음");
+        app.WaitUntil(() => !app.Exists("TerminalTabClose_1"), "탭이 하나로 줄었는데 닫기 버튼이 남음");
+    }),
+
+    ("Tabs_AreIndependent_AndSelectingTabFollowsInExplorer", () =>
+    {
+        string a = MakeDir("pdA_tabs"), b = MakeDir("pdB_tabs");
+        using var app = AppDriver.Launch(NewDataDir(null, "Bidirectional", a));
+        app.WaitUntil(() => app.TerminalText().Contains("pdA_tabs>"), $"첫 탭의 셸이 시작되지 않음:\n{app.TerminalText()}", 25000);
+        app.Click("TerminalTabAdd");
+        app.WaitUntil(() => app.Exists("TerminalTab_2"), "새 탭이 만들어지지 않음");
+        // 새 탭은 탐색기의 현재 폴더에서 시작한다.
+        app.WaitUntil(() => app.TerminalText().Contains("pdA_tabs>"), $"새 탭이 탐색기 폴더에서 시작하지 않음:\n{app.TerminalText()}", 25000);
+        app.TypeInTerminal("cd " + b + "{ENTER}");
+        app.WaitUntil(() => app.PathBarText() == b, $"둘째 탭의 cd를 탐색기가 따라가지 않음: '{app.PathBarText()}'", 25000);
+
+        app.Click("TerminalTab_1");
+        app.WaitUntil(() => app.PathBarText() == a, $"첫 탭을 선택했는데 탐색기가 그 폴더로 가지 않음: '{app.PathBarText()}'", 25000);
+        if (app.TerminalText().Contains("pdB_tabs>"))
+        {
+            throw new TestFailedException("첫 탭 화면에 둘째 탭의 프롬프트가 보임(탭이 독립적이지 않음):\n" + app.TerminalText());
+        }
+
+        app.Click("TerminalTab_2");
+        app.WaitUntil(() => app.PathBarText() == b, $"둘째 탭을 선택했는데 탐색기가 그 폴더로 가지 않음: '{app.PathBarText()}'", 25000);
+        app.WaitUntil(() => app.TerminalText().Contains("pdB_tabs>"), $"둘째 탭 화면이 보이지 않음:\n{app.TerminalText()}");
+        if (!app.Find("TerminalTab_2").Current.Name.Contains("pdB_tabs"))
+        {
+            throw new TestFailedException($"탭 제목이 현재 폴더를 보여주지 않음: '{app.Find("TerminalTab_2").Current.Name}'");
+        }
+    }),
+
+    ("Tabs_KeyboardShortcuts_NewSwitchClose", () =>
+    {
+        string a = MakeDir("pdA_tabkeys"), b = MakeDir("pdB_tabkeys");
+        using var app = AppDriver.Launch(NewDataDir(null, "Bidirectional", a));
+        app.WaitUntil(() => app.TerminalText().Contains("pdA_tabkeys>"), $"첫 탭의 셸이 시작되지 않음:\n{app.TerminalText()}", 25000);
+        app.TypeInTerminal("^+t"); // Ctrl+Shift+T: 새 탭
+        app.WaitUntil(() => app.Exists("TerminalTab_2"), "Ctrl+Shift+T로 새 탭이 만들어지지 않음");
+        app.WaitUntil(() => app.TerminalText().Contains("pdA_tabkeys>"), $"새 탭의 셸이 시작되지 않음:\n{app.TerminalText()}", 25000);
+        app.TypeInTerminal("cd " + b + "{ENTER}");
+        app.WaitUntil(() => app.PathBarText() == b, $"둘째 탭의 cd를 탐색기가 따라가지 않음: '{app.PathBarText()}'", 25000);
+
+        app.PressKeys("^{TAB}"); // 다음 탭(끝에서 처음으로)
+        app.WaitUntil(() => app.PathBarText() == a, $"Ctrl+Tab으로 첫 탭이 선택되지 않음: '{app.PathBarText()}'", 25000);
+        app.PressKeys("^+{TAB}"); // 이전 탭(처음에서 끝으로)
+        app.WaitUntil(() => app.PathBarText() == b, $"Ctrl+Shift+Tab으로 둘째 탭이 선택되지 않음: '{app.PathBarText()}'", 25000);
+
+        app.PressKeys("^+w"); // Ctrl+Shift+W: 선택된 탭(둘째) 닫기
+        app.WaitUntil(() => !app.Exists("TerminalTab_2"), "Ctrl+Shift+W로 탭이 닫히지 않음");
+        app.WaitUntil(() => app.PathBarText() == a, $"탭을 닫은 뒤 남은 탭의 폴더로 가지 않음: '{app.PathBarText()}'", 25000);
+        app.PressKeys("^+w"); // 마지막 탭은 닫히지 않는다.
+        Thread.Sleep(500);
+        app.Find("TerminalTab_1");
+    }),
+
+    ("Tabs_CloseBusyTab_AsksConfirm", () =>
+    {
+        string a = MakeDir("pdA_tabbusy");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        app.Click("TerminalTabAdd");
+        app.WaitUntil(() => app.Exists("TerminalTab_2"), "새 탭이 만들어지지 않음");
+        app.WaitUntil(() => app.TerminalText().Contains("pdA_tabbusy>"), $"새 탭의 셸이 시작되지 않음:\n{app.TerminalText()}", 25000);
+        app.TypeInTerminal("Start-Sleep -Seconds 120{ENTER}");
+        app.WaitUntil(() => app.Find("TerminalStatus").Current.Name.Contains("실행 중"), $"명령 실행 상태가 되지 않음: '{app.Find("TerminalStatus").Current.Name}'");
+
+        app.Click("TerminalTabClose_2");
+        app.AnswerConfirm("터미널 탭 닫기", false);
+        Thread.Sleep(700);
+        if (!app.Exists("TerminalTab_2"))
+        {
+            throw new TestFailedException("확인 창에서 아니오를 눌렀는데 탭이 닫힘");
+        }
+        app.Click("TerminalTabClose_2");
+        app.AnswerConfirm("터미널 탭 닫기", true);
+        app.WaitUntil(() => !app.Exists("TerminalTab_2"), "확인 창에서 예를 눌렀는데 탭이 닫히지 않음");
     }),
 
     ("Settings_SyncMode_PersistsAcrossRestart", () =>

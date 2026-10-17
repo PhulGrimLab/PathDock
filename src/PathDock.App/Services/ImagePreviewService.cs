@@ -72,7 +72,8 @@ public static class ImagePreviewService
             return new ImagePreview(image, width, height, bytes);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or InvalidOperationException
-                                       or ArgumentException or System.Runtime.InteropServices.COMException or FileFormatException)
+                                       or ArgumentException or System.Runtime.InteropServices.COMException or FileFormatException
+                                       or OutOfMemoryException) // 해상도가 비정상적으로 큰 이미지: 미리보기만 포기한다(앱이 종료되지 않게).
         {
             return null;
         }

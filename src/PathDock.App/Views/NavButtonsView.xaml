@@ -11,16 +11,16 @@
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
-        <ui:Button Grid.Column="0" Height="32" Margin="0,0,3,0" HorizontalAlignment="Stretch" Padding="0"
+        <ui:Button Grid.Column="0" Height="38" FontSize="22" BorderThickness="1" Background="{DynamicResource PdAddressBarBackgroundBrush}" BorderBrush="{DynamicResource PdAddressBarBorderBrush}" MouseOverBackground="{DynamicResource PdAddressBarBorderBrush}" Margin="0,0,3,0" HorizontalAlignment="Stretch" Padding="0"
                    Icon="{ui:SymbolIcon ArrowLeft24}" Command="{Binding GoBackCommand}" ToolTip="{loc:T '뒤로', 'Back'}"
                    AutomationProperties.AutomationId="BackButton" AutomationProperties.Name="{loc:T '뒤로', 'Back'}" />
-        <ui:Button Grid.Column="1" Height="32" Margin="3,0" HorizontalAlignment="Stretch" Padding="0"
+        <ui:Button Grid.Column="1" Height="38" FontSize="22" BorderThickness="1" Background="{DynamicResource PdAddressBarBackgroundBrush}" BorderBrush="{DynamicResource PdAddressBarBorderBrush}" MouseOverBackground="{DynamicResource PdAddressBarBorderBrush}" Margin="3,0" HorizontalAlignment="Stretch" Padding="0"
                    Icon="{ui:SymbolIcon ArrowRight24}" Command="{Binding GoForwardCommand}" ToolTip="{loc:T '앞으로', 'Forward'}"
                    AutomationProperties.AutomationId="ForwardButton" AutomationProperties.Name="{loc:T '앞으로', 'Forward'}" />
-        <ui:Button Grid.Column="2" Height="32" Margin="3,0" HorizontalAlignment="Stretch" Padding="0"
+        <ui:Button Grid.Column="2" Height="38" FontSize="22" BorderThickness="1" Background="{DynamicResource PdAddressBarBackgroundBrush}" BorderBrush="{DynamicResource PdAddressBarBorderBrush}" MouseOverBackground="{DynamicResource PdAddressBarBorderBrush}" Margin="3,0" HorizontalAlignment="Stretch" Padding="0"
                    Icon="{ui:SymbolIcon ArrowUp24}" Command="{Binding GoUpCommand}" ToolTip="{loc:T '상위 폴더', 'Parent folder'}"
                    AutomationProperties.AutomationId="UpButton" AutomationProperties.Name="{loc:T '상위 폴더', 'Parent folder'}" />
-        <ui:Button Grid.Column="3" Height="32" Margin="3,0,0,0" HorizontalAlignment="Stretch" Padding="0"
+        <ui:Button Grid.Column="3" Height="38" FontSize="22" BorderThickness="1" Background="{DynamicResource PdAddressBarBackgroundBrush}" BorderBrush="{DynamicResource PdAddressBarBorderBrush}" MouseOverBackground="{DynamicResource PdAddressBarBorderBrush}" Margin="3,0,0,0" HorizontalAlignment="Stretch" Padding="0"
                    Icon="{ui:SymbolIcon ArrowClockwise24}" Command="{Binding RefreshCommand}"
                    ToolTip="{loc:T '새로 고침 (F5) - 폴더 크기도 다시 계산', 'Refresh (F5) - recalculates folder sizes too'}"
                    AutomationProperties.AutomationId="RefreshButton" AutomationProperties.Name="{loc:T '새로 고침', 'Refresh'}" />

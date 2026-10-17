@@ -6,23 +6,25 @@
 
 ```
 PathDock.App (WPF, net10.0-windows10.0.19041.0)
- ├─ Views/            MainWindow + 영역별 UserControl(FavoritesBar, NavButtons, SyncModeSelector, DrivePanel, AncestorColumn,
- │                    FileList, TerminalPanel, StatusBar), 설정/정보 창, 확인/입력 대화상자 (XAML, code-behind 최소)
- ├─ Controls/         커스텀 컨트롤: PanelCard, DriveCard, FavoriteChip, UsageMeter, AddressBar, TerminalControl(화면 버퍼 렌더링 + 키/마우스 입력)
- ├─ ViewModels/       MainViewModel(루트), ExplorerViewModel(+FileActions), TerminalViewModel, FileItemViewModel,
- │                    FavoriteSlotViewModel, DriveItemViewModel
- ├─ Services/         대화상자(IDialogService), 테마/글자 크기, 정보(AppInfo), 계산기 실행, 휴지통, 이미지/텍스트 미리보기와 캐시
- ├─ Localization/     {loc:T} 마크업 확장 + LocSource (XAML 문구의 한국어/영어 선택)
- └─ Themes/           Generic.xaml (커스텀 컨트롤 템플릿)
-PathDock.Core (net10.0-windows, UI 비의존 → 단위 테스트 용이)
+ ├─ Views/            MainWindow, FavoritesBarView, NavButtonsView, SyncModeSelectorView, DrivePanelView,
+ │                    AncestorColumnView, FileListView, TerminalPanelView, StatusBarView,
+ │                    SettingsWindow, AboutWindow, InputDialog, ConfirmDialog (XAML, code-behind 최소; 상세 doc/05)
+ ├─ Controls/         PanelCard, DriveCard, FavoriteChip, UsageMeter, AddressBar, TerminalControl(+TerminalRenderer, TerminalKeyMap), AlertHost(알림 막대 접근성)
+ ├─ ViewModels/       MainViewModel(조립)+InfoBar/Usage/Drives/Favorites/SettingsViewModel, ExplorerViewModel(+FileActions), TerminalViewModel(+TerminalTab: 탭별 세션·상태),
+ │                    FavoriteSlotViewModel, DriveItemViewModel, FileItemViewModel
+ ├─ Localization/     LocSource ({loc:T} XAML 마크업 확장)
+ ├─ Themes/           Generic.xaml (커스텀 컨트롤 스타일)
+ └─ Services/         ThemeService, FontService, DialogService, FileClipboard, RecycleBinService, CalculatorLauncher,
+                      ImagePreviewService/PdfPreviewService/TextPreviewService/PreviewCache, UnelevatedLauncher(문서를 일반 권한으로 열기), AppInfo, SplashHost(시작 로딩 팝업, 순수 Win32)
+PathDock.Core (net10.0, UI 비의존 → 단위 테스트 용이)
  ├─ Paths/            PathNormalizer
  ├─ Settings/         AppSettings, SettingsService (JSON)
- ├─ Explorer/         ExplorerService(목록 열거, 이력), FileOperations, FileSorter, FileCategory, DriveService,
- │                    FolderSizeCalculator/Cache, SizeFormatter, ImagePreviewTypes, TextPreview(TextPreviewer)
+ ├─ Explorer/         ExplorerService(목록 열거, 이력), DriveService, FolderSizeCalculator/Cache, FileSorter,
+ │                    FileOperations(이름 변경·새 폴더·복사·이동·휴지통), FileCategory, SizeFormatter, TextPreview, ImagePreviewTypes, LaunchPolicy
  ├─ Sync/             SyncMode, PathSyncService (중재, 루프 방지, 대기 정책)
- ├─ Terminal/         ConPtySession, VtParser, ScreenBuffer, TerminalSession(셸 통합·상태), TerminalShell, TerminalColorScheme(색 테마)
- ├─ Monitoring/       SystemMonitor (CPU/GPU/메모리)
- ├─ Localization/     Loc (한국어/English 문구 선택, 언어 변경 이벤트)
+ ├─ Terminal/         ConPtySession, VtParser, ScreenBuffer, TerminalSession(셸 통합·상태), TerminalShell, TerminalColorScheme
+ ├─ Monitoring/       SystemMonitor
+ ├─ Localization/     Loc (한국어/영어 문구 선택)
  └─ Logging/          AsyncFileLogger
 ```
 
@@ -37,29 +39,33 @@ PathDock.Core (net10.0-windows, UI 비의존 → 단위 테스트 용이)
 |---|---|
 | `PathNormalizer` | 전체 경로화, 후행 `\` 제거, 드라이브 문자 대문자화, UNC 보존, 비교용 키 |
 | `FolderSizeCache` | 폴더 크기 결과 캐시(메모리+JSON, TTL·수정시각으로 Fresh/Stale 판정) |
-| `FileOperations` | 이름 검증/변경, 새 폴더, 복사·이동(이름 충돌은 "- 복사"), 휴지통 삭제. 오류 문구는 `Loc`로 언어를 따른다 |
-| `ImagePreviewTypes` / `TextPreviewer` | 이미지·PDF 확장자 판정, `LaunchPolicy`(어떤 파일을 일반 권한으로 열지), 텍스트 파일 앞부분 읽기(64KB, 20줄, 바이너리·인코딩 판별). 순수 함수 |
-| `Loc` | 현재 언어(한국어/English)와 `Loc.T(ko, en)`, 언어 변경 이벤트. 개발자용 로그는 번역 대상이 아님 |
 | `SystemMonitor` | CPU/메모리/GPU 사용률 주기 측정(Timer 스레드, 이벤트) |
 | `FolderSizeCalculator` | 폴더 재귀 크기/파일·폴더 수 집계(취소 가능, 링크 미추적, 접근 불가는 Incomplete) |
 | `DriveService` | 드라이브 목록과 용량(총/여유) 조회. 준비 안 된 드라이브는 용량 0으로 표시 |
 | `ExplorerService` | 폴더 열거(폴더 우선 정렬), 접근 불가 처리, 뒤로/앞으로/위로 이력 |
-| `SettingsService` | 즐겨찾기(최대 10), 동기화 모드, 창 위치/크기, 분할 높이 JSON 저장/복원 |
+| `SettingsService` | 즐겨찾기(최대 10), 동기화 모드, 창 위치/크기, 분할 높이, 테마/글자 크기/터미널 셸·색/언어 JSON 저장/복원 (항목은 doc/00 4절) |
+| `FileOperations` | 이름 검증·변경, 새 폴더, 복사/이동(이름 충돌 시 "- 복사"), 휴지통 삭제. 상태 없음 |
+| `FileSorter` / `FileCategory` | 정렬(폴더 우선·자연 정렬) / 확장자 → 파일 종류 분류 |
+| `TerminalTabTitle` | 탭 제목 규칙("셸 · 현재 폴더 이름"). `TerminalViewModel`/`TerminalTab`이 탭 목록·선택·세션 수명을 관리(doc/02 8절) |
+| `TerminalThemes` | 터미널 테마 5종과 사용자 지정 색 해석(`Find`/`Resolve`) |
+| `Loc` | 화면 문구 `Loc.T(한국어, English)`, 영어 단수/복수, 언어 변경 이벤트 |
+| `ThemeService` (App) | 다크/라이트/고대비 적용, 주소 표시줄·드라이브 패널 배경색, 밝은 테마 보조 글자색 대비 보정 |
 | `PathSyncService` | 모드 적용, 출처(Origin) 구분, 동일 경로 무시, 터미널 Busy 시 보류 |
-| `ConPtySession` | `CreatePseudoConsole` + 셸(PowerShell 또는 cmd) 프로세스, 입출력 스트림, 크기 조절 |
+| `ConPtySession` | `CreatePseudoConsole` + PowerShell 프로세스, 입출력 스트림, 크기 조절 |
 | `VtParser` / `ScreenBuffer` | VT 시퀀스 해석(커서, 지우기, SGR 색, OSC) → 셀 격자 |
-| `TerminalSession` | ConPTY+파서+버퍼 묶음, Idle/Busy·cwd 상태, 셸 통합(PowerShell/cmd, 창 제목 `PD:토큰:…` 마커, doc/02 3절), 보류 이동, 화면 지우기 |
+| `TerminalSession` | ConPTY+파서+버퍼 묶음, Idle/Busy·cwd 상태, 셸 통합(PowerShell은 prompt 훅, cmd는 `PROMPT` 문자열로 창 제목 `PD:…` 마커, doc/02 3절), 보류 이동 |
 
-## 3. 컨트롤 적용 계획 (WpfControlSamples 참조)
+## 3. 컨트롤 적용 (WpfControlSamples 참조)
+
+초기 계획에서 많이 바뀌었다. 현재 화면은 자체 커스텀 컨트롤(`PanelCard`, `DriveCard`, `FavoriteChip`, `UsageMeter`, `AddressBar`)과
+뷰로 구성되며 상세는 [05_UI_Design.md](./05_UI_Design.md). 아래는 WPF-UI를 그대로 쓰는 부분이다.
 
 | 용도 | 사용 컨트롤 | 출처 |
 |---|---|---|
 | 창 | `ui:FluentWindow` + `ui:TitleBar` | wpfui |
-| 즐겨찾기 버튼 | `ui:Button`(Icon + 짧은 이름), 컨텍스트 메뉴 | wpfui |
-| 동기화 모드 | `ComboBox` (wpfui 스타일 자동 적용) | wpfui |
-| 알림 | `ui:InfoBar` (경로 없음/권한 없음/대기 중) | wpfui |
-| 드라이브 패널 | `ui:Button` 카드 + `ProgressBar`(사용량, 90% 이상 경고색), 현재 드라이브 강조 | wpfui |
-| 파일 목록 | `ListView` + `GridView` (이름/수정일/크기) | wpfui 스타일 |
+| 동기화 모드/설정 콤보 | `ComboBox` (wpfui 스타일 자동 적용) | wpfui |
+| 알림 | `ui:InfoBar` (경로 없음/권한 없음/대기 중, 종류별 색, 성공은 자동 닫힘) | wpfui |
+| 파일 목록 | `ListView` + `GridView` (이름/수정일/크기/하위 항목) | wpfui 스타일 |
 | 터미널 | **자체 `TerminalControl`** (`FrameworkElement`, `OnRender`) | 자체 구현 |
 | 분할 | `GridSplitter` | WPF |
 
@@ -92,8 +98,8 @@ Terminal prompt 마커(cwd) ──▶ PathSyncService.OnTerminalCwdChanged(path)
 - XAML은 `{loc:T '한국어', 'English'}` 마크업 확장(`PathDock.App.Localization.TExtension`)을 쓴다. 문구 쌍마다 번호를 매겨 `LocSource`(싱글톤,
   `INotifyPropertyChanged`)의 인덱서에 바인딩하므로, 언어가 바뀌면 모든 문구가 **앱 재시작 없이** 바뀐다.
 - 코드에서 만든 문구는 언어가 바뀔 때 ViewModel이 다시 읽게 한다: `MainViewModel.OnLanguageChanged`가 `PropertyChanged("")`와
-  각 하위 ViewModel(`Explorer`/`Terminal`/드라이브/즐겨찾기/파일 항목)의 `RefreshLanguage`를 호출한다. 콤보박스 항목(동기화 모드, 터미널 테마)은
-  항목 객체를 유지한 채 이름만 갱신해 선택이 풀리지 않게 했다(`SyncModeOption`, `TerminalThemeOption`).
+  각 하위 ViewModel(`Explorer`/`Terminal`/`Usage`/`Drives`/`Favorites`/`Info`/`Preferences`/파일 항목)의 `RefreshLanguage`를 호출한다. 콤보박스 항목(동기화 모드, 터미널 테마)은
+  항목 객체를 유지한 채 이름만 갱신해 선택이 풀리지 않게 했다(`SyncModeOption`, `SettingsViewModel`의 `TerminalThemeOption`).
 - 저장/복원: `settings.json`의 `Language`(`ko`/`en`). 값이 없으면 OS 표시 언어(한국어면 한국어, 그 밖에는 영어). 시작 시 `App.OnStartup`이 창 생성 전에 적용한다.
 - 문구를 추가할 때: 한국어/영어를 함께 적는다. 한국어 문구를 바꾸면 영어 쪽도 같이 바꾼다(단위 테스트가 기본 언어를 한국어로 가정하므로 테스트가 한국어 문구를 직접 확인한다).
 
@@ -120,4 +126,3 @@ Terminal prompt 마커(cwd) ──▶ PathSyncService.OnTerminalCwdChanged(path)
   (`ShellWindows.FindWindowSW`(데스크톱) → `Document.Application.ShellExecute`). 연결 프로그램이 평소 탐색기에서 더블클릭한 것과 똑같이 열린다.
 - 실행 파일/스크립트(`.exe .com .bat .cmd .msi .msc .scr .cpl .ps1 .vbs .vbe .wsf .lnk`)는 기존처럼 앱의 권한으로 실행한다(관리자 권한이 필요한 작업을 위해).
 - 탐색기와 통신하지 못하면 기존 방식(`Process.Start`)으로 되돌아간다.
-- 확인: 임시 확장자 연결로 일반 권한에서 핸들러가 실행되는 것과(관리자 권한이 아님), 관리자 권한 `Start-Process`는 핸들러가 관리자 권한으로 실행되는 것을 확인했다. Adobe Reader 자체는 설치되어 있지 않아 직접 확인하지 못했다.

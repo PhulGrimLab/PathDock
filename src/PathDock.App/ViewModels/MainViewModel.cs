@@ -1,16 +1,12 @@
 using System.IO;
-using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using System.Windows;
 using PathDock.Core.Explorer;
 using PathDock.Core.Localization;
 using PathDock.Core.Logging;
-using PathDock.Core.Monitoring;
 using PathDock.Core.Paths;
 using PathDock.Core.Settings;
 using PathDock.Core.Sync;
-using PathDock.Core.Terminal;
 
 namespace PathDock.App.ViewModels;
 
@@ -37,43 +33,36 @@ public sealed class SyncModeOption : ObservableObject
     public override string ToString() => Label;
 }
 
-/// <summary>설정 창의 터미널 테마 콤보박스 항목. 이름은 언어를 따른다(항목 객체를 바꾸지 않아 선택이 유지된다).</summary>
-public sealed class TerminalThemeOption : ObservableObject
-{
-    private readonly TerminalColorScheme _scheme;
-
-    public TerminalThemeOption(TerminalColorScheme scheme) => _scheme = scheme;
-
-    public string Name => _scheme.Key switch
-    {
-        _ when _scheme.Key == TerminalColorScheme.DefaultKey => Loc.T("기본 (어두움)", "Default (dark)"),
-        "Light" => Loc.T("밝음", "Light"),
-        _ => _scheme.DisplayName,
-    };
-
-    public void RefreshName() => OnPropertyChanged(nameof(Name));
-}
-
 /// <summary>
 /// 화면 전체의 루트 ViewModel. Owner: App, Lifetime: 앱 전체.
-/// 탐색기/터미널/즐겨찾기/설정을 조립하고 <see cref="PathSyncService"/>로 둘을 연결한다(둘은 서로를 모른다).
+/// 하위 ViewModel(탐색기, 터미널, 즐겨찾기, 드라이브, 사용량, 알림 막대, 설정)을 조립하고, <see cref="PathSyncService"/>로
+/// 탐색기와 터미널을 연결한다(둘은 서로를 모른다). 이 클래스에는 조립·시작·저장·동기화 모드·테마 전환·제목 표시줄 명령만 둔다.
 /// 모든 멤버는 UI 스레드에서만 사용한다.
 /// </summary>
 public sealed partial class MainViewModel : ObservableObject, IDisposable
 {
+    private static readonly TimeSpan StartPathCheckTimeout = TimeSpan.FromSeconds(2);
+
     private readonly SettingsService _settingsService;
     private readonly FolderSizeCache _sizeCache;
-    private readonly SystemMonitor _monitor;
     private readonly ILog _log;
     private readonly PathSyncService _sync;
-    private readonly Services.IDialogService _dialogs = new Services.WpfDialogService();
+    private readonly Services.IDialogService _dialogs;
 
+    /// <summary>설정 파일 내용(창 위치/크기, 즐겨찾기, 모드 등). 설정 창의 화면 상태는 <see cref="Preferences"/>.</summary>
     public AppSettings Settings { get; }
+
     public ExplorerViewModel Explorer { get; }
     public TerminalViewModel Terminal { get; }
-    public ObservableCollection<FavoriteSlotViewModel> Favorites { get; } = new();
-    public ObservableCollection<DriveItemViewModel> Drives { get; } = new();
-    private bool _drivesRefreshing;
+    public FavoritesViewModel Favorites { get; }
+    public DrivesViewModel Drives { get; }
+    public UsageViewModel Usage { get; }
+    public InfoBarViewModel Info { get; }
+
+    /// <summary>설정 창이 쓰는 ViewModel(언어, 글자 크기, 시작 폴더, 터미널 셸·색).</summary>
+    public SettingsViewModel Preferences { get; }
+
+    // ----- 경로 동기화 모드 -----
 
     public IReadOnlyList<SyncModeOption> SyncModes { get; } = new[]
     {
@@ -87,91 +76,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(SyncSummary))]
     private SyncModeOption _selectedSyncMode;
 
-    /// <summary>InfoBar 표시 내용(비어 있으면 숨김).</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasInfo))]
-    private string _infoMessage = string.Empty;
-
-    /// <summary>InfoBar 종류(성공은 초록, 그 밖의 알림/오류는 경고색).</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(InfoTitle))]
-    private Wpf.Ui.Controls.InfoBarSeverity _infoSeverity = Wpf.Ui.Controls.InfoBarSeverity.Warning;
-
-    /// <summary>InfoBar 제목(성공이면 "완료", 그 밖에는 "알림").</summary>
-    public string InfoTitle => InfoSeverity == Wpf.Ui.Controls.InfoBarSeverity.Success ? Loc.T("완료", "Done") : Loc.T("알림", "Notice");
-
-    private bool _nextInfoIsSuccess;
-    private System.Windows.Threading.DispatcherTimer? _infoTimer;
-
-    public bool HasInfo => !string.IsNullOrEmpty(InfoMessage);
-
-    /// <summary>작업이 잘 끝났음을 알린다. 초록 InfoBar로 보였다가 몇 초 뒤 저절로 사라진다.</summary>
-    private void NotifySuccess(string message)
+    partial void OnSelectedSyncModeChanged(SyncModeOption value)
     {
-        InfoMessage = string.Empty; // 같은 문구도 다시 보이게 한다.
-        _nextInfoIsSuccess = true;
-        InfoMessage = message;
+        _sync.Mode = value.Mode;
+        Settings.SyncMode = value.Mode;
+        _log.Info($"동기화 모드 변경: {value.Mode}");
     }
 
-    partial void OnInfoMessageChanged(string value)
-    {
-        _infoTimer?.Stop();
-        if (string.IsNullOrEmpty(value))
-        {
-            _nextInfoIsSuccess = false;
-            return;
-        }
-        bool success = _nextInfoIsSuccess;
-        _nextInfoIsSuccess = false;
-        InfoSeverity = success ? Wpf.Ui.Controls.InfoBarSeverity.Success : Wpf.Ui.Controls.InfoBarSeverity.Warning;
-        // 성공은 5초, 경고/오류는 읽을 시간을 더 주고 10초 뒤 저절로 닫는다(직접 닫기도 가능).
-        if (_infoTimer is null)
-        {
-            _infoTimer = new System.Windows.Threading.DispatcherTimer();
-            _infoTimer.Tick += (_, _) =>
-            {
-                _infoTimer.Stop();
-                InfoMessage = string.Empty;
-            };
-        }
-        _infoTimer.Interval = TimeSpan.FromSeconds(success ? 5 : 10);
-        _infoTimer.Start();
-    }
+    /// <summary>상태 표시줄 왼쪽에 보이는 동기화 요약. 예: "경로 동기화: 양방향".</summary>
+    public string SyncSummary => $"{Loc.T("경로 동기화", "Path sync")}: {SelectedSyncMode.Label}";
 
-    private const int MonitorIntervalMs = 2000;
-
-    /// <summary>하단 오른쪽 시스템 사용량 문구. 예: "CPU 12% | GPU 3% | 메모리 8.1/15.7 GB (52%)".</summary>
-    [ObservableProperty]
-    private string _usageText = $"CPU - | GPU - | {Loc.T("메모리", "Memory")} -";
-
-    // 상태 표시줄 미터(UsageMeter)용 값. 각 미터의 이름은 "CPU 12%"처럼 라벨+값 문구로 접근성에 노출된다.
-    [ObservableProperty] private double _cpuPercent;
-    [ObservableProperty] private string _cpuText = "-";
-    [ObservableProperty] private double _gpuPercent;
-    [ObservableProperty] private string _gpuText = "-";
-    [ObservableProperty] private bool _gpuAvailable = true;
-    [ObservableProperty] private double _memoryPercent;
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(MemoryAutomationName))]
-    private string _memoryText = "-";
-
-    /// <summary>메모리 미터의 접근성 이름. 예: "메모리 8.1 GB / 15.7 GB (52%)".</summary>
-    public string MemoryAutomationName => $"{Loc.T("메모리", "Memory")} {MemoryText}";
-
-    /// <summary>측정값을 미터/문구 속성에 반영한다(UI 스레드).</summary>
-    private void ApplyUsage(SystemUsage u)
-    {
-        CpuPercent = u.CpuPercent;
-        CpuText = $"{u.CpuPercent:0}%";
-        GpuAvailable = u.GpuPercent is not null;
-        GpuPercent = u.GpuPercent ?? 0;
-        GpuText = FormatGpu(u.GpuPercent);
-        MemoryPercent = u.MemoryPercent;
-        MemoryText = $"{SizeFormatter.Format(u.MemoryUsedBytes)} / {SizeFormatter.Format(u.MemoryTotalBytes)} ({u.MemoryPercent:0}%)";
-        UsageText = FormatUsage(u);
-    }
-
-    // ----- 테마 / 정보 창 -----
+    // ----- 테마 -----
 
     /// <summary>현재 다크 테마인지(테마 버튼 아이콘/툴팁 선택용).</summary>
     [ObservableProperty]
@@ -190,188 +105,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _log.Info($"테마 변경: {Settings.Theme}");
     }
 
-    // ----- 설정 창 -----
-
-    /// <summary>화면 글자 크기. 바꾸면 즉시 반영되고 설정에 저장된다.</summary>
-    [ObservableProperty]
-    private double _uiFontSize;
-
-    /// <summary>터미널 글자 크기. 바꾸면 즉시 반영되고 설정에 저장된다.</summary>
-    [ObservableProperty]
-    private double _terminalFontSize;
-
-    /// <summary>시작 폴더: true면 마지막으로 열었던 폴더, false면 사용자 폴더.</summary>
-    [ObservableProperty]
-    private bool _startAtLastPath;
-
-    partial void OnStartAtLastPathChanged(bool value) => Settings.StartAtLastPath = value;
-
-    /// <summary>터미널 셸 선택(0=PowerShell, 1=명령 프롬프트). 다음 실행부터 적용된다.</summary>
-    [ObservableProperty]
-    private int _terminalShellIndex;
-
-    private bool _terminalStarted;
-    private bool _revertingShell;
-
-    partial void OnTerminalShellIndexChanged(int oldValue, int newValue)
-    {
-        if (_revertingShell)
-        {
-            return;
-        }
-        TerminalShell shell = newValue == 1 ? TerminalShell.CommandPrompt : TerminalShell.PowerShell;
-        if (_terminalStarted)
-        {
-            if (!Terminal.Session.IsIdle
-                && !_dialogs.Confirm(Loc.T("터미널 셸 변경", "Change terminal shell"), Loc.T("실행 중인 작업이 있습니다. 터미널을 새 셸로 다시 시작하면 종료됩니다. 계속할까요?", "A task is still running. Restarting the terminal with the new shell will end it. Continue?")))
-            {
-                // 콤보박스 갱신이 끝난 뒤 이전 값으로 되돌린다.
-                Application.Current.Dispatcher.BeginInvoke(() =>
-                {
-                    _revertingShell = true;
-                    TerminalShellIndex = oldValue;
-                    _revertingShell = false;
-                });
-                return;
-            }
-            Terminal.RestartShell(Terminal.CurrentPath ?? Explorer.CurrentPath, shell);
-        }
-        Settings.TerminalShell = shell;
-    }
-
-    /// <summary>설정 창 콤보박스에 보여줄 터미널 테마(TerminalThemes.All과 같은 순서).</summary>
-    public IReadOnlyList<TerminalThemeOption> TerminalThemeOptions { get; } = TerminalThemes.All.Select(t => new TerminalThemeOption(t)).ToList();
-
-    // ----- 언어 -----
-
-    /// <summary>설정 창의 언어 선택(0=한국어, 1=English). 바꾸면 화면 전체가 즉시 바뀌고 설정에 저장된다.</summary>
-    [ObservableProperty]
-    private int _languageIndex;
-
-    partial void OnLanguageIndexChanged(int value)
-    {
-        AppLanguage language = value == 1 ? AppLanguage.English : AppLanguage.Korean;
-        Settings.Language = Loc.ToCode(language);
-        Loc.SetLanguage(language);
-    }
-
-    /// <summary>언어가 바뀌면 코드에서 만든 문구(속성, 목록 항목)를 새 언어로 다시 읽게 한다. XAML 문구는 LocSource가 따로 갱신한다.</summary>
-    private void OnLanguageChanged()
-    {
-        LanguageIndex = Loc.Current == AppLanguage.English ? 1 : 0; // 코드에서 언어를 바꾼 경우에도 설정 창 선택을 맞춘다.
-        foreach (SyncModeOption option in SyncModes)
-        {
-            option.RefreshLabel();
-        }
-        foreach (TerminalThemeOption option in TerminalThemeOptions)
-        {
-            option.RefreshName();
-        }
-        OnPropertyChanged(string.Empty); // 이 ViewModel의 모든 바인딩(SyncSummary, 테마 툴팁 등)을 다시 읽는다.
-        Explorer.RefreshLanguage();
-        Terminal.RefreshLanguage();
-        foreach (DriveItemViewModel drive in Drives)
-        {
-            drive.RefreshLanguage();
-        }
-        foreach (FavoriteSlotViewModel slot in Favorites)
-        {
-            slot.RefreshLanguage();
-        }
-    }
-
-    [ObservableProperty]
-    private int _terminalThemeIndex;
-
-    /// <summary>터미널 글자색(#RRGGBB). 비우면 테마 기본값.</summary>
-    [ObservableProperty]
-    private string _terminalForeground = string.Empty;
-
-    /// <summary>터미널 배경색(#RRGGBB). 비우면 테마 기본값.</summary>
-    [ObservableProperty]
-    private string _terminalBackground = string.Empty;
-
-    partial void OnTerminalThemeIndexChanged(int value) => ApplyTerminalColors();
-
-    partial void OnTerminalForegroundChanged(string value)
-    {
-        ApplyTerminalColors();
-        OnPropertyChanged(nameof(ColorErrorText));
-        OnPropertyChanged(nameof(HasColorError));
-    }
-
-    partial void OnTerminalBackgroundChanged(string value)
-    {
-        ApplyTerminalColors();
-        OnPropertyChanged(nameof(ColorErrorText));
-        OnPropertyChanged(nameof(HasColorError));
-    }
-
-    /// <summary>글자색/배경색 입력이 #RRGGBB 형식이 아닐 때의 안내(올바르면 빈 문자열).</summary>
-    public string ColorErrorText
-    {
-        get
-        {
-            var bad = new List<string>();
-            if (!string.IsNullOrWhiteSpace(TerminalForeground) && TerminalThemes.TryParseColor(TerminalForeground) is null)
-            {
-                bad.Add(Loc.T("글자색", "Text color"));
-            }
-            if (!string.IsNullOrWhiteSpace(TerminalBackground) && TerminalThemes.TryParseColor(TerminalBackground) is null)
-            {
-                bad.Add(Loc.T("배경색", "Background color"));
-            }
-            return bad.Count == 0 ? string.Empty : Loc.T(
-                $"{string.Join("·", bad)} 형식이 올바르지 않습니다. #RRGGBB 형식(예: #FFD700)으로 입력하세요. 그 전까지는 테마 색을 씁니다.",
-                $"{string.Join(", ", bad)}: invalid format. Enter it as #RRGGBB (for example #FFD700). Until then the theme color is used.");
-        }
-    }
-
-    public bool HasColorError => ColorErrorText.Length > 0;
-
-    private void ApplyTerminalColors()
-    {
-        int index = Math.Clamp(TerminalThemeIndex, 0, TerminalThemes.All.Count - 1);
-        Settings.TerminalTheme = TerminalThemes.All[index].Key;
-        Settings.TerminalForeground = TerminalForeground;
-        Settings.TerminalBackground = TerminalBackground;
-        Terminal.ColorScheme = TerminalThemes.Resolve(Settings.TerminalTheme, TerminalForeground, TerminalBackground);
-        OnPropertyChanged(nameof(TerminalForegroundPreview));
-        OnPropertyChanged(nameof(TerminalBackgroundPreview));
-    }
-
-    /// <summary>설정 창 색 입력 옆 미리보기: 지금 터미널에 적용되는 글자색/배경색(비었거나 잘못되면 테마 기본값).</summary>
-    public System.Windows.Media.Brush TerminalForegroundPreview => PreviewBrush(Terminal.ColorScheme.Foreground);
-
-    public System.Windows.Media.Brush TerminalBackgroundPreview => PreviewBrush(Terminal.ColorScheme.Background);
-
-    private static System.Windows.Media.Brush PreviewBrush(uint argb)
-    {
-        var brush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb((byte)(argb >> 16), (byte)(argb >> 8), (byte)argb));
-        brush.Freeze();
-        return brush;
-    }
-
-    /// <summary>터미널 색을 기본 테마로 되돌린다.</summary>
-    [RelayCommand]
-    private void ResetTerminalColors()
-    {
-        TerminalThemeIndex = 0;
-        TerminalForeground = string.Empty;
-        TerminalBackground = string.Empty;
-    }
-
-    partial void OnUiFontSizeChanged(double value)
-    {
-        Settings.UiFontSize = Services.FontService.NormalizeUi(value);
-        Services.FontService.ApplyUi(Settings.UiFontSize);
-    }
-
-    partial void OnTerminalFontSizeChanged(double value)
-    {
-        Settings.TerminalFontSize = Services.FontService.NormalizeTerminal(value);
-        Terminal.FontSize = Settings.TerminalFontSize;
-    }
+    // ----- 제목 표시줄 명령 -----
 
     /// <summary>제목 표시줄 계산기 버튼: Windows 계산기를 연다.</summary>
     [RelayCommand]
@@ -383,11 +117,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         try
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("calc.exe") { UseShellExecute = true })?.Dispose();
+            // 전체 경로로 실행한다(이름만 주면 앱 폴더 등에서 같은 이름의 파일을 먼저 찾을 수 있다 - 이 앱은 관리자 권한).
+            string calc = Path.Combine(Environment.SystemDirectory, "calc.exe");
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(calc) { UseShellExecute = true })?.Dispose();
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
-            InfoMessage = Loc.T($"계산기를 열 수 없습니다: {ex.Message}", $"Could not open Calculator: {ex.Message}");
+            Info.Show(Loc.T($"계산기를 열 수 없습니다: {ex.Message}", $"Could not open Calculator: {ex.Message}"));
         }
     }
 
@@ -398,7 +134,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         (long Items, long Bytes)? content = await Task.Run(Services.RecycleBinService.Query);
         if (content is { Items: 0 })
         {
-            NotifySuccess(Loc.T("휴지통이 이미 비어 있습니다.", "The Recycle Bin is already empty."));
+            Info.ShowSuccess(Loc.T("휴지통이 이미 비어 있습니다.", "The Recycle Bin is already empty."));
             return;
         }
         string what = content is { } c
@@ -412,91 +148,52 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             await Task.Run(Services.RecycleBinService.Empty);
-            NotifySuccess(Loc.T("휴지통을 비웠습니다.", "The Recycle Bin has been emptied."));
+            Info.ShowSuccess(Loc.T("휴지통을 비웠습니다.", "The Recycle Bin has been emptied."));
             _log.Info("휴지통 비움");
         }
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or System.ComponentModel.Win32Exception)
         {
             _log.Warn($"휴지통 비우기 실패: {ex.Message}");
-            InfoMessage = Loc.T($"휴지통을 비우지 못했습니다: {ex.Message}", $"Could not empty the Recycle Bin: {ex.Message}");
+            Info.Show(Loc.T($"휴지통을 비우지 못했습니다: {ex.Message}", $"Could not empty the Recycle Bin: {ex.Message}"));
         }
     }
 
     /// <summary>제목 표시줄 톱니 버튼: 설정 창.</summary>
     [RelayCommand]
-    private void ShowSettings() => _dialogs.ShowSettings(this);
-
-    /// <summary>글자 크기를 기본값으로 되돌린다.</summary>
-    [RelayCommand]
-    private void ResetFonts()
-    {
-        UiFontSize = AppSettings.DefaultUiFontSize;
-        TerminalFontSize = AppSettings.DefaultTerminalFontSize;
-    }
-
-    /// <summary>즐겨찾기 10칸을 모두 비운다(확인 후).</summary>
-    [RelayCommand]
-    private void ResetFavorites()
-    {
-        if (!_dialogs.Confirm(Loc.T("즐겨찾기 초기화", "Reset favorites"), Loc.T("등록된 즐겨찾기를 모두 비웁니다. 계속할까요?", "This clears all registered favorites. Continue?")))
-        {
-            return;
-        }
-        foreach (FavoriteSlotViewModel slot in Favorites)
-        {
-            slot.Path = string.Empty;
-            slot.Name = string.Empty;
-        }
-        _log.Info("즐겨찾기 전체 초기화");
-    }
+    private void ShowSettings() => _dialogs.ShowSettings(Preferences);
 
     /// <summary>제목 표시줄 로고 클릭: 프로그램 정보 창.</summary>
     [RelayCommand]
     private void ShowAbout() => _dialogs.ShowAbout();
 
-    /// <summary>상태 표시줄 왼쪽에 보이는 동기화 요약. 예: "경로 동기화: 양방향".</summary>
-    public string SyncSummary => $"{Loc.T("경로 동기화", "Path sync")}: {SelectedSyncMode.Label}";
+    // ----- 조립 -----
 
-    private static string FormatGpu(double? percent) => percent is { } g ? $"{g:0}%" : "N/A";
-
-    /// <summary>측정값을 표시 문구로 바꾼다. GPU 카운터가 없는 환경이면 "N/A".</summary>
-    public static string FormatUsage(SystemUsage u)
-    {
-        return $"CPU {u.CpuPercent:0}% | GPU {FormatGpu(u.GpuPercent)} | {Loc.T("메모리", "Memory")} {SizeFormatter.Format(u.MemoryUsedBytes)} / {SizeFormatter.Format(u.MemoryTotalBytes)} ({u.MemoryPercent:0}%)";
-    }
-
-    public MainViewModel(SettingsService settingsService, FolderSizeCache sizeCache, ILog log)
+    /// <param name="progress">시작 중 로딩 팝업에 보여줄 "지금 하는 일" 문구를 받는 콜백(선택, UI 스레드에서 호출).</param>
+    /// <param name="dialogs">대화상자 구현(없으면 WPF 구현). 시험에서 바꿔 끼울 수 있다.</param>
+    public MainViewModel(SettingsService settingsService, FolderSizeCache sizeCache, ILog log, Action<string>? progress = null, Services.IDialogService? dialogs = null)
     {
         _settingsService = settingsService;
         _sizeCache = sizeCache;
         _log = log;
+        _dialogs = dialogs ?? new Services.WpfDialogService();
         Settings = settingsService.Load();
 
+        progress?.Invoke(Loc.T("폴더 크기 캐시 불러오는 중...", "Loading folder size cache..."));
         _sizeCache.Load();
+        progress?.Invoke(Loc.T("탐색기와 터미널 준비 중...", "Preparing explorer and terminal..."));
+        Info = new InfoBarViewModel();
         Explorer = new ExplorerViewModel(log, _sizeCache, _dialogs);
-        Terminal = new TerminalViewModel(log, _dialogs);
+        Terminal = new TerminalViewModel(log, _dialogs) { StartDirectoryProvider = () => Explorer.CurrentPath };
+        Favorites = new FavoritesViewModel(Settings.Favorites, () => Explorer.CurrentPath, path => Explorer.NavigateTo(path, ChangeOrigin.User), _dialogs, log, SaveSettings);
+        Drives = new DrivesViewModel(log, path => Explorer.NavigateTo(path, ChangeOrigin.User), () => Explorer.CurrentPath);
+        Preferences = new SettingsViewModel(Settings, Terminal, Explorer, Favorites, _dialogs);
         _isDarkTheme = Services.ThemeService.Normalize(Settings.Theme) == Services.ThemeService.Dark;
-        _startAtLastPath = Settings.StartAtLastPath;
-        _terminalThemeIndex = Math.Max(0, TerminalThemes.All.ToList().FindIndex(t => t.Key == TerminalThemes.Find(Settings.TerminalTheme).Key));
-        _terminalForeground = Settings.TerminalForeground ?? string.Empty;
-        _terminalBackground = Settings.TerminalBackground ?? string.Empty;
-        Terminal.ColorScheme = TerminalThemes.Resolve(Settings.TerminalTheme, _terminalForeground, _terminalBackground);
-        _terminalShellIndex =Settings.TerminalShell == TerminalShell.CommandPrompt ? 1 : 0;
-        _uiFontSize = Services.FontService.NormalizeUi(Settings.UiFontSize);
-        _terminalFontSize = Services.FontService.NormalizeTerminal(Settings.TerminalFontSize);
-        Terminal.FontSize = _terminalFontSize;
         Terminal.IsCollapsed = Settings.TerminalCollapsed;
         _sync = new PathSyncService(Explorer, Terminal, log) { Mode = Settings.SyncMode };
         _selectedSyncMode = SyncModes.First(o => o.Mode == Settings.SyncMode);
-        _languageIndex = Loc.Current == AppLanguage.English ? 1 : 0;
         Loc.LanguageChanged += OnLanguageChanged;
-
-        BuildFavoriteSlots();
         WireEvents();
-
-        // 하단 시스템 사용량: 측정은 백그라운드 타이머에서, 표시 갱신은 UI 스레드에서.
-        _monitor = new SystemMonitor(log, MonitorIntervalMs);
-        _monitor.Updated += u => Application.Current?.Dispatcher.BeginInvoke(() => ApplyUsage(u));
+        Usage = new UsageViewModel(log); // 하단 시스템 사용량: 측정은 백그라운드 타이머에서, 표시 갱신은 UI 스레드에서.
     }
 
     /// <summary>탐색기·터미널·동기화 서비스의 이벤트를 서로 연결한다.</summary>
@@ -504,187 +201,86 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         Explorer.Navigated += (path, origin) =>
         {
-            ClearInfo();
+            Info.Clear();
             _sync.OnExplorerNavigated(path, origin);
-            MarkCurrentDrive(path);
-            _ = RefreshDrivesAsync();
+            Drives.MarkCurrent(path);
+            _ = Drives.RefreshAsync();
         };
-        Explorer.ErrorOccurred += msg => InfoMessage = msg;
+        Explorer.ErrorOccurred += Info.Show;
         Terminal.Notice += Notify;
-
         Terminal.CwdChanged += (path, fromRequest) =>
             _sync.OnTerminalCwdChanged(path, fromRequest ? ChangeOrigin.Sync : ChangeOrigin.User);
-        _sync.Warning += w => InfoMessage = w.Message;
+        _sync.Warning += w => Info.Show(w.Message);
     }
 
     private void Notify(string message, bool success)
     {
         if (success)
         {
-            NotifySuccess(message);
+            Info.ShowSuccess(message);
         }
         else
         {
-            InfoMessage = message;
+            Info.Show(message);
         }
     }
 
     /// <summary>시작 경로(마지막 경로 → 사용자 폴더)로 탐색기를 열고 터미널을 같은 경로에서 시작한다.</summary>
-    public void Initialize()
+    public void Initialize(Action<string>? progress = null)
     {
         string start = ResolveStartPath();
+        progress?.Invoke(Loc.T("폴더 목록 읽는 중...", "Reading folder contents..."));
         Explorer.NavigateTo(start, ChangeOrigin.Sync);
+        progress?.Invoke(Loc.T("터미널 시작 중...", "Starting terminal..."));
         Terminal.Start(Explorer.CurrentPath ?? start, Settings.TerminalShell);
-        _terminalStarted = true;
-        _ = RefreshDrivesAsync();
+        Preferences.TerminalStarted = true;
+        _ = Drives.RefreshAsync();
         _log.Info($"앱 시작: start={start}, mode={Settings.SyncMode}");
-    }
-
-    /// <summary>
-    /// 드라이브 목록과 용량을 백그라운드에서 읽어 갱신한다(네트워크 드라이브가 UI를 막지 않도록).
-    /// 이미 갱신 중이면 건너뛴다. 결과 적용은 UI 스레드(await 복귀 지점)에서 한다.
-    /// </summary>
-    private async Task RefreshDrivesAsync()
-    {
-        if (_drivesRefreshing)
-        {
-            return; // 진행 중인 갱신이 최신 용량을 가져오므로 중복 실행하지 않는다.
-        }
-        _drivesRefreshing = true;
-        try
-        {
-            List<Core.Explorer.DriveEntry> entries = await Task.Run(Core.Explorer.DriveService.List);
-            Drives.Clear();
-            foreach (var e in entries)
-            {
-                Drives.Add(new DriveItemViewModel(e, OnDriveClick));
-            }
-            MarkCurrentDrive(Explorer.CurrentPath);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            _log.Warn($"드라이브 목록 갱신 실패: {ex.Message}");
-        }
-        finally
-        {
-            _drivesRefreshing = false;
-        }
-    }
-
-    private void OnDriveClick(DriveItemViewModel drive)
-    {
-        Explorer.NavigateTo(drive.Root, ChangeOrigin.User);
-    }
-
-    /// <summary>현재 경로가 속한 드라이브만 강조한다.</summary>
-    private void MarkCurrentDrive(string? path)
-    {
-        string? root = Core.Explorer.DriveService.RootOf(path);
-        foreach (DriveItemViewModel d in Drives)
-        {
-            d.IsCurrent = root is not null && string.Equals(d.Root, root, StringComparison.OrdinalIgnoreCase);
-        }
     }
 
     private string ResolveStartPath()
     {
         string? last = PathNormalizer.Normalize(Settings.LastPath);
-        if (Settings.StartAtLastPath && last is not null && Directory.Exists(last))
+        // 마지막 경로가 꺼진 네트워크 공유면 확인이 OS 시간 제한까지(수십 초) UI 스레드를 막으므로 2초만 기다린다(그 안에 답이 없으면 사용자 폴더로 시작).
+        if (Settings.StartAtLastPath && last is not null && SafeIo.DirectoryExistsWithTimeout(last, StartPathCheckTimeout))
         {
             return last;
         }
         return Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
     }
 
-    partial void OnSelectedSyncModeChanged(SyncModeOption value)
+    /// <summary>언어가 바뀌면 코드에서 만든 문구(속성, 목록 항목)를 새 언어로 다시 읽게 한다. XAML 문구는 LocSource가 따로 갱신한다.</summary>
+    private void OnLanguageChanged()
     {
-        _sync.Mode = value.Mode;
-        Settings.SyncMode = value.Mode;
-        _log.Info($"동기화 모드 변경: {value.Mode}");
+        foreach (SyncModeOption option in SyncModes)
+        {
+            option.RefreshLabel();
+        }
+        OnPropertyChanged(string.Empty); // 이 ViewModel의 모든 바인딩(SyncSummary, 테마 툴팁 등)을 다시 읽는다.
+        Preferences.RefreshLanguage();
+        Explorer.RefreshLanguage();
+        Terminal.RefreshLanguage();
+        Drives.RefreshLanguage();
+        Favorites.RefreshLanguage();
+        Usage.RefreshLanguage();
+        Info.RefreshLanguage();
     }
 
-    [RelayCommand]
-    private void ClearInfo() => InfoMessage = string.Empty;
-
-    private void BuildFavoriteSlots()
+    /// <summary>
+    /// 처리되지 않은 예외를 사용자에게 알린다(앱은 계속 실행). 예외는 호출 측(App)이 이미 로그에 남겼다.
+    /// 상태가 어긋났을 수 있으므로 알림에 로그 확인을 안내한다.
+    /// </summary>
+    public void ReportUnexpectedError(Exception ex)
     {
-        for (int i = 0; i < AppSettings.MaxFavorites; i++)
-        {
-            var slot = new FavoriteSlotViewModel(i + 1, OnFavoriteClick, RegisterCurrentFolder, ClearFavorite, RenameFavorite, MoveFavorite);
-            if (i < Settings.Favorites.Count)
-            {
-                slot.Name = Settings.Favorites[i].Name;
-                slot.Path = Settings.Favorites[i].Path;
-            }
-            Favorites.Add(slot);
-        }
+        Info.Show(Loc.T(
+            $"예기치 않은 오류가 발생했지만 계속 실행합니다. 문제가 반복되면 로그를 확인하세요: {ex.Message}",
+            $"An unexpected error occurred, but the app keeps running. If it keeps happening, check the log: {ex.Message}"));
     }
 
-    /// <summary>즐겨찾기 클릭: 등록된 칸이면 이동, 빈 칸이면 현재 폴더를 등록한다.</summary>
-    private void OnFavoriteClick(FavoriteSlotViewModel slot)
-    {
-        if (slot.IsEmpty)
-        {
-            RegisterCurrentFolder(slot);
-        }
-        else
-        {
-            Explorer.NavigateTo(slot.Path, ChangeOrigin.User);
-        }
-    }
-
-    private void RegisterCurrentFolder(FavoriteSlotViewModel slot)
-    {
-        string? current = Explorer.CurrentPath;
-        if (current is null)
-        {
-            return;
-        }
-        slot.Path = current;
-        slot.Name = Path.GetFileName(current) is { Length: > 0 } n ? n : current;
-        _log.Info($"즐겨찾기 등록 #{slot.Index}: {current}");
-    }
-
-    /// <summary>즐겨찾기 표시 이름을 바꾼다(경로는 그대로). 같은 이름의 폴더를 구분할 때 쓴다.</summary>
-    private void RenameFavorite(FavoriteSlotViewModel slot)
-    {
-        if (slot.IsEmpty)
-        {
-            return;
-        }
-        string? name = _dialogs.Prompt(Loc.T("즐겨찾기 이름 변경", "Rename favorite"), Loc.T("표시할 이름을 입력하세요.", "Enter the name to display."), slot.Name);
-        if (name is not null)
-        {
-            slot.Name = name;
-        }
-    }
-
-    /// <summary>칸의 내용(이름+경로)을 옆 칸과 맞바꿔 순서를 바꾼다. 끝 칸에서는 아무것도 하지 않는다.</summary>
-    private void MoveFavorite(FavoriteSlotViewModel slot, int delta)
-    {
-        int to = slot.Index - 1 + delta;
-        if (to < 0 || to >= Favorites.Count)
-        {
-            return;
-        }
-        FavoriteSlotViewModel other = Favorites[to];
-        (slot.Name, other.Name) = (other.Name, slot.Name);
-        (slot.Path, other.Path) = (other.Path, slot.Path);
-    }
-
-    private void ClearFavorite(FavoriteSlotViewModel slot)
-    {
-        slot.Path = string.Empty;
-        slot.Name = string.Empty;
-        _log.Info($"즐겨찾기 삭제 #{slot.Index}");
-    }
-
-    /// <summary>창 종료 시 호출: 현재 상태를 설정에 반영해 저장한다.</summary>
+    /// <summary>현재 상태(즐겨찾기, 마지막 경로, 터미널 접힘)를 설정에 반영해 저장한다. 창 종료 때와 즐겨찾기가 바뀔 때 호출된다.</summary>
     public void SaveSettings()
     {
-        Settings.Favorites = Favorites
-            .Select(f => new FavoriteEntry { Name = f.Name, Path = f.Path })
-            .ToList();
+        Settings.Favorites = Favorites.ToEntries();
         Settings.LastPath = Explorer.CurrentPath ?? string.Empty;
         Settings.TerminalCollapsed = Terminal.IsCollapsed;
         _settingsService.Save(Settings);
@@ -695,7 +291,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         Loc.LanguageChanged -= OnLanguageChanged;
-        _monitor.Dispose();
+        Usage.Dispose();
         Terminal.Dispose();
     }
 }

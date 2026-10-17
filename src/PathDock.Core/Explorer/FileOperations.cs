@@ -1,5 +1,6 @@
 using Microsoft.VisualBasic.FileIO;
 using PathDock.Core.Localization;
+using PathDock.Core.Paths;
 
 namespace PathDock.Core.Explorer;
 
@@ -28,7 +29,29 @@ public static class FileOperations
         {
             return Loc.T("이름은 마침표나 공백으로 끝날 수 없습니다.", "A name cannot end with a period or a space.");
         }
+        if (IsReservedDeviceName(name))
+        {
+            return Loc.T("Windows 예약 이름(CON, PRN, AUX, NUL, COM1~9, LPT1~9)은 쓸 수 없습니다.", "Windows reserved names (CON, PRN, AUX, NUL, COM1-9, LPT1-9) cannot be used.");
+        }
         return null;
+    }
+
+    private static readonly HashSet<string> ReservedDeviceNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$",
+        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    };
+
+    /// <summary>
+    /// 장치 이름(CON, NUL, COM1 등)인지. 첫 마침표 앞 부분만 보므로 "con.txt"도 해당한다.
+    /// 이런 이름의 폴더/파일은 만들어져도 탐색기 등에서 열거나 지우기 어렵다.
+    /// </summary>
+    public static bool IsReservedDeviceName(string name)
+    {
+        int dot = name.IndexOf('.');
+        string stem = (dot < 0 ? name : name[..dot]).TrimEnd(' ');
+        return ReservedDeviceNames.Contains(stem);
     }
 
     /// <summary>이름을 바꾸고 새 전체 경로를 돌려준다. 같은 이름이 이미 있으면(대소문자만 다른 자기 자신 제외) 실패.</summary>
@@ -134,15 +157,20 @@ public static class FileOperations
 
     private static bool IsSameOrInside(string path, string folder)
     {
-        string p = Path.GetFullPath(path).TrimEnd('\\', '/');
-        string f = Path.GetFullPath(folder).TrimEnd('\\', '/');
+        // 링크(정션/심볼릭 링크)를 모두 풀어낸 실제 위치로 비교한다: 자기 자신 안을 가리키는 링크로 우회하면 복사가 끝없이 이어진다.
+        string p = SafeIo.RealPath(path).TrimEnd('\\', '/');
+        string f = SafeIo.RealPath(folder).TrimEnd('\\', '/');
         return string.Equals(p, f, StringComparison.OrdinalIgnoreCase)
             || p.StartsWith(f + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>파일/폴더를 대상 폴더로 복사하고 새 경로를 돌려준다. 같은 이름이 있으면 "- 복사" 이름으로 만든다. 폴더는 재분석 지점(링크)을 따라가지 않는다.</summary>
-    public static string CopyInto(string source, string destDir)
+    public static string CopyInto(string source, string destDir) => CopyIntoCore(source, destDir, out _);
+
+    /// <summary>복사 본체. <paramref name="skippedLinks"/>는 폴더 안의 링크(정션/심볼릭 링크)를 따라가지 않고 건너뛰었는지(원본 삭제 여부 판단용).</summary>
+    private static string CopyIntoCore(string source, string destDir, out bool skippedLinks)
     {
+        skippedLinks = false;
         bool isDir = Directory.Exists(source);
         if (!isDir && !File.Exists(source))
         {
@@ -155,7 +183,7 @@ public static class FileOperations
         string target = UniqueTargetPath(destDir, Path.GetFileName(source.TrimEnd('\\', '/')), isDir);
         if (isDir)
         {
-            CopyDirectory(source, target);
+            CopyDirectory(source, target, ref skippedLinks);
         }
         else
         {
@@ -164,7 +192,7 @@ public static class FileOperations
         return target;
     }
 
-    private static void CopyDirectory(string source, string target)
+    private static void CopyDirectory(string source, string target, ref bool skippedLinks)
     {
         Directory.CreateDirectory(target);
         foreach (string file in Directory.EnumerateFiles(source))
@@ -175,9 +203,10 @@ public static class FileOperations
         {
             if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0)
             {
+                skippedLinks = true;
                 continue; // 링크/정션은 따라가지 않는다(순환 방지).
             }
-            CopyDirectory(dir, Path.Combine(target, Path.GetFileName(dir)));
+            CopyDirectory(dir, Path.Combine(target, Path.GetFileName(dir)), ref skippedLinks);
         }
     }
 
@@ -208,7 +237,14 @@ public static class FileOperations
             Move(source, target, isDir);
             return target;
         }
-        string copied = CopyInto(source, destDir);
+        string copied = CopyIntoCore(source, destDir, out bool skippedLinks);
+        if (skippedLinks)
+        {
+            // 복사에서 건너뛴 링크가 있다: 원본을 지우면 그 링크가 사라지므로(복사본에는 없다) 원본을 남기고 알린다.
+            throw new IOException(Loc.T(
+                $"폴더 안에 링크(정션/심볼릭 링크)가 있어 복사만 하고 원본은 지우지 않았습니다: {copied}",
+                $"The folder contains links (junctions/symbolic links), so it was copied but the original was not deleted: {copied}"));
+        }
         if (isDir)
         {
             Directory.Delete(source, recursive: true);
@@ -241,16 +277,20 @@ public static class FileOperations
         }
     }
 
-    /// <summary>휴지통으로 보낸다(영구 삭제 아님 - 복구 가능). 확인 창/진행 창은 띄우지 않는다.</summary>
+    /// <summary>
+    /// 휴지통으로 보낸다. Windows 대화상자를 허용한다(<see cref="UIOption.AllDialogs"/>): 휴지통 용량을 넘거나 휴지통이 꺼진 드라이브라서
+    /// 영구 삭제가 되는 경우 Windows가 직접 확인을 묻는다. <c>OnlyErrorDialogs</c>(NOCONFIRMATION)는 그런 확인을 자동으로 "예"로 답해
+    /// 앱의 "휴지통으로 보낼까요?" 안내와 달리 조용히 영구 삭제될 수 있다. 사용자가 취소하면 OperationCanceledException.
+    /// </summary>
     public static void DeleteToRecycleBin(string path)
     {
         if (Directory.Exists(path))
         {
-            FileSystem.DeleteDirectory(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin, UICancelOption.ThrowException);
+            FileSystem.DeleteDirectory(path, UIOption.AllDialogs, RecycleOption.SendToRecycleBin, UICancelOption.ThrowException);
         }
         else if (File.Exists(path))
         {
-            FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin, UICancelOption.ThrowException);
+            FileSystem.DeleteFile(path, UIOption.AllDialogs, RecycleOption.SendToRecycleBin, UICancelOption.ThrowException);
         }
         else
         {

@@ -25,6 +25,10 @@ public sealed class AppDriver : IDisposable
         Window = window;
     }
 
+
+    public const string MainWindowTitle = "PathDock";
+    public const string SplashWindowTitle = "PathDock Loading";
+
     /// <summary>앱 실행 파일 위치. 하네스 출력 폴더에서 위로 올라가며 src 아래의 PathDock.App 빌드 결과(플랫폼/대상 프레임워크 폴더 이름이 바뀌어도 찾도록 후보를 확인)를 찾는다.</summary>
     public static string AppExePath
     {
@@ -65,12 +69,13 @@ public sealed class AppDriver : IDisposable
             // 데스크톱 전체를 UIA로 훑으면 최상위 창이 많을 때 매우 느리고 불안정하므로, 프로세스의 메인 창 핸들에서 바로 요소를 얻는다.
             WaitUntil(() =>
             {
-                p.Refresh();
-                if (p.MainWindowHandle == IntPtr.Zero)
+                // 메인 창 제목은 "PathDock". 시작 중 로딩 팝업("PathDock Loading")이 먼저 뜨므로 Process.MainWindowHandle 대신 제목으로 찾는다.
+                IntPtr hwnd = Native.FindWindowByTitle(p.Id, MainWindowTitle);
+                if (hwnd == IntPtr.Zero)
                 {
                     return false;
                 }
-                window = AutomationElement.FromHandle(p.MainWindowHandle);
+                window = AutomationElement.FromHandle(hwnd);
                 return true;
             }, DefaultTimeoutMs, p.HasExited ? $"앱이 시작 직후 종료됨(코드 {p.ExitCode})" : "메인 창이 뜨지 않음");
             var driver = new AppDriver(p, dataDir, window!);
@@ -126,6 +131,10 @@ public sealed class AppDriver : IDisposable
         return e!;
     }
 
+    /// <summary>요소가 지금 UIA 트리에 있는지(기다리지 않는다). 숨겨진(Collapsed) 요소는 트리에 없다.</summary>
+    public bool Exists(string automationId) =>
+        Window.FindFirst(TreeScope.Descendants, new PropertyCondition(AutomationElement.AutomationIdProperty, automationId)) is not null;
+
     public void Click(string automationId)
     {
         AutomationElement e = Find(automationId);
@@ -178,6 +187,66 @@ public sealed class AppDriver : IDisposable
         ((SelectionItemPattern)item!.GetCurrentPattern(SelectionItemPattern.Pattern)).Select();
         try { expand.Collapse(); } catch (InvalidOperationException) { }
     }
+
+    /// <summary>콤보박스(AutomationId)의 index번째 항목을 선택한다(항목 이름이 언어/설정에 따라 바뀌는 콤보에 쓴다).</summary>
+    public void SelectComboItemByIndex(string comboId, int index)
+    {
+        AutomationElement combo = Find(comboId);
+        var expand = (ExpandCollapsePattern)combo.GetCurrentPattern(ExpandCollapsePattern.Pattern);
+        expand.Expand();
+        AutomationElement? item = null;
+        WaitUntil(() =>
+        {
+            AutomationElementCollection items = combo.FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem));
+            item = items.Count > index ? items[index] : null;
+            return item is not null;
+        }, DefaultTimeoutMs, $"콤보박스 항목 없음: {comboId}[{index}]");
+        ((SelectionItemPattern)item!.GetCurrentPattern(SelectionItemPattern.Pattern)).Select();
+        try { expand.Collapse(); } catch (InvalidOperationException) { }
+    }
+
+    /// <summary>슬라이더(AutomationId)의 값을 설정한다.</summary>
+    public void SetSlider(string sliderId, double value)
+    {
+        ((RangeValuePattern)Find(sliderId).GetCurrentPattern(RangeValuePattern.Pattern)).SetValue(value);
+    }
+
+    /// <summary>입력칸(AutomationId)에 글자를 넣는다.</summary>
+    public void SetText(string textBoxId, string value)
+    {
+        ((ValuePattern)Find(textBoxId).GetCurrentPattern(ValuePattern.Pattern)).SetValue(value);
+    }
+
+    /// <summary>화면의 어떤 글자 요소에 <paramref name="fragment"/>가 들어 있는지(알림 막대처럼 AutomationId로 못 찾는 문구 확인용).</summary>
+    public bool AnyTextContains(string fragment)
+    {
+        foreach (AutomationElement e in Window.FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Text)))
+        {
+            if (e.Current.Name.Contains(fragment, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>체크박스(AutomationId)의 현재 선택 상태.</summary>
+    public bool IsChecked(string checkBoxId) =>
+        ((TogglePattern)Find(checkBoxId).GetCurrentPattern(TogglePattern.Pattern)).Current.ToggleState == ToggleState.On;
+
+    public void Toggle(string checkBoxId)
+    {
+        ((TogglePattern)Find(checkBoxId).GetCurrentPattern(TogglePattern.Pattern)).Toggle();
+    }
+
+    /// <summary>제목 표시줄의 설정 버튼으로 설정 창을 연다(모달).</summary>
+    public void OpenSettings() => Click("SettingsButton");
+
+    /// <summary>설정 창을 닫는다.</summary>
+    public void CloseSettings() => Click("SettingsCloseButton");
+
+    /// <summary>앱이 종료된 뒤 데이터 폴더의 settings.json 내용.</summary>
+    public string ReadSettingsJson() => File.ReadAllText(Path.Combine(DataDir, "settings.json"));
 
     public string SelectedSyncModeName()
     {
@@ -359,10 +428,29 @@ public sealed class AppDriver : IDisposable
         return list.FindFirst(TreeScope.Descendants, new PropertyCondition(AutomationElement.NameProperty, name)) is not null;
     }
 
+    /// <summary>메인 창에 닫기를 요청만 한다(종료를 기다리지 않는다). 종료 확인 창이 뜨는 경우를 시험할 때 쓴다.</summary>
+    public void RequestClose()
+    {
+        IntPtr main = Native.FindWindowByTitle(_process.Id, MainWindowTitle);
+        if (main == IntPtr.Zero || !Native.RequestClose(main))
+        {
+            _process.CloseMainWindow();
+        }
+    }
+
+    public bool HasExited => _process.HasExited;
+
+    public bool WaitForExit(int timeoutMs) => _process.WaitForExit(timeoutMs);
+
     /// <summary>창을 정상 종료(설정 저장 경로를 타도록 CloseMainWindow)하고 종료를 기다린다.</summary>
     public void CloseGracefully()
     {
-        _process.CloseMainWindow();
+        // 시작 직후에는 로딩 팝업이 떠 있을 수 있어 Process.CloseMainWindow 대신 메인 창을 제목으로 찾아 닫는다.
+        IntPtr main = Native.FindWindowByTitle(_process.Id, MainWindowTitle);
+        if (main == IntPtr.Zero || !Native.RequestClose(main))
+        {
+            _process.CloseMainWindow();
+        }
         if (!_process.WaitForExit(15000))
         {
             throw new TestFailedException("앱이 정상 종료하지 않음");

@@ -86,7 +86,7 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
 
     // 폴더 크기 계산/상위 열 로딩을 이동마다 취소·무효화하기 위한 토큰. UI 스레드에서만 접근.
     private CancellationTokenSource? _backgroundCts;
-    private const int SizeWorkers = 3;
+    private const int SizeWorkers = 2; // 큰 폴더를 훑는 동안 UI와 다른 프로그램에 CPU/디스크를 덜 쓰도록 동시 수를 낮게 유지한다.
     private const int ErrorCancelled = 1223; // ERROR_CANCELLED
     private readonly FolderSizeCache _cache;
     // 새로 고침 버튼으로 요청한 강제 재계산 표시(다음 StartBackgroundWork에서 소비).
@@ -294,7 +294,7 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
             }
             try
             {
-                FolderStats stats = await Task.Run(() => FolderSizeCalculator.Calculate(d.FullPath, ct), ct);
+                FolderStats stats = await Task.Run(() => CalculateAtLowPriority(d.FullPath, ct), ct);
                 ct.ThrowIfCancellationRequested(); // 계산이 끝난 직후 다른 폴더로 이동했다면 오래된 결과로 요약을 덮어쓰지 않는다.
                 _cache.Store(d.FullPath, stats);
                 d.SetStats(stats);
@@ -312,6 +312,22 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
         }).ToList();
         await Task.WhenAll(tasks);
     }
+    /// <summary>폴더 크기 집계를 낮은 우선순위로 실행한다(스레드 풀 스레드라 끝나면 원래 우선순위로 되돌린다).</summary>
+    private static FolderStats CalculateAtLowPriority(string path, CancellationToken ct)
+    {
+        Thread thread = Thread.CurrentThread;
+        ThreadPriority original = thread.Priority;
+        thread.Priority = ThreadPriority.BelowNormal;
+        try
+        {
+            return FolderSizeCalculator.Calculate(path, ct);
+        }
+        finally
+        {
+            thread.Priority = original;
+        }
+    }
+
     /// <summary>요약 줄 갱신. 폴더 크기 계산이 끝나지 않았으면 진행 상황을 함께 표시한다.</summary>
     private void UpdateSummary(List<FileItemViewModel> snapshot, int dirsDone)
     {
