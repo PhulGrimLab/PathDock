@@ -57,6 +57,7 @@ It runs as administrator (a UAC prompt appears). Unsigned builds may trigger a S
   결과는 30분 동안 캐시되며, 새로 고침 버튼은 캐시를 무시하고 다시 계산합니다.
 - **이름 검색**: 현재 폴더 열 머리글의 검색 입력칸(Ctrl+F)에 입력하면 이름으로 걸러지고 일치 개수가 표시됩니다. Esc로 해제합니다.
 - **미리보기**: 이미지(png/jpg/gif/bmp/ico/tif/webp)는 썸네일, PDF는 첫 쪽, 텍스트/소스 파일은 앞 20줄을 툴팁으로 보여줍니다.
+- **새로 고침 버튼**: 현재 폴더 머리글의 이름 검색 입력칸 앞에 있는 작은 버튼으로 F5와 같습니다(폴더 크기도 다시 계산).
 - **경로 복사 버튼**: 주소 표시줄 맨 오른쪽 버튼으로 현재 경로를 클립보드에 복사합니다(복사되면 아이콘이 잠깐 체크로 바뀜).
 - **숨김 파일**: 기본은 숨김·시스템 항목을 감춥니다. Ctrl+H(또는 우클릭 메뉴)로 보이게 하면 `.git`, `.vs` 같은 폴더가 흐리게 나타나고, 설정은 다음 실행에도 유지됩니다.
 - **복사/이동 진행 표시**: 큰 파일·폴더를 붙여넣거나 끌어 놓을 때 0.3초 넘게 걸리면 목록 아래에 진행 막대(복사한 크기/전체, %)와 **취소** 버튼이 나옵니다. 취소하면 이미 끝난 항목은 남고 복사 중이던 항목의 반쪽 결과는 지워집니다.
@@ -129,7 +130,7 @@ It runs as administrator (a UAC prompt appears). Unsigned builds may trigger a S
 
 ## 빌드 · 실행 · 테스트
 - 실행: `dotnet run --project src/PathDock.App`
-- 테스트: `doc\run_tests.ps1` (MSTest 232개), `doc\run_ui_tests.ps1` (UI Automation 41개, 실행 중 마우스/키보드 금지)
+- 테스트: `doc\run_tests.ps1` (MSTest 232개), `doc\run_ui_tests.ps1` (UI Automation 42개, 실행 중 마우스/키보드 금지)
 - 배포: Release 빌드 시 `publish\Release\PathDock.App.exe` 단일 파일이 만들어집니다. `v*` 태그를 푸시하면 GitHub Actions가 테스트 → 빌드 → GitHub Release를 만듭니다.
 
 ## 라이선스

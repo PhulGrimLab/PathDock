@@ -183,6 +183,17 @@ var tests = new List<(string Name, Action Body)>
         app.WaitUntil(() => app.ListContains("made_by_test"), "목록에 새 폴더가 보이지 않음");
     }),
 
+    ("Explorer_ListRefreshButton_PicksUpNewFile", () =>
+    {
+        string a = MakeDir("pdA_listrefresh");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        app.WaitUntil(() => app.Exists("ListRefreshButton"), "목록 머리글의 새로 고침 버튼이 없음");
+        File.WriteAllText(Path.Combine(a, "made_outside_pd.txt"), "x");
+        if (app.ListContains("made_outside_pd.txt")) throw new TestFailedException("새로 고침 전에 이미 보임(테스트 전제 오류)");
+        app.Click("ListRefreshButton");
+        app.WaitUntil(() => app.ListContains("made_outside_pd.txt"), "새로 고침 버튼을 눌러도 새 파일이 보이지 않음");
+    }),
+
     ("Explorer_CtrlH_TogglesHiddenFiles_AndPersists", () =>
     {
         string a = MakeDir("pdA_hid");
