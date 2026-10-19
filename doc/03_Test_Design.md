@@ -4,7 +4,7 @@
 
 ## 1. PathDock.Tests (MSTest, net10.0-windows)
 
-현재 **208개**(2026-10-16 전부 통과, Core 줄 커버리지 91.8% / 분기 88.0%). 파일: `CoreLogicTests.cs`(핵심 로직 다수), `TerminalSessionTests.cs`(ConPTY 통합), `TerminalTabTitleTests.cs`(탭 제목 규칙), `TerminalSecurityTests.cs`·`HardeningTests.cs`(보안 회귀), `TerminalParserTests.cs`(VT 파서·화면 버퍼), `SettingsRobustnessTests.cs`(손상된 설정), `TerminalThemeTests.cs`,
+현재 **232개**(1개는 다른 드라이브가 없으면 건너뜀)(2026-10-19 전부 통과; Core 줄 커버리지 91.8% / 분기 88.0%는 10-16 측정값). 파일: `HiddenFilesTests.cs`(숨김 파일 표시), `FileOperationProgressTests.cs`(복사/이동 진행 보고·취소·반쪽 파일 정리), `DropRulesTests.cs`(끌어 놓기 규칙), `TerminalPathTextTests.cs`(터미널 입력용 경로 따옴표·제어 문자 거부), `CoreLogicTests.cs`(핵심 로직 다수), `TerminalSessionTests.cs`(ConPTY 통합), `TerminalTabTitleTests.cs`(탭 제목 규칙), `TerminalSecurityTests.cs`·`HardeningTests.cs`(보안 회귀), `TerminalParserTests.cs`(VT 파서·화면 버퍼), `SettingsRobustnessTests.cs`(손상된 설정), `TerminalThemeTests.cs`,
 `LocTests.cs`(언어), `TextPreviewerTests.cs`, `ImagePreviewTypesTests.cs`.
 
 | 영역 | 주요 케이스 |
@@ -30,7 +30,7 @@
 실제 `PathDock.App.exe`를 `PATHDOCK_DATA_DIR`(임시 폴더)로 격리해 띄우고 `System.Windows.Automation`으로 조작한다.
 CodeAtlas에서 얻은 교훈 적용: `Invoke` 스퓨리어스 예외는 삼키고 상태 변화로 판정, 새 창/대화상자는 `EnumWindows`로 탐색.
 
-| 테스트 (구현됨, 33개) | 검증 |
+| 테스트 (구현됨, 41개) | 검증 |
 |---|---|
 | Favorites_Click_NavigatesExplorer | 즐겨찾기 1·2 클릭 → 경로 표시줄이 해당 폴더로 |
 | Drives_ShowSystemDriveUsage_AndClickNavigatesToRoot | 드라이브 패널에 시스템 드라이브가 표시되고 클릭하면 루트로 이동 |
@@ -47,6 +47,14 @@ CodeAtlas에서 얻은 교훈 적용: `Invoke` 스퓨리어스 예외는 삼키�
 | Explorer_ShowsAncestorColumns_AndFolderSizes | 부모/조부모 열 내용, 폴더 크기(3 KB)·요약 줄, 상위 열 클릭 이동 |
 | Explorer_OpenFolderWithEnter_UpdatesPath | 목록에서 폴더 선택 + Enter → 하위 폴더 진입 |
 | PathBar_InvalidPath_ShowsInfoBar_AndKeepsPath | 존재하지 않는 경로 입력 → 주소창이 입력값을 유지(고쳐 쓸 수 있도록. 4553801 이전에는 원래 경로로 복원했음) |
+| PathBar_CopyButton_CopiesCurrentPathToClipboard | 주소 표시줄 오른쪽의 복사 버튼을 누르면 클립보드가 현재 경로로 바뀜(클립보드는 PowerShell로 읽고 씀) |
+| Explorer_CtrlH_TogglesHiddenFiles_AndPersists | Ctrl+H로 숨김 파일이 나타났다 사라지고, 설정에 저장되어 재시작 후에도 유지됨 |
+| Explorer_CtrlShiftC_CopiesSelectedFilePaths | Ctrl+Shift+C가 선택한 파일의 전체 경로를 클립보드에 복사 |
+| Explorer_CtrlShiftV_TypesQuotedPathIntoTerminal_WithoutRunningIt | Ctrl+Shift+V가 공백이 있는 경로를 따옴표로 터미널 입력줄에 넣고 실행하지는 않음 |
+| Explorer_PasteBigFile_ShowsProgress_CancelRemovesPartial | 4GB 파일 붙여넣기 중 진행 표시(취소 버튼)가 나타나고, 취소하면 반쪽 파일이 지워지고 원본은 남음 |
+| Explorer_DragFileOntoFolder_MovesIt | 실제 마우스 끌어 놓기로 파일을 폴더 행에 놓으면 이동(앱 창이 앞에 있을 때만 입력, 아니면 중단) |
+| Explorer_DragFileOntoParentColumnFolder_MovesIt | 파일을 상위 열의 폴더에 끌어 놓으면 이동 |
+| Explorer_DragFileOntoTerminal_TypesPath_WithoutRunningIt | 파일을 터미널에 끌어 놓으면 경로가 입력줄에 들어가고 원본은 그대로 |
 | SyncMode_ExplorerToTerminal_ChangesTerminalPrompt | 양방향에서 즐겨찾기 이동 → 터미널 프롬프트가 새 폴더로 |
 | SyncMode_TerminalToExplorer_UpdatesPathBar | 터미널에 `cd` 입력 → 경로 표시줄 갱신 |
 | SyncMode_Off_DoesNotPropagate | 동기화 끄기 후 탐색기 이동이 터미널에 전파되지 않음 |

@@ -51,6 +51,8 @@ public sealed class AppSettings
     public string TerminalBackground { get; set; } = string.Empty;
     /// <summary>시작할 때 마지막으로 열었던 폴더에서 시작할지(false면 사용자 폴더).</summary>
     public bool StartAtLastPath { get; set; } = true;
+    /// <summary>숨김/시스템 파일·폴더를 목록에 보여줄지.</summary>
+    public bool ShowHiddenFiles { get; set; }
     /// <summary>터미널에서 실행할 셸(다음 실행부터 적용).</summary>
     public TerminalShell TerminalShell { get; set; } = TerminalShell.PowerShell;
     /// <summary>화면 언어 코드("ko" 또는 "en"). 비어 있으면 운영체제 표시 언어를 따른다.</summary>

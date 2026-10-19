@@ -10,7 +10,7 @@ PathDock.App (WPF, net10.0-windows10.0.19041.0)
  │                    AncestorColumnView, FileListView, TerminalPanelView, StatusBarView,
  │                    SettingsWindow, AboutWindow, InputDialog, ConfirmDialog (XAML, code-behind 최소; 상세 doc/05)
  ├─ Controls/         PanelCard, DriveCard, FavoriteChip, UsageMeter, AddressBar, TerminalControl(+TerminalRenderer, TerminalKeyMap), AlertHost(알림 막대 접근성)
- ├─ ViewModels/       MainViewModel(조립)+InfoBar/Usage/Drives/Favorites/SettingsViewModel, ExplorerViewModel(+FileActions), TerminalViewModel(+TerminalTab: 탭별 세션·상태),
+ ├─ ViewModels/       MainViewModel(조립)+InfoBar/Usage/Drives/Favorites/SettingsViewModel, ExplorerViewModel(+FileActions, ShellActions), TerminalViewModel(+TerminalTab: 탭별 세션·상태),
  │                    FavoriteSlotViewModel, DriveItemViewModel, FileItemViewModel
  ├─ Localization/     LocSource ({loc:T} XAML 마크업 확장)
  ├─ Themes/           Generic.xaml (커스텀 컨트롤 스타일)
@@ -20,7 +20,7 @@ PathDock.Core (net10.0, UI 비의존 → 단위 테스트 용이)
  ├─ Paths/            PathNormalizer
  ├─ Settings/         AppSettings, SettingsService (JSON)
  ├─ Explorer/         ExplorerService(목록 열거, 이력), DriveService, FolderSizeCalculator/Cache, FileSorter,
- │                    FileOperations(이름 변경·새 폴더·복사·이동·휴지통), FileCategory, SizeFormatter, TextPreview, ImagePreviewTypes, LaunchPolicy
+ │                    FileOperations(이름 변경·새 폴더·복사·이동(진행 보고·취소)·휴지통), DropRules(끌어 놓기 복사/이동 판단), FileCategory, SizeFormatter, TextPreview, ImagePreviewTypes, LaunchPolicy
  ├─ Sync/             SyncMode, PathSyncService (중재, 루프 방지, 대기 정책)
  ├─ Terminal/         ConPtySession, VtParser, ScreenBuffer, TerminalSession(셸 통합·상태), TerminalShell, TerminalColorScheme
  ├─ Monitoring/       SystemMonitor

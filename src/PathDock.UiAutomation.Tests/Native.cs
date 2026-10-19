@@ -123,4 +123,56 @@ internal static class Native
         SetForegroundWindow(hwnd);
         return GetForegroundWindow() == hwnd;
     }
+
+    [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out Point p);
+    [DllImport("user32.dll")] private static extern void mouse_event(uint flags, int dx, int dy, uint data, UIntPtr extra);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Point { public int X, Y; }
+
+    private const uint MouseLeftDown = 0x0002, MouseLeftUp = 0x0004;
+
+    /// <summary>
+    /// 앱 창 위에서 왼쪽 버튼으로 끌어 놓는다(OS 마우스 입력). 시작 전과 이동 중에 앱 창이 앞에 있는지 확인하고, 아니면 버튼을 떼고 false를 돌려준다
+    /// (다른 창에 입력이 가는 것을 막는다). 끝나면 원래 커서 위치로 돌려놓는다. 좌표는 화면 픽셀(DPI 인식 프로세스 전제).
+    /// </summary>
+    public static bool Drag(IntPtr appWindow, int fromX, int fromY, int toX, int toY)
+    {
+        GetCursorPos(out Point original);
+        bool pressed = false;
+        try
+        {
+            if (GetForegroundWindow() != appWindow)
+            {
+                return false;
+            }
+            SetCursorPos(fromX, fromY);
+            Thread.Sleep(150);
+            mouse_event(MouseLeftDown, 0, 0, 0, UIntPtr.Zero);
+            pressed = true;
+            Thread.Sleep(150);
+            const int steps = 14;
+            for (int i = 1; i <= steps; i++)
+            {
+                if (GetForegroundWindow() != appWindow)
+                {
+                    return false;
+                }
+                SetCursorPos(fromX + (toX - fromX) * i / steps, fromY + (toY - fromY) * i / steps);
+                Thread.Sleep(40);
+            }
+            Thread.Sleep(250); // 놓기 전에 마지막 DragOver가 처리되도록 잠깐 머문다
+            return GetForegroundWindow() == appWindow;
+        }
+        finally
+        {
+            if (pressed)
+            {
+                mouse_event(MouseLeftUp, 0, 0, 0, UIntPtr.Zero);
+            }
+            Thread.Sleep(200);
+            SetCursorPos(original.X, original.Y);
+        }
+    }
 }

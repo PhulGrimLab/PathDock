@@ -35,6 +35,13 @@
                          ItemsSource="{Binding Items}"
                          SelectedItem="{Binding SelectedItem}"
                          SelectionMode="Extended"
+                         AllowDrop="True"
+                         PreviewMouseLeftButtonDown="OnListMouseDown"
+                         PreviewMouseLeftButtonUp="OnListMouseUp"
+                         PreviewMouseMove="OnListMouseMove"
+                         DragOver="OnListDragOver"
+                         DragLeave="OnListDragLeave"
+                         Drop="OnListDrop"
                          SelectionChanged="FileList_SelectionChanged"
                          AutomationProperties.AutomationId="FileList"
                          AutomationProperties.Name="{loc:T '파일 목록', 'File list'}"
@@ -50,6 +57,14 @@
                         <MenuItem Header="{loc:T '삭제 - 휴지통 (Delete)', 'Delete - Recycle Bin (Delete)'}" Command="{Binding DeleteSelectedCommand}" />
                         <Separator />
                         <MenuItem Header="{loc:T '새 폴더 (Ctrl+Shift+N)', 'New folder (Ctrl+Shift+N)'}" Command="{Binding NewFolderCommand}" />
+                        <MenuItem Header="{loc:T '숨김 파일 표시 (Ctrl+H)', 'Show hidden files (Ctrl+H)'}" IsCheckable="True" IsChecked="{Binding ShowHidden, Mode=TwoWay}" />
+                        <Separator />
+                        <MenuItem Header="{loc:T '열기 (Enter)', 'Open (Enter)'}" Command="{Binding OpenItemCommand}" CommandParameter="{Binding SelectedItem}" />
+                        <MenuItem Header="{loc:T '연결 프로그램 선택...', 'Open with...'}" Command="{Binding OpenWithCommand}" />
+                        <MenuItem Header="{loc:T '탐색기에서 보기', 'Show in File Explorer'}" Command="{Binding ShowInExplorerCommand}" />
+                        <MenuItem Header="{loc:T '경로 복사 (Ctrl+Shift+C)', 'Copy path (Ctrl+Shift+C)'}" Command="{Binding CopyPathCommand}" />
+                        <MenuItem Header="{loc:T '터미널에 경로 입력 (Ctrl+Shift+V)', 'Type path into terminal (Ctrl+Shift+V)'}" Command="{Binding SendPathsToTerminalCommand}" />
+                        <MenuItem Header="{loc:T '속성 (Alt+Enter)', 'Properties (Alt+Enter)'}" Command="{Binding ShowPropertiesCommand}" />
                     </ContextMenu>
                 </ui:ListView.ContextMenu>
                 <ui:ListView.View>
@@ -57,8 +72,18 @@
                         <ui:GridViewColumn x:Name="NameColumn" Header="{loc:T '이름', 'Name'}" Width="280">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate DataType="{x:Type vm:FileItemViewModel}">
-                                    <StackPanel Orientation="Horizontal" ToolTipService.InitialShowDelay="400"
+                                    <StackPanel Orientation="Horizontal" ToolTipService.InitialShowDelay="400" Opacity="{Binding RowOpacity}"
                                                 ToolTipOpening="OnNameToolTipOpening">
+                                        <StackPanel.Style>
+                                            <Style TargetType="StackPanel">
+                                                <Style.Triggers>
+                                                    <!-- 끌어 놓을 폴더 행 강조 -->
+                                                    <DataTrigger Binding="{Binding IsDropTarget}" Value="True">
+                                                        <Setter Property="Background" Value="{DynamicResource SystemAccentColorPrimaryBrush}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </StackPanel.Style>
                                         <!-- 이미지(썸네일)·텍스트(앞 20줄) 파일 위에서만 뜨는 툴팁(그 밖의 파일은 코드 숨김에서 열리지 않게 막는다) -->
                                         <StackPanel.ToolTip>
                                             <ToolTip FontFamily="{StaticResource PdFontFamily}">
@@ -105,10 +130,30 @@
             <!-- 요약 줄 -->
             <Border Grid.Row="1" Padding="12,6" BorderThickness="0,1,0,0"
                     BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
-                <TextBlock Text="{Binding SummaryDisplay}" TextWrapping="Wrap" FontSize="{DynamicResource PdFontSize}"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           AutomationProperties.AutomationId="FolderSummary"
-                           AutomationProperties.Name="{Binding SummaryDisplay}" />
+                <StackPanel>
+                    <TextBlock Text="{Binding SummaryDisplay}" TextWrapping="Wrap" FontSize="{DynamicResource PdFontSize}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               AutomationProperties.AutomationId="FolderSummary"
+                               AutomationProperties.Name="{Binding SummaryDisplay}" />
+                    <!-- 붙여넣기(복사/이동) 진행: 0.3초 넘게 걸릴 때만 나타난다 -->
+                    <Grid Margin="0,6,0,0" Visibility="{Binding IsOperationVisible, Converter={StaticResource BoolToVis}}"
+                          AutomationProperties.AutomationId="OperationPanel">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding OperationText}" TextTrimming="CharacterEllipsis" FontSize="{DynamicResource PdFontSize}"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                       AutomationProperties.AutomationId="OperationText" />
+                            <ProgressBar Margin="0,4,0,0" Height="6" Minimum="0" Maximum="100" Value="{Binding OperationPercent, Mode=OneWay}"
+                                         AutomationProperties.AutomationId="OperationProgress" />
+                        </StackPanel>
+                        <ui:Button Grid.Column="1" Margin="10,0,0,0" Padding="10,3" VerticalAlignment="Center"
+                                   Content="{loc:T '취소', 'Cancel'}" Command="{Binding CancelOperationCommand}"
+                                   AutomationProperties.AutomationId="OperationCancelButton" />
+                    </Grid>
+                </StackPanel>
             </Border>
         </Grid>
     </ctl:PanelCard>

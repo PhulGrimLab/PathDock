@@ -150,6 +150,25 @@ public sealed class AppDriver : IDisposable
 
     public string PathBarText() => ((ValuePattern)Find("PathBar").GetCurrentPattern(ValuePattern.Pattern)).Current.Value;
 
+    /// <summary>클립보드의 글자(PowerShell Get-Clipboard로 읽는다. 하네스는 STA가 아니므로 Clipboard 클래스를 쓰지 않는다).</summary>
+    public static string ClipboardText() => RunPowerShell("Get-Clipboard -Raw").TrimEnd('\r', '\n');
+
+    public static void SetClipboardText(string text) => RunPowerShell($"Set-Clipboard -Value '{text.Replace("'", "''")}'");
+
+    private static string RunPowerShell(string command)
+    {
+        var psi = new ProcessStartInfo("powershell.exe", $"-NoProfile -NonInteractive -Command \"{command}\"")
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            CreateNoWindow = true,
+        };
+        using Process p = Process.Start(psi) ?? throw new InvalidOperationException("powershell을 시작하지 못함");
+        string output = p.StandardOutput.ReadToEnd();
+        p.WaitForExit(15000);
+        return output;
+    }
+
     public string TerminalText() => ((ValuePattern)Find("Terminal").GetCurrentPattern(ValuePattern.Pattern)).Current.Value;
 
     /// <summary>경로 표시줄에 값을 넣고 Enter로 이동한다.</summary>
@@ -341,6 +360,62 @@ public sealed class AppDriver : IDisposable
         catch (InvalidOperationException)
         {
             // 클릭 처리 후 발생하는 스퓨리어스 예외.
+        }
+    }
+
+    /// <summary>목록 항목(이름)을 끌어 다른 요소(AutomationId) 한가운데에 놓는다. 앱 창이 앞에 없으면 실패로 본다(다른 창 보호).</summary>
+    public void DragListItemTo(string itemName, string targetAutomationId)
+    {
+        AutomationElement item = FindListItem(itemName);
+        AutomationElement target = Find(targetAutomationId);
+        DragBetween(item, target);
+    }
+
+    /// <summary>목록 항목(이름)을 끌어 목록의 다른 항목(이름) 위에 놓는다.</summary>
+    public void DragListItemToItem(string itemName, string targetItemName)
+    {
+        DragBetween(FindListItem(itemName), FindListItem(targetItemName));
+    }
+
+    /// <summary>목록 항목(이름)을 끌어 상위 열(AutomationId)의 항목(이름) 위에 놓는다.</summary>
+    public void DragListItemToColumnItem(string itemName, string columnId, string columnItemName)
+    {
+        AutomationElement col = Find(columnId);
+        AutomationElement? target = null;
+        WaitUntil(() =>
+        {
+            target = col.FindFirst(TreeScope.Descendants, new AndCondition(
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem),
+                new PropertyCondition(AutomationElement.NameProperty, columnItemName)));
+            return target is not null;
+        }, DefaultTimeoutMs, $"열 항목 없음: {columnItemName}");
+        DragBetween(FindListItem(itemName), target!);
+    }
+
+    private AutomationElement FindListItem(string name)
+    {
+        AutomationElement list = Find("FileList");
+        AutomationElement? item = null;
+        WaitUntil(() =>
+        {
+            item = list.FindFirst(TreeScope.Descendants, new AndCondition(
+                new OrCondition(new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.DataItem), new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem)),
+                new PropertyCondition(AutomationElement.NameProperty, name)));
+            return item is not null;
+        }, DefaultTimeoutMs, $"목록 항목 없음: {name}");
+        return item!;
+    }
+
+    private void DragBetween(AutomationElement from, AutomationElement to)
+    {
+        Activate();
+        System.Windows.Rect a = from.Current.BoundingRectangle, b = to.Current.BoundingRectangle;
+        // 항목은 이름 칸(왼쪽)을 눌러야 하므로 가로는 왼쪽에서 60px, 세로는 가운데로 잡는다. 대상이 항목이면 같은 규칙, 큰 요소면 한가운데.
+        int fromX = (int)(a.X + Math.Min(60, a.Width / 2)), fromY = (int)(a.Y + a.Height / 2);
+        int toX = (int)(b.Height < 60 ? b.X + Math.Min(60, b.Width / 2) : b.X + b.Width / 2), toY = (int)(b.Y + b.Height / 2);
+        if (!Native.Drag(new IntPtr(Window.Current.NativeWindowHandle), fromX, fromY, toX, toY))
+        {
+            throw new TestFailedException("끌어 놓는 동안 앱 창이 앞에 있지 않아 중단함(다른 창 보호)");
         }
     }
 

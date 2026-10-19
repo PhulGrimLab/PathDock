@@ -1,8 +1,10 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using PathDock.App.ViewModels;
+using PathDock.Core.Explorer;
 
 namespace PathDock.App.Views;
 
@@ -57,5 +59,37 @@ public partial class AncestorColumnView : UserControl
                 FolderList.ScrollIntoView(item);
             }
         });
+    }
+
+    // ----- 끌어 놓기: 이 열의 폴더 항목 위에 놓으면 그 폴더로 이동/복사한다(Ctrl=복사, Shift=이동). 판단 규칙은 Core의 DropRules. -----
+
+    private ExplorerViewModel? FindExplorer() => (Window.GetWindow(this)?.DataContext as MainViewModel)?.Explorer;
+
+    private static string? FolderUnder(DragEventArgs e) =>
+        FileDragDrop.FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject)?.DataContext is AncestorItemViewModel item ? item.FullPath : null;
+
+    private void OnFolderDragOver(object sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        IReadOnlyList<string> paths = FileDragDrop.GetPaths(e.Data);
+        if (FindExplorer() is not { } explorer || paths.Count == 0 || FolderUnder(e) is not { } target)
+        {
+            e.Effects = DragDropEffects.None;
+            return;
+        }
+        e.Effects = FileDragDrop.ToWpf(explorer.GetDropEffect(paths, target, FileDragDrop.CtrlHeld(e), FileDragDrop.ShiftHeld(e)));
+    }
+
+    private async void OnFolderDrop(object sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        IReadOnlyList<string> paths = FileDragDrop.GetPaths(e.Data);
+        if (FindExplorer() is not { } explorer || paths.Count == 0 || FolderUnder(e) is not { } target)
+        {
+            return;
+        }
+        DropEffect effect = explorer.GetDropEffect(paths, target, FileDragDrop.CtrlHeld(e), FileDragDrop.ShiftHeld(e));
+        e.Effects = FileDragDrop.ToWpf(effect);
+        await explorer.DropAsync(paths, target, effect);
     }
 }

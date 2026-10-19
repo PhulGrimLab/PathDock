@@ -12,7 +12,7 @@
 | 타깃 | `net10.0-windows` (WPF) |
 | 패턴 | MVVM — `CommunityToolkit.Mvvm` 8.4.x (Source Generator) |
 | UI 컨트롤 | `WPF-UI` 4.3.0 (FluentWindow, Button, Card, InfoBar, SymbolIcon 등) + 자체 커스텀 컨트롤 |
-| 테스트 | MSTest(로직, 208개) + 자체 콘솔 하네스(UI Automation 33개, 실제 프로세스 구동) |
+| 테스트 | MSTest(로직, 232개) + 자체 콘솔 하네스(UI Automation 41개, 실제 프로세스 구동) |
 | 솔루션 | `PathDock.slnx` (SDK-style 이므로 VS2019 제약 없음 — CodeAtlas와 다름) |
 | 플랫폼 | x64 고정(`Directory.Build.props`). 출력은 `bin\x64\<구성>\net10.0-windows` |
 | 실행 권한 | `app.manifest`의 `requireAdministrator` — 앱은 항상 관리자 권한으로 실행된다 |
@@ -49,7 +49,7 @@ PS> .\doc\run_ui_tests.ps1 -SkipBuild -Tests <이름...>
 
 `settings.json` 항목: 즐겨찾기(최대 10), `SyncMode`, `LastPath`/`StartAtLastPath`, 창 위치·크기·최대화, `ExplorerRatio`(탐색기:터미널 비율, 기본 0.6),
 `Theme`(Dark/Light), `UiFontSize`, `TerminalFontSize`, `TerminalTheme`/`TerminalForeground`/`TerminalBackground`, `TerminalShell`(PowerShell/CommandPrompt),
-`TerminalCollapsed`, `Language`(`ko`/`en`, 비면 OS 표시 언어를 따름). 손상되면 기본값으로 시작한다.
+`ShowHiddenFiles`(숨김 파일 표시), `TerminalCollapsed`, `Language`(`ko`/`en`, 비면 OS 표시 언어를 따름). 손상되면 기본값으로 시작한다.
 
 ## 5. 배포와 릴리스
 

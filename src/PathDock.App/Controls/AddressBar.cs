@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Threading;
+using PathDock.Core.Localization;
 using Wpf.Ui.Controls;
 
 namespace PathDock.App.Controls;
@@ -12,9 +14,12 @@ namespace PathDock.App.Controls;
 /// Owner: NavigationBarView(XAML). UI 스레드 전용.
 /// </summary>
 [TemplatePart(Name = PartTextBox, Type = typeof(System.Windows.Controls.TextBox))]
+[TemplatePart(Name = PartCopyButton, Type = typeof(Wpf.Ui.Controls.Button))]
 public class AddressBar : Control
 {
     private const string PartTextBox = "PART_TextBox";
+    private const string PartCopyButton = "PART_CopyButton";
+    private static readonly TimeSpan CopyFeedbackDuration = TimeSpan.FromMilliseconds(1500);
 
     public static readonly DependencyProperty TextProperty = DependencyProperty.Register(
         nameof(Text), typeof(string), typeof(AddressBar),
@@ -33,6 +38,8 @@ public class AddressBar : Control
         nameof(TextBoxAutomationName), typeof(string), typeof(AddressBar), new PropertyMetadata(string.Empty));
 
     private System.Windows.Controls.TextBox? _textBox;
+    private Wpf.Ui.Controls.Button? _copyButton;
+    private DispatcherTimer? _copyFeedbackTimer;
 
     static AddressBar()
     {
@@ -77,6 +84,15 @@ public class AddressBar : Control
         {
             _textBox.PreviewKeyDown -= OnTextBoxKeyDown;
         }
+        if (_copyButton is not null)
+        {
+            _copyButton.Click -= OnCopyClick;
+        }
+        _copyButton = GetTemplateChild(PartCopyButton) as Wpf.Ui.Controls.Button;
+        if (_copyButton is not null)
+        {
+            _copyButton.Click += OnCopyClick;
+        }
         _textBox = GetTemplateChild(PartTextBox) as System.Windows.Controls.TextBox;
         if (_textBox is not null)
         {
@@ -85,6 +101,36 @@ public class AddressBar : Control
         else
         {
             // 템플릿에 PART_TextBox가 없으면 Enter 처리는 비활성(스타일 오류를 앱 중단으로 만들지 않는다).
+        }
+    }
+
+    /// <summary>현재 경로(주소 표시줄에 보이는 글자)를 클립보드에 복사하고, 버튼 아이콘·툴팁으로 결과를 잠깐 알린다.</summary>
+    private void OnCopyClick(object sender, RoutedEventArgs e)
+    {
+        string text = Text;
+        if (string.IsNullOrEmpty(text) || _copyButton is null)
+        {
+            return;
+        }
+        bool copied = Services.ClipboardText.TryCopy(text); // 다른 프로그램이 클립보드를 잡고 있으면 false: 실패를 아이콘으로 알리고 앱은 계속 동작한다.
+        _copyButton.Icon = new SymbolIcon(copied ? SymbolRegular.Checkmark24 : SymbolRegular.ErrorCircle24);
+        _copyButton.ToolTip = copied
+            ? Loc.T("복사했습니다", "Copied")
+            : Loc.T("복사하지 못했습니다(클립보드 사용 중)", "Could not copy (clipboard is busy)");
+        _copyFeedbackTimer ??= new DispatcherTimer(DispatcherPriority.Normal) { Interval = CopyFeedbackDuration };
+        _copyFeedbackTimer.Tick -= OnCopyFeedbackEnd;
+        _copyFeedbackTimer.Tick += OnCopyFeedbackEnd;
+        _copyFeedbackTimer.Stop();
+        _copyFeedbackTimer.Start();
+    }
+
+    private void OnCopyFeedbackEnd(object? sender, EventArgs e)
+    {
+        _copyFeedbackTimer?.Stop();
+        if (_copyButton is not null)
+        {
+            _copyButton.Icon = new SymbolIcon(SymbolRegular.Copy24);
+            _copyButton.ToolTip = Loc.T("현재 경로 복사", "Copy current path");
         }
     }
 

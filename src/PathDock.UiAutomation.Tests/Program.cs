@@ -183,6 +183,137 @@ var tests = new List<(string Name, Action Body)>
         app.WaitUntil(() => app.ListContains("made_by_test"), "목록에 새 폴더가 보이지 않음");
     }),
 
+    ("Explorer_CtrlH_TogglesHiddenFiles_AndPersists", () =>
+    {
+        string a = MakeDir("pdA_hid");
+        File.WriteAllText(Path.Combine(a, "shown_pd.txt"), "x");
+        string hidden = Path.Combine(a, "hidden_pd.txt");
+        File.WriteAllText(hidden, "x");
+        File.SetAttributes(hidden, File.GetAttributes(hidden) | FileAttributes.Hidden);
+        string data = NewDataDir(null, "Off", a);
+        using (var app = AppDriver.Launch(data))
+        {
+            app.WaitUntil(() => app.ListContains("shown_pd.txt"), "목록이 보이지 않음");
+            if (app.ListContains("hidden_pd.txt")) throw new TestFailedException("숨김 파일이 기본으로 보임");
+            app.Activate();
+            app.Find("FileList").SetFocus();
+            app.PressKeys("^h");
+            app.WaitUntil(() => app.ListContains("hidden_pd.txt"), "Ctrl+H 후에도 숨김 파일이 보이지 않음");
+            app.WaitUntil(() => app.ReadSettingsJson().Contains("\"ShowHiddenFiles\": true", StringComparison.Ordinal), "숨김 표시 설정이 저장되지 않음");
+        }
+        // 다시 시작해도 유지된다.
+        using (var app = AppDriver.Launch(data))
+        {
+            app.WaitUntil(() => app.ListContains("hidden_pd.txt"), "재시작 후 숨김 표시 설정이 유지되지 않음");
+            app.Activate();
+            app.Find("FileList").SetFocus();
+            app.PressKeys("^h");
+            app.WaitUntil(() => !app.ListContains("hidden_pd.txt"), "Ctrl+H를 다시 눌러도 숨김 파일이 사라지지 않음");
+        }
+    }),
+
+    ("Explorer_CtrlShiftC_CopiesSelectedFilePaths", () =>
+    {
+        string a = MakeDir("pdA_cpath");
+        string f1 = Path.Combine(a, "one_pd.txt"), f2 = Path.Combine(a, "two_pd.txt");
+        File.WriteAllText(f1, "x");
+        File.WriteAllText(f2, "x");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        Thread.Sleep(1500); // 시작 직후의 터미널 포커스 이동이 끝난 뒤에 진행한다(터미널에 포커스가 있으면 Ctrl+Shift+C는 터미널의 복사로 간다).
+        AppDriver.SetClipboardText("sentinel-before-copy");
+        app.SelectListItem("one_pd.txt");
+        app.PressKeys("^+c");
+        app.WaitUntil(() => AppDriver.ClipboardText() == f1, $"Ctrl+Shift+C가 선택한 파일의 전체 경로를 복사하지 않음: '{AppDriver.ClipboardText()}'", 8000);
+    }),
+
+    ("Explorer_PasteBigFile_ShowsProgress_CancelRemovesPartial", () =>
+    {
+        string a = MakeDir("pdA_big"), b = MakeDir("pdB_big");
+        string big = Path.Combine(a, "big_pd.bin");
+        try
+        {
+            using (var f = File.Create(big)) { f.SetLength(4096L * 1024 * 1024); } // 4GB: 복사에 몇 초가 걸려 진행 막대가 보이도록
+            using var app = AppDriver.Launch(NewDataDir(new[] { a, b }, "Off", a));
+            app.SelectListItem("big_pd.bin");
+            app.PressKeys("^c");
+            app.Click("Favorite_2");
+            app.WaitUntil(() => app.PathBarText() == b, $"즐겨찾기 2 이동 실패: '{app.PathBarText()}'");
+            app.Activate();
+            app.Find("FileList").SetFocus();
+            app.PressKeys("^v");
+            app.WaitUntil(() => app.Exists("OperationCancelButton"), "붙여넣기 진행 표시(취소 버튼)가 나타나지 않음", 15000);
+            app.Click("OperationCancelButton");
+            app.WaitUntil(() => !app.Exists("OperationCancelButton"), "취소 후에도 진행 표시가 남음", 15000);
+            app.WaitUntil(() => Directory.GetFileSystemEntries(b).Length == 0, "취소한 복사의 반쪽 파일이 남음", 15000);
+            if (!File.Exists(big)) throw new TestFailedException("취소했는데 원본이 사라짐");
+        }
+        finally
+        {
+            try { File.Delete(big); } catch (IOException) { }
+        }
+    }),
+
+    ("Explorer_CtrlShiftV_TypesQuotedPathIntoTerminal_WithoutRunningIt", () =>
+    {
+        string a = MakeDir("pdA_sendpath with space");
+        string f = Path.Combine(a, "pick me.txt");
+        File.WriteAllText(f, "x");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        Thread.Sleep(1500); // 시작 직후의 터미널 포커스 이동이 끝난 뒤에 목록을 선택한다(그렇지 않으면 Ctrl+Shift+V가 터미널의 붙여넣기로 가는 경우가 있다).
+        app.SelectListItem("pick me.txt");
+        app.PressKeys("^+v");
+        string expected = "'" + f + "'";
+        app.WaitUntil(() => app.TerminalText().Contains(expected, StringComparison.Ordinal), $"경로가 터미널 입력줄에 들어가지 않음:\n{app.TerminalText()}", 10000);
+        Thread.Sleep(800);
+        // Enter를 보내지 않았으므로 명령이 실행되어 오류(찾을 수 없음 등)가 출력되면 안 된다: 입력한 경로가 줄에 한 번만 나타난다.
+        string text = app.TerminalText();
+        int first = text.IndexOf(expected, StringComparison.Ordinal);
+        if (text.IndexOf(expected, first + 1, StringComparison.Ordinal) >= 0) throw new TestFailedException("입력한 경로가 실행된 것으로 보임(두 번 이상 출력):\n" + text);
+    }),
+
+    ("Explorer_DragFileOntoFolder_MovesIt", () =>
+    {
+        string a = MakeDir("pdA_dnd");
+        string f = Path.Combine(a, "drag_me_pd.txt");
+        File.WriteAllText(f, "x");
+        string target = Path.Combine(a, "target_dir_pd");
+        Directory.CreateDirectory(target);
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        Thread.Sleep(1500);
+        app.DragListItemToItem("drag_me_pd.txt", "target_dir_pd");
+        app.WaitUntil(() => File.Exists(Path.Combine(target, "drag_me_pd.txt")), "끌어 놓은 파일이 폴더로 이동하지 않음", 10000);
+        if (File.Exists(f)) throw new TestFailedException("이동인데 원본이 남아 있음");
+        app.WaitUntil(() => !app.ListContains("drag_me_pd.txt"), "이동 후 목록에서 파일이 사라지지 않음");
+    }),
+
+    ("Explorer_DragFileOntoTerminal_TypesPath_WithoutRunningIt", () =>
+    {
+        string a = MakeDir("pdA_dnd2");
+        string f = Path.Combine(a, "to_terminal_pd.txt");
+        File.WriteAllText(f, "x");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        Thread.Sleep(1500);
+        app.DragListItemTo("to_terminal_pd.txt", "Terminal");
+        app.WaitUntil(() => app.TerminalText().Contains(f, StringComparison.Ordinal), $"끌어 놓은 파일 경로가 터미널에 입력되지 않음:\n{app.TerminalText()}", 10000);
+        if (!File.Exists(f)) throw new TestFailedException("터미널에 놓았는데 원본이 사라짐");
+    }),
+
+    ("Explorer_DragFileOntoParentColumnFolder_MovesIt", () =>
+    {
+        string a = MakeDir("pdA_dnd3");
+        string cur = Path.Combine(a, "current_pd");
+        string sibling = Path.Combine(a, "sibling_pd");
+        Directory.CreateDirectory(cur);
+        Directory.CreateDirectory(sibling);
+        string f = Path.Combine(cur, "moveup_pd.txt");
+        File.WriteAllText(f, "x");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", cur));
+        Thread.Sleep(1500);
+        app.DragListItemToColumnItem("moveup_pd.txt", "AncestorColumn_1", "sibling_pd");
+        app.WaitUntil(() => File.Exists(Path.Combine(sibling, "moveup_pd.txt")), "상위 열의 폴더로 끌어 놓은 파일이 이동하지 않음", 10000);
+        if (File.Exists(f)) throw new TestFailedException("이동인데 원본이 남아 있음");
+    }),
+
     ("Explorer_Delete_AsksConfirm_NoKeeps_YesRecycles", () =>
     {
         string a = MakeDir("pdA_del");
@@ -242,6 +373,15 @@ var tests = new List<(string Name, Action Body)>
         {
             throw new TestFailedException("라이트 테마가 설정에 저장되지 않음: " + json);
         }
+    }),
+
+    ("PathBar_CopyButton_CopiesCurrentPathToClipboard", () =>
+    {
+        string a = MakeDir("pdA_copy");
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", a));
+        AppDriver.SetClipboardText("sentinel-before-copy");
+        app.Click("CopyPathButton");
+        app.WaitUntil(() => AppDriver.ClipboardText() == a, $"경로 복사 버튼이 현재 경로를 복사하지 않음: '{AppDriver.ClipboardText()}'", 8000);
     }),
 
     ("PathBar_InvalidPath_ShowsInfoBar_AndKeepsPath", () =>

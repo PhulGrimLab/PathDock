@@ -145,16 +145,24 @@ public partial class FileListView : UserControl
         }
     }
 
-    /// <summary>목록 단축키: Ctrl+F=이름 필터, Ctrl+C/X/V=복사/잘라내기/붙여넣기, Enter=열기, Backspace=상위, F2=이름 변경, Delete=삭제, F5=새로 고침, Ctrl+Shift+N=새 폴더.</summary>
+    /// <summary>목록 단축키: Ctrl+F=이름 필터, Ctrl+C/X/V=복사/잘라내기/붙여넣기, Enter=열기, Backspace=상위, F2=이름 변경, Delete=삭제, F5=새로 고침, Ctrl+Shift+N=새 폴더, Ctrl+H=숨김 파일 표시, Ctrl+Shift+C=경로 복사, Ctrl+Shift+V=터미널에 경로 입력, Alt+Enter=속성.</summary>
     private void FileList_KeyDown(object sender, KeyEventArgs e)
     {
         if (Vm is not { } vm)
         {
             return;
         }
-        if (e.Key == Key.Enter && vm.SelectedItem is { } item)
+        if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.Alt)
+        {
+            vm.ShowPropertiesCommand.Execute(null);
+        }
+        else if (e.Key == Key.Enter && vm.SelectedItem is { } item)
         {
             vm.OpenItemCommand.Execute(item);
+        }
+        else if (e.Key == Key.C && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
+        {
+            vm.CopyPathCommand.Execute(null);
         }
         else if (e.Key == Key.C && Keyboard.Modifiers == ModifierKeys.Control)
         {
@@ -163,6 +171,10 @@ public partial class FileListView : UserControl
         else if (e.Key == Key.X && Keyboard.Modifiers == ModifierKeys.Control)
         {
             vm.CutSelectedCommand.Execute(null);
+        }
+        else if (e.Key == Key.V && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
+        {
+            vm.SendPathsToTerminalCommand.Execute(null);
         }
         else if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control)
         {
@@ -184,6 +196,10 @@ public partial class FileListView : UserControl
         else if (e.Key == Key.F5)
         {
             vm.RefreshCommand.Execute(null);
+        }
+        else if (e.Key == Key.H && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            vm.ToggleHiddenCommand.Execute(null);
         }
         else if (e.Key == Key.N && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
         {

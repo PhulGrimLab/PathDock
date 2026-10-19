@@ -3,7 +3,7 @@ using PathDock.Core.Paths;
 namespace PathDock.Core.Explorer;
 
 /// <summary>목록 한 줄(폴더 또는 파일). 단순 DTO.</summary>
-public sealed record FileItem(string Name, string FullPath, bool IsDirectory, long Size, DateTime Modified);
+public sealed record FileItem(string Name, string FullPath, bool IsDirectory, long Size, DateTime Modified, bool IsHidden = false);
 
 /// <summary>
 /// 폴더 열거와 이동 이력(뒤로/앞으로) 관리. Owner: ExplorerViewModel, Lifetime: 앱 전체. UI 스레드 전용(동기화 없음).
@@ -19,11 +19,14 @@ public sealed class ExplorerService
     public bool CanGoBack => _index > 0;
     public bool CanGoForward => _index >= 0 && _index < _history.Count - 1;
 
+    /// <summary>숨김/시스템 항목을 목록에 포함할지(<see cref="NavigateTo"/>와 <see cref="Refresh"/>에 적용).</summary>
+    public bool ShowHidden { get; set; }
+
     /// <summary>
-    /// 폴더 내용을 열거한다(폴더 먼저, 이름순). 숨김/시스템 항목은 제외.
+    /// 폴더 내용을 열거한다(폴더 먼저, 이름순). 숨김/시스템 항목은 <paramref name="includeHidden"/>가 true일 때만 포함한다(포함하면 <see cref="FileItem.IsHidden"/>로 구분).
     /// 폴더가 없으면 DirectoryNotFoundException, 권한이 없으면 UnauthorizedAccessException을 그대로 던진다.
     /// </summary>
-    public static List<FileItem> List(string path)
+    public static List<FileItem> List(string path, bool includeHidden = false)
     {
         var dir = new DirectoryInfo(path);
         if (!dir.Exists)
@@ -35,14 +38,15 @@ public sealed class ExplorerService
         {
             // false: 폴더 자체에 접근 권한이 없으면 UnauthorizedAccessException으로 알린다(비재귀 열거라 개별 항목에는 영향 없음).
             IgnoreInaccessible = false,
-            AttributesToSkip = FileAttributes.Hidden | FileAttributes.System,
+            AttributesToSkip = includeHidden ? FileAttributes.None : FileAttributes.Hidden | FileAttributes.System,
         };
         var result = new List<FileItem>();
         foreach (FileSystemInfo e in dir.EnumerateFileSystemInfos("*", options))
         {
             bool isDir = e is DirectoryInfo;
             long size = e is FileInfo f ? f.Length : 0;
-            result.Add(new FileItem(e.Name, e.FullName, isDir, size, e.LastWriteTime));
+            bool hidden = (e.Attributes & (FileAttributes.Hidden | FileAttributes.System)) != 0;
+            result.Add(new FileItem(e.Name, e.FullName, isDir, size, e.LastWriteTime, hidden));
         }
         return result
             .OrderByDescending(i => i.IsDirectory)
@@ -57,7 +61,7 @@ public sealed class ExplorerService
     public List<FileItem> NavigateTo(string path)
     {
         string? normalized = PathNormalizer.Normalize(path) ?? throw new ArgumentException("잘못된 경로", nameof(path));
-        List<FileItem> items = List(normalized);
+        List<FileItem> items = List(normalized, ShowHidden);
 
         if (!PathNormalizer.AreSame(Current, normalized))
         {
@@ -100,20 +104,20 @@ public sealed class ExplorerService
     /// <summary>현재 경로의 목록을 다시 읽는다.</summary>
     public List<FileItem> Refresh()
     {
-        return Current is null ? new List<FileItem>() : List(Current);
+        return Current is null ? new List<FileItem>() : List(Current, ShowHidden);
     }
 
     /// <summary>
     /// 하위 폴더만 이름순으로 나열한다(상위 단계 열 표시용). 숨김/시스템 제외.
     /// 접근 불가/없음이면 빈 목록(상위 열은 보조 정보라 오류로 알리지 않는다).
     /// </summary>
-    public static List<FileItem> ListDirectories(string path)
+    public static List<FileItem> ListDirectories(string path, bool includeHidden = false)
     {
         try
         {
-            var options = new EnumerationOptions { IgnoreInaccessible = true, AttributesToSkip = FileAttributes.Hidden | FileAttributes.System };
+            var options = new EnumerationOptions { IgnoreInaccessible = true, AttributesToSkip = includeHidden ? FileAttributes.None : FileAttributes.Hidden | FileAttributes.System };
             return new DirectoryInfo(path).EnumerateDirectories("*", options)
-                .Select(d => new FileItem(d.Name, d.FullName, true, 0, d.LastWriteTime))
+                .Select(d => new FileItem(d.Name, d.FullName, true, 0, d.LastWriteTime, (d.Attributes & (FileAttributes.Hidden | FileAttributes.System)) != 0))
                 .OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }

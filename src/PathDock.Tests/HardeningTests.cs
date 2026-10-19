@@ -204,7 +204,7 @@ public class HardeningTests
         Directory.CreateDirectory(dest);
 
         MethodInfo m = typeof(FileOperations).GetMethod("CopyIntoCore", BindingFlags.NonPublic | BindingFlags.Static)!;
-        var args = new object?[] { src, dest, false };
+        var args = new object?[] { src, dest, false, null, CancellationToken.None };
         m.Invoke(null, args);
 
         Assert.IsTrue((bool)args[2]!, "링크를 건너뛰었는데 알리지 않음(원본 삭제로 링크가 사라질 수 있다)");

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -178,34 +179,136 @@ public sealed partial class ExplorerViewModel
         }
     }
 
-    /// <summary>클립보드의 파일을 현재 폴더에 붙여넣는다(Ctrl+V). 복사/이동은 백그라운드에서 실행한다.</summary>
+    // ----- 붙여넣기 진행 표시: 0.3초 넘게 걸리면 목록 아래에 진행 막대와 취소 버튼을 보여준다. -----
+
+    private const int OperationVisibleDelayMs = 300;
+    private CancellationTokenSource? _operationCts;
+    private bool _operationBusy;
+
+    [ObservableProperty]
+    private bool _isOperationVisible;
+
+    [ObservableProperty]
+    private string _operationText = string.Empty;
+
+    /// <summary>진행률(0~100). 전체 크기를 아직 모르면 0.</summary>
+    [ObservableProperty]
+    private double _operationPercent;
+
+    /// <summary>진행 중인 붙여넣기를 취소한다. 이미 끝난 항목은 남고, 복사 중이던 항목의 반쯤 복사된 결과는 지운다.</summary>
     [RelayCommand]
+    private void CancelOperation() => _operationCts?.Cancel();
+
+    private bool CanPaste() => !_operationBusy;
+
+    /// <summary>클립보드의 파일을 현재 폴더에 붙여넣는다(Ctrl+V). 복사/이동은 백그라운드에서 실행하고 진행 상황을 보여 준다.</summary>
+    [RelayCommand(CanExecute = nameof(CanPaste))]
     private async Task PasteAsync()
     {
-        if (_service.Current is not { } dest || !FileClipboard.TryGet(out List<string> paths, out bool cut))
+        if (_operationBusy || _service.Current is not { } dest || !FileClipboard.TryGet(out List<string> paths, out bool cut))
         {
             return;
         }
-        (List<string> sources, List<string> errors) = await Task.Run(() => CopyOrMoveInto(paths, dest, cut));
-        _log.Info($"붙여넣기({(cut ? "이동" : "복사")}): 성공 {sources.Count}, 실패 {errors.Count} -> {dest}");
-        _cache.InvalidateWithAncestors(dest);
-        if (cut)
-        {
-            foreach (string p in sources)
-            {
-                _cache.InvalidateWithAncestors(p);
-            }
-            FileClipboard.Clear();
-        }
-        if (errors.Count > 0)
-        {
-            ErrorOccurred?.Invoke(Loc.T($"붙여넣기 실패 {errors.Count}건 - {errors[0]}", $"Paste failed for {errors.Count} item(s) - {errors[0]}"));
-        }
-        Reload();
+        await TransferAsync(paths, dest, cut, fromClipboard: true);
     }
 
-    /// <summary>각 경로를 대상 폴더로 복사(또는 이동)한다. 성공한 원본 경로와 실패 문구를 따로 모아 돌려준다. 백그라운드 스레드용.</summary>
-    private static (List<string> Sources, List<string> Errors) CopyOrMoveInto(IReadOnlyList<string> paths, string dest, bool cut)
+    /// <summary>끌어 놓기(드롭)로 항목을 대상 폴더에 복사/이동한다. 붙여넣기와 같은 진행 표시·취소·오류 처리를 쓴다.</summary>
+    public async Task DropAsync(IReadOnlyList<string> sources, string destFolder, DropEffect effect)
+    {
+        if (effect == DropEffect.None || sources.Count == 0)
+        {
+            return;
+        }
+        if (_operationBusy)
+        {
+            ErrorOccurred?.Invoke(Loc.T("다른 복사/이동 작업이 진행 중입니다. 끝난 뒤에 다시 시도하세요", "Another copy/move is in progress. Try again when it finishes"));
+            return;
+        }
+        await TransferAsync(sources.ToList(), destFolder, effect == DropEffect.Move, fromClipboard: false);
+    }
+
+    /// <summary>끌어 놓을 때의 동작(복사/이동/불가)을 정한다(규칙은 Core의 <see cref="DropRules"/>).</summary>
+    public DropEffect GetDropEffect(IReadOnlyList<string> sources, string destFolder, bool ctrlHeld, bool shiftHeld) =>
+        DropRules.Decide(sources, destFolder, ctrlHeld, shiftHeld);
+
+    /// <summary>복사/이동 본체: 크기를 재고, 진행 표시와 함께 백그라운드에서 실행하고, 끝나면 캐시를 무효화하고 목록을 새로 읽는다.</summary>
+    private async Task TransferAsync(List<string> paths, string dest, bool cut, bool fromClipboard)
+    {
+        _operationBusy = true;
+        PasteCommand.NotifyCanExecuteChanged();
+        using var cts = new CancellationTokenSource();
+        _operationCts = cts;
+        string verb = cut ? Loc.T("이동", "Moving") : Loc.T("복사", "Copying");
+        OperationText = Loc.T($"{verb} 준비 중...", $"{verb}: preparing...");
+        OperationPercent = 0;
+        _ = ShowOperationAfterDelayAsync(cts);
+        var watch = Stopwatch.StartNew();
+        List<string> sources = new();
+        List<string> errors = new();
+        bool cancelled = false;
+        try
+        {
+            long total = await Task.Run(() => paths.Sum(p => FileOperations.MeasureBytes(p, cts.Token)), cts.Token);
+            long done = 0;
+            var progress = new Progress<long>(delta =>
+            {
+                done += delta; // Progress<T>는 만든 스레드(UI)에서 호출된다.
+                OperationPercent = total > 0 ? Math.Min(100, done * 100.0 / total) : 0;
+                OperationText = Loc.T($"{verb} 중... {SizeFormatter.Format(done)} / {SizeFormatter.Format(total)} ({OperationPercent:0}%)", $"{verb}... {SizeFormatter.Format(done)} / {SizeFormatter.Format(total)} ({OperationPercent:0}%)");
+            });
+            (sources, errors, cancelled) = await Task.Run(() => CopyOrMoveInto(paths, dest, cut, progress, cts.Token));
+        }
+        catch (OperationCanceledException)
+        {
+            cancelled = true; // 준비(크기 계산) 중에 취소됨.
+        }
+        finally
+        {
+            bool wasVisible = IsOperationVisible;
+            _operationCts = null;
+            _operationBusy = false;
+            IsOperationVisible = false;
+            PasteCommand.NotifyCanExecuteChanged();
+            _log.Info($"붙여넣기({(cut ? "이동" : "복사")}): 성공 {sources.Count}, 실패 {errors.Count}{(cancelled ? ", 취소됨" : string.Empty)} -> {dest} ({watch.ElapsedMilliseconds}ms)");
+            _cache.InvalidateWithAncestors(dest);
+            if (cut)
+            {
+                foreach (string p in sources)
+                {
+                    _cache.InvalidateWithAncestors(p);
+                }
+                if (!cancelled && fromClipboard)
+                {
+                    FileClipboard.Clear();
+                }
+            }
+            if (errors.Count > 0)
+            {
+                ErrorOccurred?.Invoke(Loc.T($"붙여넣기 실패 {errors.Count}건 - {errors[0]}", $"Paste failed for {errors.Count} item(s) - {errors[0]}"));
+            }
+            else if (cancelled)
+            {
+                Notified?.Invoke(Loc.T($"취소했습니다(완료된 {sources.Count}개는 그대로 남아 있습니다)", $"Cancelled ({Loc.Plural(sources.Count, "item", "items")} already done remain)"));
+            }
+            else if (wasVisible)
+            {
+                Notified?.Invoke(cut ? Loc.T("이동을 마쳤습니다", "Move finished") : Loc.T("복사를 마쳤습니다", "Copy finished"));
+            }
+            Reload();
+        }
+    }
+
+    private async Task ShowOperationAfterDelayAsync(CancellationTokenSource cts)
+    {
+        await Task.Delay(OperationVisibleDelayMs);
+        if (_operationBusy && ReferenceEquals(_operationCts, cts))
+        {
+            IsOperationVisible = true; // 금방 끝나는 작업은 막대를 번쩍이지 않는다.
+        }
+    }
+
+    /// <summary>각 경로를 대상 폴더로 복사(또는 이동)한다. 성공한 원본 경로·실패 문구·취소 여부를 돌려준다. 백그라운드 스레드용.</summary>
+    private static (List<string> Sources, List<string> Errors, bool Cancelled) CopyOrMoveInto(IReadOnlyList<string> paths, string dest, bool cut, IProgress<long> progress, CancellationToken ct)
     {
         var sources = new List<string>();
         var errors = new List<string>();
@@ -213,23 +316,29 @@ public sealed partial class ExplorerViewModel
         {
             try
             {
+                ct.ThrowIfCancellationRequested();
                 if (cut)
                 {
-                    FileOperations.MoveInto(p, dest);
+                    FileOperations.MoveInto(p, dest, progress, ct);
                 }
                 else
                 {
-                    FileOperations.CopyInto(p, dest);
+                    FileOperations.CopyInto(p, dest, progress, ct);
                 }
                 sources.Add(p);
+            }
+            catch (OperationCanceledException)
+            {
+                return (sources, errors, true);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
             {
                 errors.Add($"{Path.GetFileName(p)}: {ex.Message}");
             }
         }
-        return (sources, errors);
+        return (sources, errors, false);
     }
+
 
     /// <summary>현재 폴더를 같은 경로로 다시 읽는다(Navigated 이벤트는 발생하지 않는다).</summary>
     private void Reload()

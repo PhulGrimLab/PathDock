@@ -7,6 +7,7 @@ using PathDock.Core.Logging;
 using PathDock.Core.Paths;
 using PathDock.Core.Settings;
 using PathDock.Core.Sync;
+using PathDock.Core.Terminal;
 
 namespace PathDock.App.ViewModels;
 
@@ -183,6 +184,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         progress?.Invoke(Loc.T("탐색기와 터미널 준비 중...", "Preparing explorer and terminal..."));
         Info = new InfoBarViewModel();
         Explorer = new ExplorerViewModel(log, _sizeCache, _dialogs);
+        Explorer.ShowHidden = Settings.ShowHiddenFiles;
+        Explorer.ShowHiddenChanged += v => { Settings.ShowHiddenFiles = v; SaveSettings(); };
         Terminal = new TerminalViewModel(log, _dialogs) { StartDirectoryProvider = () => Explorer.CurrentPath };
         Favorites = new FavoritesViewModel(Settings.Favorites, () => Explorer.CurrentPath, path => Explorer.NavigateTo(path, ChangeOrigin.User), _dialogs, log, SaveSettings);
         Drives = new DrivesViewModel(log, path => Explorer.NavigateTo(path, ChangeOrigin.User), () => Explorer.CurrentPath);
@@ -207,6 +210,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _ = Drives.RefreshAsync();
         };
         Explorer.ErrorOccurred += Info.Show;
+        Explorer.Notified += Info.ShowSuccess;
+        Explorer.SendPathsToTerminalRequested += SendPathsToTerminal;
         Terminal.Notice += Notify;
         Terminal.CwdChanged += (path, fromRequest) =>
             _sync.OnTerminalCwdChanged(path, fromRequest ? ChangeOrigin.Sync : ChangeOrigin.User);
@@ -225,6 +230,28 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+
+    /// <summary>터미널로 포커스를 옮겨 달라는 요청(창이 처리한다).</summary>
+    public event Action? TerminalFocusRequested;
+
+    /// <summary>경로들을 활성 터미널 입력줄에 넣는다(Enter 없음). 터미널이 끝났거나 쓸 수 없는 경로뿐이면 알림 막대로 알린다.</summary>
+    public void SendPathsToTerminal(IReadOnlyList<string> paths)
+    {
+        TerminalTab tab = Terminal.SelectedTab;
+        if (tab.Status == TerminalTabStatus.Exited)
+        {
+            Info.Show(Loc.T("터미널이 종료되어 경로를 입력할 수 없습니다", "The terminal has exited, so the path cannot be typed into it"));
+            return;
+        }
+        string text = TerminalPathText.Join(paths, Settings.TerminalShell);
+        if (text.Length == 0)
+        {
+            Info.Show(Loc.T("경로에 제어 문자가 있어 터미널에 입력하지 않았습니다", "The path contains control characters, so it was not typed into the terminal"));
+            return;
+        }
+        tab.Session.SendInput(text);
+        TerminalFocusRequested?.Invoke();
+    }
     /// <summary>시작 경로(마지막 경로 → 사용자 폴더)로 탐색기를 열고 터미널을 같은 경로에서 시작한다.</summary>
     public void Initialize(Action<string>? progress = null)
     {

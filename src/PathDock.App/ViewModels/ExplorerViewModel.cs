@@ -110,6 +110,27 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
 
     public string? CurrentPath => _service.Current;
 
+    // ----- 숨김/시스템 파일 표시(Ctrl+H, 우클릭 메뉴). 바꾸면 현재 폴더와 상위 열을 다시 읽고 설정에 저장한다. -----
+
+    [ObservableProperty]
+    private bool _showHidden;
+
+    /// <summary>숨김 표시 설정이 바뀌었을 때(저장용). 초기값을 넣을 때는 발생하지 않도록 호출 측이 구독을 나중에 한다.</summary>
+    public event Action<bool>? ShowHiddenChanged;
+
+    partial void OnShowHiddenChanged(bool value)
+    {
+        _service.ShowHidden = value;
+        ShowHiddenChanged?.Invoke(value);
+        if (_service.Current is not null)
+        {
+            NavigateTo(_service.Current, ChangeOrigin.User); // 같은 경로라 이력은 늘지 않고 목록만 다시 읽는다(폴더 크기는 캐시 그대로).
+        }
+    }
+
+    [RelayCommand]
+    private void ToggleHidden() => ShowHidden = !ShowHidden;
+
     /// <summary>동기화 요청: 터미널에서 온 경로로 이동한다. 항상 즉시 처리(true).</summary>
     bool IPathSyncTarget.RequestChange(string path)
     {
@@ -204,11 +225,12 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
     {
         string? parent = current is null ? null : ExplorerService.GetParent(current);
         string? grand = parent is null ? null : ExplorerService.GetParent(parent);
+        bool showHidden = ShowHidden; // 백그라운드 스레드에서 읽지 않도록 UI 스레드에서 복사한다.
         try
         {
             (List<FileItem> parentDirs, List<FileItem> grandDirs) = await Task.Run(() => (
-                parent is null ? new List<FileItem>() : ExplorerService.ListDirectories(parent),
-                grand is null ? new List<FileItem>() : ExplorerService.ListDirectories(grand)), ct);
+                parent is null ? new List<FileItem>() : ExplorerService.ListDirectories(parent, showHidden),
+                grand is null ? new List<FileItem>() : ExplorerService.ListDirectories(grand, showHidden)), ct);
             ct.ThrowIfCancellationRequested();
             Parent.Load(parent, parentDirs, current);
             GrandParent.Load(grand, grandDirs, parent);
@@ -452,7 +474,7 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
         }
         try
         {
-            ApplyListing(ExplorerService.List(target));
+            ApplyListing(ExplorerService.List(target, ShowHidden));
         }
         catch (Exception ex) when (ex is DirectoryNotFoundException or UnauthorizedAccessException or IOException)
         {

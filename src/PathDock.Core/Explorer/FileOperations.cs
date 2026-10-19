@@ -155,6 +155,9 @@ public static class FileOperations
         }
     }
 
+    /// <summary><paramref name="path"/>가 <paramref name="folder"/> 자신이거나 그 안인지(링크를 풀어낸 실제 위치로 비교).</summary>
+    public static bool IsInside(string path, string folder) => IsSameOrInside(path, folder);
+
     private static bool IsSameOrInside(string path, string folder)
     {
         // 링크(정션/심볼릭 링크)를 모두 풀어낸 실제 위치로 비교한다: 자기 자신 안을 가리키는 링크로 우회하면 복사가 끝없이 이어진다.
@@ -165,10 +168,10 @@ public static class FileOperations
     }
 
     /// <summary>파일/폴더를 대상 폴더로 복사하고 새 경로를 돌려준다. 같은 이름이 있으면 "- 복사" 이름으로 만든다. 폴더는 재분석 지점(링크)을 따라가지 않는다.</summary>
-    public static string CopyInto(string source, string destDir) => CopyIntoCore(source, destDir, out _);
+    public static string CopyInto(string source, string destDir, IProgress<long>? progress = null, CancellationToken ct = default) => CopyIntoCore(source, destDir, out _, progress, ct);
 
     /// <summary>복사 본체. <paramref name="skippedLinks"/>는 폴더 안의 링크(정션/심볼릭 링크)를 따라가지 않고 건너뛰었는지(원본 삭제 여부 판단용).</summary>
-    private static string CopyIntoCore(string source, string destDir, out bool skippedLinks)
+    private static string CopyIntoCore(string source, string destDir, out bool skippedLinks, IProgress<long>? progress = null, CancellationToken ct = default)
     {
         skippedLinks = false;
         bool isDir = Directory.Exists(source);
@@ -183,30 +186,124 @@ public static class FileOperations
         string target = UniqueTargetPath(destDir, Path.GetFileName(source.TrimEnd('\\', '/')), isDir);
         if (isDir)
         {
-            CopyDirectory(source, target, ref skippedLinks);
+            try
+            {
+                CopyDirectory(source, target, ref skippedLinks, progress, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                TryDeleteDirectory(target); // 취소하면 이 항목의 반쯤 복사된 결과는 남기지 않는다.
+                throw;
+            }
         }
         else
         {
-            File.Copy(source, target);
+            CopyFile(source, target, progress, ct);
         }
         return target;
     }
 
-    private static void CopyDirectory(string source, string target, ref bool skippedLinks)
+    private static void CopyDirectory(string source, string target, ref bool skippedLinks, IProgress<long>? progress, CancellationToken ct)
     {
         Directory.CreateDirectory(target);
         foreach (string file in Directory.EnumerateFiles(source))
         {
-            File.Copy(file, Path.Combine(target, Path.GetFileName(file)));
+            CopyFile(file, Path.Combine(target, Path.GetFileName(file)), progress, ct);
         }
         foreach (string dir in Directory.EnumerateDirectories(source))
         {
+            ct.ThrowIfCancellationRequested();
             if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0)
             {
                 skippedLinks = true;
                 continue; // 링크/정션은 따라가지 않는다(순환 방지).
             }
-            CopyDirectory(dir, Path.Combine(target, Path.GetFileName(dir)), ref skippedLinks);
+            CopyDirectory(dir, Path.Combine(target, Path.GetFileName(dir)), ref skippedLinks, progress, ct);
+        }
+    }
+
+    private const int CopyBufferBytes = 1024 * 1024;
+
+    /// <summary>
+    /// 파일 하나를 복사한다. 진행 보고나 취소가 필요 없으면 <see cref="File.Copy(string, string)"/>를 그대로 쓰고,
+    /// 그렇지 않으면 1MB씩 읽어 쓰면서 바이트 수를 보고하고 취소를 확인한다(복사본은 특성·시간을 원본과 맞춘다).
+    /// 중간에 실패하거나 취소되면 반쯤 쓰인 대상 파일은 지운다.
+    /// </summary>
+    private static void CopyFile(string source, string target, IProgress<long>? progress, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (progress is null && !ct.CanBeCanceled)
+        {
+            File.Copy(source, target);
+            return;
+        }
+        bool completed = false;
+        try
+        {
+            using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, CopyBufferBytes, FileOptions.SequentialScan))
+            using (var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None, CopyBufferBytes, FileOptions.SequentialScan))
+            {
+                var buffer = new byte[CopyBufferBytes];
+                int read;
+                while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    output.Write(buffer, 0, read);
+                    progress?.Report(read);
+                }
+            }
+            File.SetAttributes(target, File.GetAttributes(source));
+            File.SetCreationTimeUtc(target, File.GetCreationTimeUtc(source));
+            File.SetLastWriteTimeUtc(target, File.GetLastWriteTimeUtc(source));
+            completed = true;
+        }
+        finally
+        {
+            if (!completed)
+            {
+                try { File.Delete(target); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* 지우지 못해도 원래 오류를 우선한다. */ }
+            }
+        }
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            Directory.Delete(path, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // 정리 실패는 무시한다(취소 결과를 알리는 것이 우선).
+        }
+    }
+
+    /// <summary>복사·이동할 전체 바이트 수(진행률의 분모). 폴더는 하위 파일 크기를 더하고 링크(재분석 지점)는 복사와 같이 건너뛴다. 읽을 수 없는 항목은 0으로 센다.</summary>
+    public static long MeasureBytes(string path, CancellationToken ct = default)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                return new FileInfo(path).Length;
+            }
+            if (!Directory.Exists(path))
+            {
+                return 0;
+            }
+            long total = 0;
+            var options = new EnumerationOptions { IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint, RecurseSubdirectories = true };
+            foreach (string file in Directory.EnumerateFiles(path, "*", options))
+            {
+                ct.ThrowIfCancellationRequested();
+                try { total += new FileInfo(file).Length; }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* 읽을 수 없는 파일은 건너뛴다. */ }
+            }
+            return total;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return 0;
         }
     }
 
@@ -214,7 +311,7 @@ public static class FileOperations
     /// 파일/폴더를 대상 폴더로 옮기고 새 경로를 돌려준다. 이미 그 폴더에 있으면 아무것도 하지 않는다.
     /// 같은 이름이 있으면 "- 복사" 이름으로 옮긴다. 다른 드라이브면 복사한 뒤 원본을 지운다.
     /// </summary>
-    public static string MoveInto(string source, string destDir)
+    public static string MoveInto(string source, string destDir, IProgress<long>? progress = null, CancellationToken ct = default)
     {
         bool isDir = Directory.Exists(source);
         if (!isDir && !File.Exists(source))
@@ -237,7 +334,7 @@ public static class FileOperations
             Move(source, target, isDir);
             return target;
         }
-        string copied = CopyIntoCore(source, destDir, out bool skippedLinks);
+        string copied = CopyIntoCore(source, destDir, out bool skippedLinks, progress, ct);
         if (skippedLinks)
         {
             // 복사에서 건너뛴 링크가 있다: 원본을 지우면 그 링크가 사라지므로(복사본에는 없다) 원본을 남기고 알린다.

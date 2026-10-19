@@ -54,7 +54,7 @@
 | `DriveCard` | `Button` | 드라이브 이름/사용량 막대/용량 문구, 현재 드라이브 강조(`IsCurrent`), 90% 이상 경고색(`IsLow`) |
 | `FavoriteChip` | `Button` | 번호 배지 + 폴더 이름. 빈 칸(`IsEmpty`)은 "+ 등록" 모양 |
 | `UsageMeter` | `Control` | "라벨 막대 값" 한 줄 미터. 임계값 이상이면 경고색, `IsAvailable=false`면 흐리게(GPU N/A) |
-| `AddressBar` | `Control` | 아이콘 + 경로 입력, Enter로 명령 실행. UIA ID/이름은 안쪽 TextBox에 전달(`TextBoxAutomationId`) |
+| `AddressBar` | `Control` | 아이콘 + 경로 입력 + 오른쪽 끝 "현재 경로 복사" 버튼(`CopyPathButton`, 누르면 아이콘이 잠깐 체크로 바뀜), Enter로 명령 실행. UIA ID/이름은 안쪽 TextBox에 전달(`TextBoxAutomationId`) |
 | `TerminalControl` | `FrameworkElement` | (기존) 화면 버퍼 렌더링/입력/UIA 값 노출 |
 
 ## 3. 뷰(UserControl, `Views/`)
@@ -68,7 +68,7 @@
 | `SyncModeSelectorView` | MainViewModel | 경로 동기화 콤보(즐겨찾기 띠 오른쪽) |
 | `DrivePanelView` | MainViewModel.Drives | `DriveCard` 목록, 패널 배경은 `PdDrivePanelBackgroundBrush`(네이비) |
 | `AncestorColumnView` | AncestorColumnViewModel | 조부모/부모 열이 **같은 뷰를 재사용**, 선택 항목 왼쪽 강조 막대 |
-| `FileListView` | ExplorerViewModel | 종류별 아이콘/색, 정렬 머리글(▲▼), 이름 검색 입력칸(Ctrl+F), 요약 줄, 미리보기 툴팁, 단축키·우클릭 메뉴(이름 변경/삭제/새 폴더/복사/잘라내기/붙여넣기) |
+| `FileListView` | ExplorerViewModel | 종류별 아이콘/색, 정렬 머리글(▲▼), 이름 검색 입력칸(Ctrl+F), 요약 줄, 미리보기 툴팁, 단축키(Ctrl+H 숨김 표시, Ctrl+Shift+C 경로 복사, Ctrl+Shift+V 터미널에 경로 입력, Alt+Enter 속성), 붙여넣기/끌어 놓기 진행 막대+취소, 끌어 놓기(폴더 행·터미널), 우클릭 메뉴(열기·연결 프로그램·탐색기에서 보기·경로 복사·터미널에 경로 입력·속성·숨김 표시, 이름 변경/삭제/새 폴더/복사/잘라내기/붙여넣기) |
 | `TerminalPanelView` | TerminalViewModel | 셸 상태, 도움말·내용 저장·화면 지우기·접기 버튼을 머리글에 표시. 본문 위쪽에 **탭 줄**(탭 버튼 + 닫기 `×`, 오른쪽 `+`; 선택된 탭은 강조색 밑줄, 탭이 많으면 가로 스크롤). 탭 버튼은 포커스를 가져가지 않고 클릭 후 포커스를 터미널로 돌려준다 |
 | `StatusBarView` | MainViewModel(SyncSummary) + Usage | 동기화 요약 + `UsageMeter` 3개 |
 | `SettingsWindow` | SettingsViewModel(MainViewModel.Preferences) | 언어, 글자 크기(화면/터미널), 터미널 셸·테마·글자색/배경색(미리보기), 시작 시 마지막 경로, 즐겨찾기 초기화 |

@@ -24,6 +24,16 @@ public sealed partial class FileItemViewModel : ObservableObject
 
     public FileItem Item { get; }
 
+    /// <summary>숨김/시스템 항목인지(숨김 표시를 켠 경우 흐리게 보여준다).</summary>
+    public bool IsHidden => Item.IsHidden;
+
+    /// <summary>끌어 놓을 폴더로 강조 중인지(끌어 놓기 중에만 true).</summary>
+    [ObservableProperty]
+    private bool _isDropTarget;
+
+    /// <summary>목록의 이름 칸 불투명도(숨김 항목은 흐리게).</summary>
+    public double RowOpacity => Item.IsHidden ? 0.55 : 1.0;
+
     // ----- 종류별 아이콘/색(목록의 이름 열). 종류 분류는 Core(FileCategorizer), 여기서는 표시 방식만 정한다. -----
 
     /// <summary>목록 아이콘 종류.</summary>

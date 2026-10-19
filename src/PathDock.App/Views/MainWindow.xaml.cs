@@ -44,6 +44,10 @@ public partial class MainWindow : FluentWindow
             }
         };
         RestoreWindowState();
+        _vm.TerminalFocusRequested += () => TerminalPanel.FocusTerminal();
+        TerminalPanel.AllowDrop = true;
+        TerminalPanel.DragOver += OnTerminalDragOver;
+        TerminalPanel.Drop += OnTerminalDrop;
         _vm.Terminal.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(TerminalViewModel.IsCollapsed))
@@ -109,6 +113,24 @@ public partial class MainWindow : FluentWindow
         {
             ClockText.Text = text;
         }
+    }
+
+    // ----- 터미널로 끌어 놓기: 파일을 터미널에 놓으면 경로를 입력줄에 넣는다(Enter는 누르지 않는다). -----
+
+    private void OnTerminalDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = FileDragDrop.GetPaths(e.Data).Count > 0 ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void OnTerminalDrop(object sender, DragEventArgs e)
+    {
+        IReadOnlyList<string> paths = FileDragDrop.GetPaths(e.Data);
+        if (paths.Count > 0)
+        {
+            _vm.SendPathsToTerminal(paths);
+        }
+        e.Handled = true;
     }
 
     /// <summary>시계를 더블 클릭하면 Windows 알림 센터(달력 포함)를 연다. 제목 표시줄의 더블 클릭 최대화는 막는다.</summary>

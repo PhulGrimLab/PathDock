@@ -22,7 +22,7 @@ public static class UnelevatedLauncher
     }
 
     /// <summary>탐색기를 통해 파일을 연다. 탐색기와 통신하지 못하면 false(호출 측이 기존 방식으로 연다).</summary>
-    public static bool TryOpen(string path, string workingDirectory)
+    public static bool TryOpen(string path, string workingDirectory, string verb = "open")
     {
         try
         {
@@ -37,7 +37,7 @@ public static class UnelevatedLauncher
             int hwnd = 0;
             dynamic desktop = shellWindows.FindWindowSW(ref location, ref root, DesktopSwClass, out hwnd, NeedDispatch);
             dynamic explorerShell = desktop.Document.Application;
-            explorerShell.ShellExecute(path, string.Empty, workingDirectory, "open", 1);
+            explorerShell.ShellExecute(path, string.Empty, workingDirectory, verb, 1);
             return true;
         }
         catch (Exception ex) when (ex is COMException or InvalidCastException or MissingMemberException or Microsoft.CSharp.RuntimeBinder.RuntimeBinderException)
