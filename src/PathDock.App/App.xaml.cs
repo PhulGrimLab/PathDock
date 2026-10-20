@@ -20,6 +20,7 @@ public partial class App : Application
     private AsyncFileLogger? _logger;
     private MainViewModel? _viewModel;
     private Services.SplashHost? _splash;
+    private Services.SingleInstanceGuard? _singleInstance;
 
     /// <summary>프로세스가 시작된 뒤 지금까지 걸린 시간(ms). 시작이 느린 구간을 로그로 찾기 위한 진단용.</summary>
     private static long SinceProcessStartMs()
@@ -33,6 +34,12 @@ public partial class App : Application
         base.OnStartup(e);
 
         string dataDir = SettingsService.ResolveDataDir();
+        // 같은 데이터 폴더로 이미 떠 있으면 그 창을 앞으로 가져오고 이 실행은 바로 끝낸다(설정·캐시·로그를 두 인스턴스가 함께 쓰면 서로 덮어쓴다).
+        if (!Services.SingleInstanceGuard.TryAcquire(dataDir, out _singleInstance))
+        {
+            Shutdown(0);
+            return;
+        }
         _logger = new AsyncFileLogger(dataDir);
         _logger.Info($"시작 시간: OnStartup 진입 - 프로세스 시작 후 {SinceProcessStartMs()}ms");
         // UI 스레드의 처리되지 않은 예외: 기록하고 알린 뒤 계속 실행한다(그냥 두면 앱이 종료되어 열어 둔 터미널 작업이 모두 끝난다).
@@ -96,12 +103,31 @@ public partial class App : Application
         window.Closed += (_, _) => splash.CloseNow();
         window.Show();
         _viewModel.Initialize(splash.SetStatus);
+        _singleInstance?.StartListening(() => Dispatcher.BeginInvoke(BringMainWindowToFront));
+    }
+
+    /// <summary>다른 실행이 "앞으로"를 요청했을 때: 최소화돼 있으면 복원하고 맨 앞으로 가져온다(UI 스레드).</summary>
+    private void BringMainWindowToFront()
+    {
+        if (MainWindow is not { } window)
+        {
+            return;
+        }
+        if (window.WindowState == WindowState.Minimized)
+        {
+            window.WindowState = WindowState.Normal;
+        }
+        window.Show();
+        window.Activate();
+        window.Topmost = true; // 포그라운드 전환이 막힌 경우를 위한 보조: 잠깐 최상위로 올렸다가 원래대로 돌린다.
+        window.Topmost = false;
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
         _splash?.CloseNow();
         _viewModel?.Dispose();
+        _singleInstance?.Dispose();
         _logger?.Info("앱 종료");
         _logger?.Dispose();
         base.OnExit(e);

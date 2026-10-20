@@ -517,6 +517,21 @@ public sealed class AppDriver : IDisposable
 
     public bool WaitForExit(int timeoutMs) => _process.WaitForExit(timeoutMs);
 
+    /// <summary>같은 앱을 한 번 더 실행한다(기본은 같은 데이터 폴더). 단일 인스턴스 확인용: 호출 측이 종료 여부를 보고 정리한다.</summary>
+    public Process LaunchSecondInstance(string? dataDir = null)
+    {
+        var psi = new ProcessStartInfo(AppExePath) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(AppExePath)! };
+        psi.Environment["PATHDOCK_DATA_DIR"] = dataDir ?? DataDir;
+        return Process.Start(psi) ?? throw new InvalidOperationException("두 번째 실행을 시작하지 못함");
+    }
+
+    /// <summary>메인 창의 시각 상태(Normal/Minimized/Maximized).</summary>
+    public WindowVisualState GetWindowState() =>
+        ((WindowPattern)Window.GetCurrentPattern(WindowPattern.Pattern)).Current.WindowVisualState;
+
+    public void SetWindowState(WindowVisualState state) =>
+        ((WindowPattern)Window.GetCurrentPattern(WindowPattern.Pattern)).SetWindowVisualState(state);
+
     /// <summary>창을 정상 종료(설정 저장 경로를 타도록 CloseMainWindow)하고 종료를 기다린다.</summary>
     public void CloseGracefully()
     {

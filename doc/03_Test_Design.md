@@ -4,7 +4,7 @@
 
 ## 1. PathDock.Tests (MSTest, net10.0-windows)
 
-현재 **232개**(1개는 다른 드라이브가 없으면 건너뜀)(2026-10-19 전부 통과; Core 줄 커버리지 91.8% / 분기 88.0%는 10-16 측정값). 파일: `HiddenFilesTests.cs`(숨김 파일 표시), `FileOperationProgressTests.cs`(복사/이동 진행 보고·취소·반쪽 파일 정리), `DropRulesTests.cs`(끌어 놓기 규칙), `TerminalPathTextTests.cs`(터미널 입력용 경로 따옴표·제어 문자 거부), `CoreLogicTests.cs`(핵심 로직 다수), `TerminalSessionTests.cs`(ConPTY 통합), `TerminalTabTitleTests.cs`(탭 제목 규칙), `TerminalSecurityTests.cs`·`HardeningTests.cs`(보안 회귀), `TerminalParserTests.cs`(VT 파서·화면 버퍼), `SettingsRobustnessTests.cs`(손상된 설정), `TerminalThemeTests.cs`,
+현재 **236개**(1개는 다른 드라이브가 없으면 건너뜀)(2026-10-19 전부 통과; Core 줄 커버리지 91.8% / 분기 88.0%는 10-16 측정값). 파일: `SingleInstanceNameTests.cs`(단일 인스턴스 이름), `HiddenFilesTests.cs`(숨김 파일 표시), `FileOperationProgressTests.cs`(복사/이동 진행 보고·취소·반쪽 파일 정리), `DropRulesTests.cs`(끌어 놓기 규칙), `TerminalPathTextTests.cs`(터미널 입력용 경로 따옴표·제어 문자 거부), `CoreLogicTests.cs`(핵심 로직 다수), `TerminalSessionTests.cs`(ConPTY 통합), `TerminalTabTitleTests.cs`(탭 제목 규칙), `TerminalSecurityTests.cs`·`HardeningTests.cs`(보안 회귀), `TerminalParserTests.cs`(VT 파서·화면 버퍼), `SettingsRobustnessTests.cs`(손상된 설정), `TerminalThemeTests.cs`,
 `LocTests.cs`(언어), `TextPreviewerTests.cs`, `ImagePreviewTypesTests.cs`.
 
 | 영역 | 주요 케이스 |
@@ -30,7 +30,7 @@
 실제 `PathDock.App.exe`를 `PATHDOCK_DATA_DIR`(임시 폴더)로 격리해 띄우고 `System.Windows.Automation`으로 조작한다.
 CodeAtlas에서 얻은 교훈 적용: `Invoke` 스퓨리어스 예외는 삼키고 상태 변화로 판정, 새 창/대화상자는 `EnumWindows`로 탐색.
 
-| 테스트 (구현됨, 42개) | 검증 |
+| 테스트 (구현됨, 45개) | 검증 |
 |---|---|
 | Favorites_Click_NavigatesExplorer | 즐겨찾기 1·2 클릭 → 경로 표시줄이 해당 폴더로 |
 | Drives_ShowSystemDriveUsage_AndClickNavigatesToRoot | 드라이브 패널에 시스템 드라이브가 표시되고 클릭하면 루트로 이동 |
@@ -49,6 +49,9 @@ CodeAtlas에서 얻은 교훈 적용: `Invoke` 스퓨리어스 예외는 삼키�
 | PathBar_InvalidPath_ShowsInfoBar_AndKeepsPath | 존재하지 않는 경로 입력 → 주소창이 입력값을 유지(고쳐 쓸 수 있도록. 4553801 이전에는 원래 경로로 복원했음) |
 | PathBar_CopyButton_CopiesCurrentPathToClipboard | 주소 표시줄 오른쪽의 복사 버튼을 누르면 클립보드가 현재 경로로 바뀜(클립보드는 PowerShell로 읽고 씀) |
 | Explorer_ListRefreshButton_PicksUpNewFile | 현재 폴더 머리글(이름 검색 앞)의 새로 고침 버튼을 누르면 밖에서 만든 파일이 목록에 나타남 |
+| SingleInstance_SecondLaunchWithSameDataDir_ExitsAndKeepsFirst | 같은 데이터 폴더로 두 번째 실행하면 두 번째는 종료 코드 0으로 바로 끝나고 첫 창은 그대로 |
+| SingleInstance_SecondLaunch_RestoresMinimizedWindow | 첫 창이 최소화돼 있을 때 두 번째 실행하면 첫 창이 복원됨 |
+| SingleInstance_DifferentDataDirs_BothRun | 데이터 폴더가 다르면 두 인스턴스가 모두 뜸(테스트·개발용 격리가 막히지 않음) |
 | Explorer_CtrlH_TogglesHiddenFiles_AndPersists | Ctrl+H로 숨김 파일이 나타났다 사라지고, 설정에 저장되어 재시작 후에도 유지됨 |
 | Explorer_CtrlShiftC_CopiesSelectedFilePaths | Ctrl+Shift+C가 선택한 파일의 전체 경로를 클립보드에 복사 |
 | Explorer_CtrlShiftV_TypesQuotedPathIntoTerminal_WithoutRunningIt | Ctrl+Shift+V가 공백이 있는 경로를 따옴표로 터미널 입력줄에 넣고 실행하지는 않음 |

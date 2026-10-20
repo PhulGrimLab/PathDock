@@ -22,6 +22,7 @@ It runs as administrator (a UAC prompt appears). Unsigned builds may trigger a S
   이름 변경/삭제(휴지통)/새 폴더/복사·이동·붙여넣기, 이미지 썸네일·PDF 첫 쪽·텍스트 미리보기 툴팁
 - **터미널**: ConPTY 기반 PowerShell/명령 프롬프트, **여러 탭**, 마우스 선택·복사·붙여넣기, 색 테마 5종 + 글자/배경색, 내용 저장, 화면 지우기
 - **경로 동기화** 4개 모드(양방향 / 탐색기→터미널 / 터미널→탐색기 / 끄기), 실행 중 명령이 있으면 보류
+- 같은 데이터 폴더로는 앱이 하나만 실행됩니다(다시 실행하면 떠 있는 창이 앞으로 나옵니다)
 - 다크/라이트 테마, 한국어/English, 글자 크기 설정, 설정·창 위치·마지막 경로 복원
 - 제목 표시줄: 정보 창, 계산기, 휴지통 비우기, 시계. 하단: CPU/GPU/메모리 사용량
 
@@ -130,7 +131,7 @@ It runs as administrator (a UAC prompt appears). Unsigned builds may trigger a S
 
 ## 빌드 · 실행 · 테스트
 - 실행: `dotnet run --project src/PathDock.App`
-- 테스트: `doc\run_tests.ps1` (MSTest 232개), `doc\run_ui_tests.ps1` (UI Automation 42개, 실행 중 마우스/키보드 금지)
+- 테스트: `doc\run_tests.ps1` (MSTest 236개), `doc\run_ui_tests.ps1` (UI Automation 45개, 실행 중 마우스/키보드 금지)
 - 배포: Release 빌드 시 `publish\Release\PathDock.App.exe` 단일 파일이 만들어집니다. `v*` 태그를 푸시하면 GitHub Actions가 테스트 → 빌드 → GitHub Release를 만듭니다.
 
 ## 라이선스

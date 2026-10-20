@@ -15,10 +15,10 @@ PathDock.App (WPF, net10.0-windows10.0.19041.0)
  ├─ Localization/     LocSource ({loc:T} XAML 마크업 확장)
  ├─ Themes/           Generic.xaml (커스텀 컨트롤 스타일)
  └─ Services/         ThemeService, FontService, DialogService, FileClipboard, RecycleBinService, CalculatorLauncher,
-                      ImagePreviewService/PdfPreviewService/TextPreviewService/PreviewCache, UnelevatedLauncher(문서를 일반 권한으로 열기), AppInfo, SplashHost(시작 로딩 팝업, 순수 Win32)
+                      ImagePreviewService/PdfPreviewService/TextPreviewService/PreviewCache, SingleInstanceGuard(중복 실행 방지), UnelevatedLauncher(문서를 일반 권한으로 열기), AppInfo, SplashHost(시작 로딩 팝업, 순수 Win32)
 PathDock.Core (net10.0, UI 비의존 → 단위 테스트 용이)
  ├─ Paths/            PathNormalizer
- ├─ Settings/         AppSettings, SettingsService (JSON)
+ ├─ Settings/         AppSettings, SettingsService (JSON), SingleInstanceName(데이터 폴더별 단일 인스턴스 이름)
  ├─ Explorer/         ExplorerService(목록 열거, 이력), DriveService, FolderSizeCalculator/Cache, FileSorter,
  │                    FileOperations(이름 변경·새 폴더·복사·이동(진행 보고·취소)·휴지통), DropRules(끌어 놓기 복사/이동 판단), FileCategory, SizeFormatter, TextPreview, ImagePreviewTypes, LaunchPolicy
  ├─ Sync/             SyncMode, PathSyncService (중재, 루프 방지, 대기 정책)

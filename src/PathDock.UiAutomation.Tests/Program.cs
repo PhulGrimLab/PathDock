@@ -325,6 +325,54 @@ var tests = new List<(string Name, Action Body)>
         if (File.Exists(f)) throw new TestFailedException("이동인데 원본이 남아 있음");
     }),
 
+    ("SingleInstance_SecondLaunchWithSameDataDir_ExitsAndKeepsFirst", () =>
+    {
+        using var app = AppDriver.Launch(NewDataDir(null, "Off"));
+        using System.Diagnostics.Process second = app.LaunchSecondInstance();
+        try
+        {
+            AppDriver.WaitUntil(() => second.HasExited, 15000, "같은 데이터 폴더로 두 번째 실행이 종료되지 않음(중복 실행이 막히지 않음)");
+            if (second.ExitCode != 0) throw new TestFailedException($"두 번째 실행의 종료 코드가 0이 아님: {second.ExitCode}");
+            if (!app.Exists("PathBar")) throw new TestFailedException("첫 인스턴스의 창이 사라짐");
+        }
+        finally
+        {
+            if (!second.HasExited) second.Kill();
+        }
+    }),
+
+    ("SingleInstance_SecondLaunch_RestoresMinimizedWindow", () =>
+    {
+        using var app = AppDriver.Launch(NewDataDir(null, "Off"));
+        app.SetWindowState(System.Windows.Automation.WindowVisualState.Minimized);
+        app.WaitUntil(() => app.GetWindowState() == System.Windows.Automation.WindowVisualState.Minimized, "창이 최소화되지 않음(테스트 전제)");
+        using System.Diagnostics.Process second = app.LaunchSecondInstance();
+        try
+        {
+            app.WaitUntil(() => app.GetWindowState() == System.Windows.Automation.WindowVisualState.Normal, "두 번째 실행 후에도 최소화된 창이 복원되지 않음", 15000);
+        }
+        finally
+        {
+            if (!second.HasExited) second.Kill();
+        }
+    }),
+
+    ("SingleInstance_DifferentDataDirs_BothRun", () =>
+    {
+        using var app = AppDriver.Launch(NewDataDir(null, "Off"));
+        string other = NewDataDir(null, "Off");
+        using System.Diagnostics.Process second = app.LaunchSecondInstance(other);
+        try
+        {
+            Thread.Sleep(8000);
+            if (second.HasExited) throw new TestFailedException($"다른 데이터 폴더인데 두 번째 실행이 종료됨(종료 코드 {second.ExitCode})");
+        }
+        finally
+        {
+            if (!second.HasExited) second.Kill();
+        }
+    }),
+
     ("Explorer_Delete_AsksConfirm_NoKeeps_YesRecycles", () =>
     {
         string a = MakeDir("pdA_del");
