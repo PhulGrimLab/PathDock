@@ -239,7 +239,9 @@
                                 </TextBox.Template>
                             </TextBox>
                             <!-- 현재 경로 복사: 누르면 아이콘이 잠깐 체크 표시로 바뀐다(코드: AddressBar.OnCopyClick) -->
-                            <ui:Button x:Name="PART_CopyButton" Grid.Column="2" Appearance="Transparent" Padding="6,3" Margin="6,0,0,0"
+                            <ui:Button x:Name="PART_CopyButton" Grid.Column="2" Padding="16,3" MinWidth="50" Margin="8,3,0,3" BorderThickness="0"
+                                       Background="{DynamicResource PdCopyPathBackgroundBrush}" MouseOverBackground="{DynamicResource PdCopyPathHoverBrush}"
+                                       PressedBackground="{DynamicResource PdCopyPathHoverBrush}" Foreground="{DynamicResource PdRefreshForegroundBrush}"
                                        VerticalAlignment="Center" Focusable="True"
                                        Icon="{ui:SymbolIcon Copy24}"
                                        ToolTip="{loc:T '현재 경로 복사', 'Copy current path'}"

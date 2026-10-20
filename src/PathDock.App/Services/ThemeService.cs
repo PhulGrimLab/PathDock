@@ -50,11 +50,32 @@ public static class ThemeService
             res["PdAddressBarBackgroundBrush"] = System.Windows.SystemColors.WindowBrush;
             res["PdAddressBarBorderBrush"] = System.Windows.SystemColors.WindowTextBrush;
             res["PdDrivePanelBackgroundBrush"] = System.Windows.SystemColors.WindowBrush;
+            res["PdRefreshBackgroundBrush"] = System.Windows.SystemColors.ControlBrush;
+            res["PdRefreshHoverBrush"] = System.Windows.SystemColors.HighlightBrush;
+            res["PdRefreshForegroundBrush"] = System.Windows.SystemColors.ControlTextBrush;
+            res["PdCopyPathBackgroundBrush"] = System.Windows.SystemColors.ControlBrush;
+            res["PdCopyPathHoverBrush"] = System.Windows.SystemColors.HighlightBrush;
+            foreach (string name in new[] { "Clear", "Save", "Collapse" })
+            {
+                res[$"PdTerm{name}BackgroundBrush"] = System.Windows.SystemColors.ControlBrush;
+                res[$"PdTerm{name}HoverBrush"] = System.Windows.SystemColors.HighlightBrush;
+            }
             return;
         }
         res["PdDrivePanelBackgroundBrush"] = Frozen(light ? "#E8EEF7" : "#1B2433");
         res["PdAddressBarBackgroundBrush"] = Frozen(light ? "#E6EFFA" : "#1E2F45");
         res["PdAddressBarBorderBrush"] = Frozen(light ? "#9DB8D9" : "#3B5A80");
+        res["PdRefreshBackgroundBrush"] = Frozen("#2E7D32");
+        res["PdRefreshHoverBrush"] = Frozen("#3E9B44");
+        res["PdRefreshForegroundBrush"] = Frozen("#FFFFFF");
+        res["PdCopyPathBackgroundBrush"] = Frozen("#C2410C");
+        res["PdCopyPathHoverBrush"] = Frozen("#E0561A");
+        res["PdTermClearBackgroundBrush"] = Frozen("#C62828");
+        res["PdTermClearHoverBrush"] = Frozen("#E53935");
+        res["PdTermSaveBackgroundBrush"] = Frozen("#1565C0");
+        res["PdTermSaveHoverBrush"] = Frozen("#1E88E5");
+        res["PdTermCollapseBackgroundBrush"] = Frozen("#6A1B9A");
+        res["PdTermCollapseHoverBrush"] = Frozen("#8E24AA");
     }
 
     /// <summary>

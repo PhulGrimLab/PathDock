@@ -54,21 +54,24 @@
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                ToolTip="{loc:T '마우스 드래그: 글자 선택 (더블클릭: 단어)&#x0A;Ctrl+C: 선택이 있으면 복사, 없으면 실행 중단&#x0A;Ctrl+Shift+C: 복사&#x0A;Ctrl+V: 붙여넣기&#x0A;우클릭: 선택이 있으면 복사, 없으면 붙여넣기&#x0A;휠: 지난 출력 보기', 'Mouse drag: select text (double-click: word)&#x0A;Ctrl+C: copy if there is a selection, otherwise interrupt&#x0A;Ctrl+Shift+C: copy&#x0A;Ctrl+V: paste&#x0A;Right-click: copy if there is a selection, otherwise paste&#x0A;Wheel: scroll back through output'}"
                                AutomationProperties.AutomationId="TerminalHelp" AutomationProperties.Name="{loc:T '터미널 사용법', 'Terminal help'}" />
-                <ui:Button Appearance="Transparent" Margin="4,-3,0,-3" Padding="6,3"
+                <ui:Button Margin="6,-3,0,-3" Padding="16,3" MinWidth="50" BorderThickness="0" Foreground="{DynamicResource PdRefreshForegroundBrush}"
+                           Background="{DynamicResource PdTermClearBackgroundBrush}" MouseOverBackground="{DynamicResource PdTermClearHoverBrush}" PressedBackground="{DynamicResource PdTermClearHoverBrush}"
                            Command="{Binding ClearScreenCommand}" Click="OnClearClick"
                            ToolTip="{loc:T '터미널 화면 지우기', 'Clear terminal screen'}"
                            AutomationProperties.AutomationId="TerminalClearButton"
                            AutomationProperties.Name="{loc:T '터미널 화면 지우기', 'Clear terminal screen'}">
                     <ui:SymbolIcon Symbol="Eraser24" FontSize="14" />
                 </ui:Button>
-                <ui:Button Appearance="Transparent" Margin="2,-3,0,-3" Padding="6,3"
+                <ui:Button Margin="4,-3,0,-3" Padding="16,3" MinWidth="50" BorderThickness="0" Foreground="{DynamicResource PdRefreshForegroundBrush}"
+                           Background="{DynamicResource PdTermSaveBackgroundBrush}" MouseOverBackground="{DynamicResource PdTermSaveHoverBrush}" PressedBackground="{DynamicResource PdTermSaveHoverBrush}"
                            Command="{Binding SaveOutputCommand}"
                            ToolTip="{loc:T '터미널 내용을 파일로 저장', 'Save terminal contents to a file'}"
                            AutomationProperties.AutomationId="TerminalSaveButton"
                            AutomationProperties.Name="{loc:T '터미널 내용 저장', 'Save terminal contents'}">
                     <ui:SymbolIcon Symbol="Save24" FontSize="14" />
                 </ui:Button>
-                <ui:Button Appearance="Transparent" Margin="2,-3,-6,-3" Padding="6,3"
+                <ui:Button Margin="4,-3,-6,-3" Padding="16,3" MinWidth="50" BorderThickness="0" Foreground="{DynamicResource PdRefreshForegroundBrush}"
+                           Background="{DynamicResource PdTermCollapseBackgroundBrush}" MouseOverBackground="{DynamicResource PdTermCollapseHoverBrush}" PressedBackground="{DynamicResource PdTermCollapseHoverBrush}"
                            Command="{Binding ToggleCollapsedCommand}"
                            ToolTip="{Binding CollapseToolTip}"
                            AutomationProperties.AutomationId="TerminalCollapseButton"

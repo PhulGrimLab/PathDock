@@ -17,8 +17,10 @@
     <ctl:PanelCard Header="{Binding CurrentFolderName}" Symbol="Folder24">
         <ctl:PanelCard.HeaderTrailing>
         <StackPanel Orientation="Horizontal">
-            <!-- 새로 고침: 이름 검색 앞의 작은 버튼(F5와 같음, 폴더 크기도 다시 계산) -->
-            <ui:Button Appearance="Transparent" Padding="6,2" Margin="0,-4,0,-4" MinHeight="26" Height="26" VerticalAlignment="Center"
+            <!-- 새로 고침: 이름 검색 앞의 녹색 버튼(F5와 같음, 폴더 크기도 다시 계산). 색은 PdRefresh*Brush(ThemeService) -->
+            <ui:Button Padding="14,2" Margin="0,-4,0,-4" MinWidth="44" MinHeight="26" Height="26" VerticalAlignment="Center" BorderThickness="0"
+                       Background="{DynamicResource PdRefreshBackgroundBrush}" MouseOverBackground="{DynamicResource PdRefreshHoverBrush}"
+                       PressedBackground="{DynamicResource PdRefreshHoverBrush}" Foreground="{DynamicResource PdRefreshForegroundBrush}"
                        Icon="{ui:SymbolIcon ArrowClockwise24}" Command="{Binding RefreshCommand}"
                        ToolTip="{loc:T '새로 고침 (F5) - 폴더 크기도 다시 계산', 'Refresh (F5) - recalculates folder sizes too'}"
                        AutomationProperties.AutomationId="ListRefreshButton" AutomationProperties.Name="{loc:T '새로 고침', 'Refresh'}" />

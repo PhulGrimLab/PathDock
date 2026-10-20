@@ -20,6 +20,20 @@
             <!-- 주소 표시줄 배경/테두리(슬레이트 블루). 기본값은 다크용이며 테마가 바뀌면 ThemeService가 갱신한다. -->
             <SolidColorBrush x:Key="PdAddressBarBackgroundBrush" Color="#1E2F45" />
             <SolidColorBrush x:Key="PdAddressBarBorderBrush" Color="#3B5A80" />
+            <!-- 목록 머리글의 새로 고침 버튼(녹색). 밝은 글자(흰색)와의 대비 4.5:1 이상. 고대비 모드에서는 ThemeService가 시스템 색으로 바꾼다. -->
+            <SolidColorBrush x:Key="PdRefreshBackgroundBrush" Color="#2E7D32" />
+            <SolidColorBrush x:Key="PdRefreshHoverBrush" Color="#3E9B44" />
+            <SolidColorBrush x:Key="PdRefreshForegroundBrush" Color="#FFFFFF" />
+            <!-- 주소 표시줄의 경로 복사 버튼(주황). 새로 고침(녹색)과 구분되는 색. -->
+            <SolidColorBrush x:Key="PdCopyPathBackgroundBrush" Color="#C2410C" />
+            <SolidColorBrush x:Key="PdCopyPathHoverBrush" Color="#E0561A" />
+            <!-- 터미널 머리글 버튼 색: 화면 지우기(빨강), 내용 저장(파랑), 접기/펼치기(보라). 글자/아이콘은 흰색(PdRefreshForegroundBrush). -->
+            <SolidColorBrush x:Key="PdTermClearBackgroundBrush" Color="#C62828" />
+            <SolidColorBrush x:Key="PdTermClearHoverBrush" Color="#E53935" />
+            <SolidColorBrush x:Key="PdTermSaveBackgroundBrush" Color="#1565C0" />
+            <SolidColorBrush x:Key="PdTermSaveHoverBrush" Color="#1E88E5" />
+            <SolidColorBrush x:Key="PdTermCollapseBackgroundBrush" Color="#6A1B9A" />
+            <SolidColorBrush x:Key="PdTermCollapseHoverBrush" Color="#8E24AA" />
             <!-- 드라이브 패널 배경(네이비). 기본값은 다크용이며 테마가 바뀌면 ThemeService가 갱신한다. -->
             <SolidColorBrush x:Key="PdDrivePanelBackgroundBrush" Color="#1B2433" />
             <!-- 화면 글자 크기(설정 창에서 바꾸면 FontService가 이 값을 갱신) -->
