@@ -99,10 +99,12 @@
                                      AutomationProperties.AutomationId="LayoutDualButton"
                                      AutomationProperties.Name="{loc:T '폴더 2묶음', '2 folder pairs'}">
                             <Canvas Width="24" Height="16">
-                                <Rectangle Canvas.Left="1" Canvas.Top="1" Width="3" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
-                                <Rectangle Canvas.Left="5" Canvas.Top="1" Width="6" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
-                                <Rectangle Canvas.Left="13" Canvas.Top="1" Width="3" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                                <!-- 두 묶음: (가는 막대 + 넓은 막대) 한 쌍이 둘. 사이를 크게 띄워 한 경로 그림과 구분한다 -->
+                                <Rectangle Canvas.Left="1" Canvas.Top="1" Width="2" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                                <Rectangle Canvas.Left="4" Canvas.Top="1" Width="6" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                                <Rectangle Canvas.Left="14" Canvas.Top="1" Width="2" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
                                 <Rectangle Canvas.Left="17" Canvas.Top="1" Width="6" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                                <Rectangle Canvas.Left="11" Canvas.Top="0" Width="2" Height="16" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" Opacity="0.45" />
                             </Canvas>
                         </RadioButton>
                         <RadioButton Style="{StaticResource LayoutModeButton}" GroupName="ExplorerLayout"
@@ -111,10 +113,11 @@
                                      AutomationProperties.AutomationId="LayoutSingleButton"
                                      AutomationProperties.Name="{loc:T '한 경로', 'One path'}">
                             <Canvas Width="24" Height="16">
-                                <Rectangle Canvas.Left="1" Canvas.Top="1" Width="4" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
-                                <Rectangle Canvas.Left="6" Canvas.Top="1" Width="4" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
-                                <Rectangle Canvas.Left="11" Canvas.Top="1" Width="4" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
-                                <Rectangle Canvas.Left="16" Canvas.Top="1" Width="7" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                                <!-- 한 경로: 가는 막대 3개(상위 폴더) + 하나의 큰 블록(현재 폴더) -->
+                                <Rectangle Canvas.Left="1" Canvas.Top="1" Width="2" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                                <Rectangle Canvas.Left="4" Canvas.Top="1" Width="2" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                                <Rectangle Canvas.Left="7" Canvas.Top="1" Width="2" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                                <Rectangle Canvas.Left="10" Canvas.Top="1" Width="13" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
                             </Canvas>
                         </RadioButton>
                     </StackPanel>
@@ -241,7 +244,7 @@
                 <Grid x:Name="TabHost" Grid.Row="0" Grid.Column="2" Margin="0,0,0,8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition x:Name="TabCol0" Width="*" />
-                        <ColumnDefinition x:Name="TabCol1" Width="6" />
+                        <ColumnDefinition x:Name="TabCol1" Width="8" />
                         <ColumnDefinition x:Name="TabCol2" Width="*" />
                     </Grid.ColumnDefinitions>
                     <ctl:AddressBar x:Name="Tab0" DataContext="{Binding Panes[0]}"
@@ -270,8 +273,10 @@
 
                 <!-- 폴더 영역 4칸: 4분할은 2열 2행(영역 사이 16px + 얇은 십자 선), 2묶음은 앞 두 영역을 나란히(묶음마다 폭이 좁은 상위 폴더 열 1개),
                      한 경로는 선택된 영역 하나(상위 폴더 3개 + 현재 폴더, 선택 테두리 없음). 배치를 바꿀 때 뷰를 새로 만들지 않도록
-                     4개를 한 번만 만들어 두고 MainWindow.ApplyPaneLayout이 위치·보임·상위 열 수만 바꾼다. -->
-                <Grid x:Name="PaneHost" Grid.Row="1" Grid.Column="2">
+                     4개를 한 번만 만들어 두고 MainWindow.ApplyPaneLayout이 위치·보임·상위 열 수만 바꾼다.
+                     Margin -4는 PaneView 안쪽 여백(선택 테두리 자리 4px)을 상쇄한다: 카드는 경로 탭과 같은 자리에 오고, 영역 사이 실제 간격은
+                     여기 간격 + 8px이 된다(4분할 8+8=16, 2묶음 0+8=8). -->
+                <Grid x:Name="PaneHost" Grid.Row="1" Grid.Column="2" Margin="-4">
                     <Grid.RowDefinitions>
                         <RowDefinition x:Name="PaneRow0" Height="*" />
                         <RowDefinition x:Name="PaneRow1" Height="0" />
@@ -279,7 +284,7 @@
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition x:Name="PaneCol0" Width="*" />
-                        <ColumnDefinition x:Name="PaneCol1" Width="6" />
+                        <ColumnDefinition x:Name="PaneCol1" Width="0" />
                         <ColumnDefinition x:Name="PaneCol2" Width="*" />
                     </Grid.ColumnDefinitions>
                     <v:PaneView x:Name="Pane0" DataContext="{Binding Panes[0]}" />

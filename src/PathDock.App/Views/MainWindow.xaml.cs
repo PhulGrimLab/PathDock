@@ -81,6 +81,7 @@ public partial class MainWindow : FluentWindow
         StartClock();
     }
 
+
     /// <summary>
     /// 폴더 영역 4칸과 윗줄 경로 탭 4개의 위치·보임·상위 폴더 열 수를 현재 배치에 맞춘다(뷰는 새로 만들지 않는다).
     /// 4분할: 2열 2행(영역 사이 16px, 십자 선), 위 두 영역의 경로 탭은 윗줄에·아래 두 영역은 PaneView 안에. 2묶음: 앞 두 영역(상위 열 1개). 한 경로: 선택된 영역 하나(상위 열 3개).
@@ -91,11 +92,12 @@ public partial class MainWindow : FluentWindow
         bool quad = layout == PathDock.Core.Settings.ExplorerLayout.Quad;
         bool dual = layout == PathDock.Core.Settings.ExplorerLayout.Dual;
         bool single = !quad && !dual;
-        double gap = quad ? 16 : 6;
 
-        PaneRow1.Height = new GridLength(quad ? 16 : 0);
+        // 폴더 영역 칸 사이 간격은 PaneView 안쪽 여백 8px(양쪽 4px씩)을 더해 카드 사이 간격이 된다. 윗줄 경로 탭은 카드 사이 간격 그대로.
+        PaneRow1.Height = new GridLength(quad ? 8 : 0);
         PaneRow2.Height = quad ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
-        PaneCol1.Width = TabCol1.Width = new GridLength(gap);
+        PaneCol1.Width = new GridLength(quad ? 8 : 0);
+        TabCol1.Width = new GridLength(quad ? 16 : 8);
         QuadVLine.Visibility = QuadHLine.Visibility = QuadTabLine.Visibility = quad ? Visibility.Visible : Visibility.Collapsed;
 
         PaneView[] panes = { Pane0, Pane1, Pane2, Pane3 };
