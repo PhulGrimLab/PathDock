@@ -26,6 +26,9 @@ public partial class MainWindow : FluentWindow
 
     private readonly MainViewModel _vm;
     private double _expandedRatio = 0.6;
+    // 탐색기 높이 비율은 배치마다 따로 기억한다(4분할은 폴더가 네 개라 탐색기를 더 크게). _expandedRatio는 지금 배치의 값이다.
+    private double _otherLayoutRatio = 0.6;
+    private bool _ratioIsForQuad;
 
     public MainWindow(MainViewModel vm)
     {
@@ -44,10 +47,26 @@ public partial class MainWindow : FluentWindow
             }
         };
         RestoreWindowState();
+        LayoutButtons.LayoutUpdated += (_, _) => CenterLayoutButtons();
+        ApplyPaneLayout();
+        _vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(MainViewModel.Layout) or nameof(MainViewModel.Explorer))
+            {
+                ApplyPaneLayout();
+            }
+        };
         _vm.TerminalFocusRequested += () => TerminalPanel.FocusTerminal();
         TerminalPanel.AllowDrop = true;
         TerminalPanel.DragOver += OnTerminalDragOver;
         TerminalPanel.Drop += OnTerminalDrop;
+        _vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.Layout))
+            {
+                SwitchLayoutRatio();
+            }
+        };
         _vm.Terminal.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(TerminalViewModel.IsCollapsed))
@@ -60,6 +79,62 @@ public partial class MainWindow : FluentWindow
         Application.Current.SessionEnding += (_, _) => _sessionEnding = true;
         Loaded += (_, _) => TerminalPanel.FocusTerminal();
         StartClock();
+    }
+
+    /// <summary>
+    /// 폴더 영역 4칸과 윗줄 경로 탭 4개의 위치·보임·상위 폴더 열 수를 현재 배치에 맞춘다(뷰는 새로 만들지 않는다).
+    /// 4분할: 2열 2행(영역 사이 16px, 십자 선), 위 두 영역의 경로 탭은 윗줄에·아래 두 영역은 PaneView 안에. 2묶음: 앞 두 영역(상위 열 1개). 한 경로: 선택된 영역 하나(상위 열 3개).
+    /// </summary>
+    private void ApplyPaneLayout()
+    {
+        var layout = _vm.Layout;
+        bool quad = layout == PathDock.Core.Settings.ExplorerLayout.Quad;
+        bool dual = layout == PathDock.Core.Settings.ExplorerLayout.Dual;
+        bool single = !quad && !dual;
+        double gap = quad ? 16 : 6;
+
+        PaneRow1.Height = new GridLength(quad ? 16 : 0);
+        PaneRow2.Height = quad ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        PaneCol1.Width = TabCol1.Width = new GridLength(gap);
+        QuadVLine.Visibility = QuadHLine.Visibility = QuadTabLine.Visibility = quad ? Visibility.Visible : Visibility.Collapsed;
+
+        PaneView[] panes = { Pane0, Pane1, Pane2, Pane3 };
+        PathDock.App.Controls.AddressBar[] tabs = { Tab0, Tab1, Tab2, Tab3 };
+        for (int i = 0; i < panes.Length; i++)
+        {
+            bool selectedInSingle = single && ReferenceEquals(_vm.Panes[i], _vm.Explorer);
+            PaneView pane = panes[i];
+            pane.Visibility = quad || (dual && i < 2) || selectedInSingle ? Visibility.Visible : Visibility.Collapsed;
+            System.Windows.Controls.Grid.SetRow(pane, quad && i >= 2 ? 2 : 0);
+            System.Windows.Controls.Grid.SetColumn(pane, single ? 0 : (i % 2 == 0 ? 0 : 2));
+            System.Windows.Controls.Grid.SetColumnSpan(pane, single ? 3 : 1);
+            pane.AncestorColumns = quad ? 0 : dual ? 1 : 3;
+            pane.HighlightActive = !single;
+            pane.ShowAddressBar = quad && i >= 2;
+
+            PathDock.App.Controls.AddressBar tab = tabs[i];
+            tab.Visibility = (quad || dual) ? (i < 2 ? Visibility.Visible : Visibility.Collapsed) : (selectedInSingle ? Visibility.Visible : Visibility.Collapsed);
+            System.Windows.Controls.Grid.SetColumn(tab, single ? 0 : (i % 2 == 0 ? 0 : 2));
+            System.Windows.Controls.Grid.SetColumnSpan(tab, single ? 3 : 1);
+        }
+    }
+
+    /// <summary>
+    /// 배치 버튼(TitleBar.CenterContent)을 창의 가로 가운데로 옮긴다. 제목 표시줄은 앞뒤 내용 때문에 가운데 칸이 한쪽으로 치우쳐
+    /// 있으므로, 지금 위치와 창 가운데의 차이만큼 렌더 변환을 더한다(레이아웃은 바뀌지 않아 반복되지 않는다).
+    /// </summary>
+    private void CenterLayoutButtons()
+    {
+        if (!LayoutButtons.IsVisible || LayoutButtons.ActualWidth <= 0 || ActualWidth <= 0)
+        {
+            return;
+        }
+        double current = LayoutButtons.TransformToAncestor(this).Transform(new Point(LayoutButtons.ActualWidth / 2, 0)).X; // 지금의 이동량이 포함된 값
+        double delta = ActualWidth / 2 - current;
+        if (Math.Abs(delta) > 0.5)
+        {
+            LayoutButtonsShift.X += delta;
+        }
     }
 
     /// <summary>제목 표시줄의 버전·빌드 날짜 문구와 툴팁을 현재 언어로 만든다.</summary>
@@ -204,10 +279,40 @@ public partial class MainWindow : FluentWindow
         {
             WindowState = WindowState.Maximized;
         }
-        double ratio = Math.Clamp(s.ExplorerRatio, MinExplorerRatio, MaxExplorerRatio);
+        double normal = Math.Clamp(s.ExplorerRatio, MinExplorerRatio, MaxExplorerRatio);
+        double quad = Math.Clamp(s.QuadExplorerRatio, MinExplorerRatio, MaxExplorerRatio);
+        _ratioIsForQuad = _vm.IsQuadLayout;
+        double ratio = _ratioIsForQuad ? quad : normal;
+        _otherLayoutRatio = _ratioIsForQuad ? normal : quad;
         _expandedRatio = ratio;
         ExplorerRow.Height = new GridLength(ratio, GridUnitType.Star);
         TerminalRow.Height = new GridLength(1 - ratio, GridUnitType.Star);
+    }
+
+    /// <summary>지금 화면의 탐색기 비율(터미널이 접혀 있으면 펼쳤을 때의 비율).</summary>
+    private double CurrentRatio()
+    {
+        double total = ExplorerRow.ActualHeight + TerminalRow.ActualHeight;
+        return !_vm.Terminal.IsCollapsed && total > 0 && TerminalRow.Height.IsStar
+            ? Math.Clamp(ExplorerRow.ActualHeight / total, MinExplorerRatio, MaxExplorerRatio)
+            : _expandedRatio;
+    }
+
+    /// <summary>4분할로 들어가거나 나올 때, 떠나는 배치의 비율을 기억하고 들어가는 배치의 비율로 바꾼다.</summary>
+    private void SwitchLayoutRatio()
+    {
+        bool toQuad = _vm.IsQuadLayout;
+        if (toQuad == _ratioIsForQuad)
+        {
+            return; // 2묶음 <-> 한 경로: 같은 비율을 쓴다.
+        }
+        (_expandedRatio, _otherLayoutRatio) = (_otherLayoutRatio, CurrentRatio());
+        _ratioIsForQuad = toQuad;
+        if (!_vm.Terminal.IsCollapsed)
+        {
+            ExplorerRow.Height = new GridLength(_expandedRatio, GridUnitType.Star);
+            TerminalRow.Height = new GridLength(1 - _expandedRatio, GridUnitType.Star);
+        }
     }
 
     /// <summary>터미널을 접으면 머리글 높이만 남기고 탐색기가 나머지를 채운다. 펼치면 접기 전 비율로 되돌린다.</summary>
@@ -270,19 +375,9 @@ public partial class MainWindow : FluentWindow
         s.WindowTop = bounds.Top;
         s.WindowWidth = bounds.Width;
         s.WindowHeight = bounds.Height;
-        double total = ExplorerRow.ActualHeight + TerminalRow.ActualHeight;
-        if (_vm.Terminal.IsCollapsed)
-        {
-            s.ExplorerRatio = _expandedRatio;
-        }
-        else if (total > 0)
-        {
-            s.ExplorerRatio = ExplorerRow.ActualHeight / total;
-        }
-        else
-        {
-            // 레이아웃 전 종료: 비율은 기존 값 유지.
-        }
+        double current = CurrentRatio(); // 레이아웃 전 종료나 접힌 터미널이면 기억해 둔 값 그대로
+        s.ExplorerRatio = _ratioIsForQuad ? _otherLayoutRatio : current;
+        s.QuadExplorerRatio = _ratioIsForQuad ? current : _otherLayoutRatio;
         _vm.SaveSettings();
     }
 }

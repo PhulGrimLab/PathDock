@@ -63,7 +63,8 @@ public partial class AncestorColumnView : UserControl
 
     // ----- 끌어 놓기: 이 열의 폴더 항목 위에 놓으면 그 폴더로 이동/복사한다(Ctrl=복사, Shift=이동). 판단 규칙은 Core의 DropRules. -----
 
-    private ExplorerViewModel? FindExplorer() => (Window.GetWindow(this)?.DataContext as MainViewModel)?.Explorer;
+    /// <summary>이 열이 속한 폴더 영역(PaneView)의 탐색기. 여러 영역이 보일 때 선택된 영역이 아니라 이 열의 영역으로 이동/복사해야 한다.</summary>
+    private ExplorerViewModel? FindExplorer() => FileDragDrop.FindAncestor<PaneView>(this)?.DataContext as ExplorerViewModel;
 
     private static string? FolderUnder(DragEventArgs e) =>
         FileDragDrop.FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject)?.DataContext is AncestorItemViewModel item ? item.FullPath : null;

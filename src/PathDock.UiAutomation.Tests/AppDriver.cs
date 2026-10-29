@@ -148,6 +148,10 @@ public sealed class AppDriver : IDisposable
         }
     }
 
+    /// <summary>라디오 버튼(배치 버튼 등)을 선택한다. RadioButton은 Invoke가 없어 SelectionItem 패턴을 쓴다.</summary>
+    public void Select(string automationId) =>
+        ((SelectionItemPattern)Find(automationId).GetCurrentPattern(SelectionItemPattern.Pattern)).Select();
+
     public string PathBarText() => ((ValuePattern)Find("PathBar").GetCurrentPattern(ValuePattern.Pattern)).Current.Value;
 
     /// <summary>클립보드의 글자(PowerShell Get-Clipboard로 읽는다. 하네스는 STA가 아니므로 Clipboard 클래스를 쓰지 않는다).</summary>

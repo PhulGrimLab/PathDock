@@ -21,6 +21,42 @@
         화면은 색이 다른 세 개의 띠(즐겨찾기 / 탐색기 / 터미널)와 상태 표시줄로 구분한다.
         탐색기 띠는 한 개의 격자를 공유해, 이동 버튼은 드라이브 열 폭에, 주소 표시줄은 폴더 열 시작점에 정렬된다.
     -->
+    <Window.Resources>
+        <!-- 배치 버튼: 선택된 배치는 강조색으로 채운다. 그림은 안쪽 도형이 Foreground를 따라 그린다. -->
+        <Style x:Key="LayoutModeButton" TargetType="RadioButton">
+            <Setter Property="Width" Value="42" />
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Margin" Value="3,0" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Grid>
+                            <Border x:Name="Root" CornerRadius="4" BorderThickness="1"
+                                    Background="{DynamicResource PdAddressBarBackgroundBrush}" BorderBrush="{DynamicResource PdAddressBarBorderBrush}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <!-- 선택 표시 링: 레이아웃에 영향을 주지 않도록 겹쳐 그린다(테두리 두께를 바꾸면 제목 표시줄 안에서 잔상이 생겼다) -->
+                            <Border x:Name="Ring" CornerRadius="4" BorderThickness="2" Visibility="Collapsed" IsHitTestVisible="False"
+                                    BorderBrush="{DynamicResource PdPaneActiveBrush}" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource SystemAccentColorPrimaryBrush}" />
+                            </Trigger>
+                            <!-- 선택됨: 강조색 채움 + 흰 아이콘 + 폴더 선택과 같은 색의 굵은 링 -->
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource SystemAccentColorPrimaryBrush}" />
+                                <Setter TargetName="Ring" Property="Visibility" Value="Visible" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+    </Window.Resources>
     <Window.InputBindings>
         <KeyBinding Key="C" Modifiers="Ctrl+Alt" Command="{Binding OpenCalculatorCommand}" />
         <KeyBinding Key="E" Modifiers="Ctrl+Alt" Command="{Binding EmptyRecycleBinCommand}" />
@@ -38,6 +74,51 @@
 
         <!-- 제목 표시줄: 왼쪽 로고(누르면 정보 창) + 이름, 오른쪽 테마 전환 -->
         <ui:TitleBar Grid.Row="0" Title="PathDock">
+            <ui:TitleBar.CenterContent>
+                <!-- 폴더 영역 배치 버튼: 4분할 / 2묶음 / 한 경로. TitleBar 안에 두어야 제목 표시줄 영역에서도 클릭된다
+                     (겹쳐 올린 버튼은 Windows가 창 이동으로 처리해 눌리지 않았다). 창 가운데 위치는 CenterLayoutButtons가 렌더 이동으로 맞춘다. -->
+                <StackPanel x:Name="LayoutButtons" Orientation="Horizontal" VerticalAlignment="Center">
+                    <StackPanel.RenderTransform>
+                        <TranslateTransform x:Name="LayoutButtonsShift" />
+                    </StackPanel.RenderTransform>
+                        <RadioButton Style="{StaticResource LayoutModeButton}" GroupName="ExplorerLayout"
+                                     IsChecked="{Binding IsQuadLayout, Mode=TwoWay}"
+                                     ToolTip="{loc:T '폴더 4개: 각각 다른 폴더를 2열 2행으로', '4 folders: independent folders in 2 columns x 2 rows'}"
+                                     AutomationProperties.AutomationId="LayoutQuadButton"
+                                     AutomationProperties.Name="{loc:T '폴더 4개', '4 folders'}">
+                            <Canvas Width="24" Height="16">
+                                <Rectangle Canvas.Left="1" Canvas.Top="1" Width="10" Height="6" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                                <Rectangle Canvas.Left="13" Canvas.Top="1" Width="10" Height="6" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                                <Rectangle Canvas.Left="1" Canvas.Top="9" Width="10" Height="6" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                                <Rectangle Canvas.Left="13" Canvas.Top="9" Width="10" Height="6" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                            </Canvas>
+                        </RadioButton>
+                        <RadioButton Style="{StaticResource LayoutModeButton}" GroupName="ExplorerLayout"
+                                     IsChecked="{Binding IsDualLayout, Mode=TwoWay}"
+                                     ToolTip="{loc:T '폴더 2묶음: 각각 상위 폴더 열 + 폴더', '2 folder pairs: each with a parent-folder column'}"
+                                     AutomationProperties.AutomationId="LayoutDualButton"
+                                     AutomationProperties.Name="{loc:T '폴더 2묶음', '2 folder pairs'}">
+                            <Canvas Width="24" Height="16">
+                                <Rectangle Canvas.Left="1" Canvas.Top="1" Width="3" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                                <Rectangle Canvas.Left="5" Canvas.Top="1" Width="6" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                                <Rectangle Canvas.Left="13" Canvas.Top="1" Width="3" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                                <Rectangle Canvas.Left="17" Canvas.Top="1" Width="6" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                            </Canvas>
+                        </RadioButton>
+                        <RadioButton Style="{StaticResource LayoutModeButton}" GroupName="ExplorerLayout"
+                                     IsChecked="{Binding IsSingleLayout, Mode=TwoWay}"
+                                     ToolTip="{loc:T '한 경로: 상위 폴더 3개와 현재 폴더', 'One path: three parent folders and the current folder'}"
+                                     AutomationProperties.AutomationId="LayoutSingleButton"
+                                     AutomationProperties.Name="{loc:T '한 경로', 'One path'}">
+                            <Canvas Width="24" Height="16">
+                                <Rectangle Canvas.Left="1" Canvas.Top="1" Width="4" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                                <Rectangle Canvas.Left="6" Canvas.Top="1" Width="4" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                                <Rectangle Canvas.Left="11" Canvas.Top="1" Width="4" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                                <Rectangle Canvas.Left="16" Canvas.Top="1" Width="7" Height="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                            </Canvas>
+                        </RadioButton>
+                    </StackPanel>
+            </ui:TitleBar.CenterContent>
             <ui:TitleBar.Header>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- 로고 왼쪽 끝을 아래 띠의 콘텐츠 시작 열(12px)에 맞춘다. TitleBar Header가 앞쪽에 32px 여백을 두므로 12-32=-20 -->
@@ -112,6 +193,7 @@
             </ui:TitleBar.TrailingContent>
         </ui:TitleBar>
 
+    
         <!-- 즐겨찾기 띠: 기본 배경 위에 강조색을 옅게 깔아 탐색기 띠와 확실히 구분(다크/라이트 공통). 왼쪽 칩, 오른쪽 동기화 모드 -->
         <Border Grid.Row="1"
                 Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
@@ -138,39 +220,77 @@
                         IsOpen="{Binding Info.HasInfo, Mode=OneWay}" />
         </ctl:AlertHost>
 
-        <!-- 탐색기 띠 -->
+        <!-- 탐색기 띠: 위쪽 줄에 이동 버튼(선택된 폴더 영역에 적용)과 배치 버튼 3개, 아래에 드라이브 | 폴더 영역 -->
         <Border Grid.Row="3" Padding="12,10,12,10"
                 Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
             <Grid>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />   <!-- 이동 버튼 + 주소 표시줄 -->
-                    <RowDefinition Height="*" />      <!-- 드라이브 | 조부모 | 부모 | 현재 폴더 -->
+                    <RowDefinition Height="Auto" />   <!-- 이동 버튼 + 배치 버튼 -->
+                    <RowDefinition Height="*" />      <!-- 드라이브 | 폴더 영역 -->
                 </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="220" MinWidth="130" />
                     <ColumnDefinition Width="6" />
-                    <ColumnDefinition Width="170" MinWidth="90" />
-                    <ColumnDefinition Width="6" />
-                    <ColumnDefinition Width="170" MinWidth="90" />
-                    <ColumnDefinition Width="6" />
-                    <ColumnDefinition Width="*" MinWidth="240" />
+                    <ColumnDefinition Width="*" MinWidth="440" />
                 </Grid.ColumnDefinitions>
 
-                <!-- 1행: 버튼은 드라이브 열 폭을 채우고, 주소 표시줄은 조부모 열 시작점부터 끝까지 -->
                 <v:NavButtonsView Grid.Row="0" Grid.Column="0" Margin="0,0,0,8" DataContext="{Binding Explorer}" />
-                <ctl:AddressBar Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="5" Margin="0,0,0,8"
-                                Text="{Binding Explorer.PathText, Mode=TwoWay}"
-                                Command="{Binding Explorer.NavigatePathCommand}"
-                                TextBoxAutomationId="PathBar" TextBoxAutomationName="{loc:T '현재 경로', 'Current path'}" />
 
-                <!-- 2행: 네 개의 영역 -->
+                <!-- 경로 탭: 4분할은 위 두 영역만 이 윗줄에(아래 두 영역은 PaneView 안), 2묶음은 두 칸, 한 경로는 선택된 영역 하나가 한 칸을 다 쓴다.
+                     배치를 바꿀 때마다 새로 만들지 않도록 4개를 한 번만 만들어 두고 위치·보임만 MainWindow.ApplyPaneLayout이 바꾼다. -->
+                <Grid x:Name="TabHost" Grid.Row="0" Grid.Column="2" Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition x:Name="TabCol0" Width="*" />
+                        <ColumnDefinition x:Name="TabCol1" Width="6" />
+                        <ColumnDefinition x:Name="TabCol2" Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <ctl:AddressBar x:Name="Tab0" DataContext="{Binding Panes[0]}"
+                                    Text="{Binding PathText, Mode=TwoWay}" Command="{Binding NavigatePathCommand}"
+                                    TextBoxAutomationId="{Binding AutomationSuffix, StringFormat=PathBar{0}}"
+                                    TextBoxAutomationName="{loc:T '현재 경로', 'Current path'}" />
+                    <ctl:AddressBar x:Name="Tab1" DataContext="{Binding Panes[1]}"
+                                    Text="{Binding PathText, Mode=TwoWay}" Command="{Binding NavigatePathCommand}"
+                                    TextBoxAutomationId="{Binding AutomationSuffix, StringFormat=PathBar{0}}"
+                                    TextBoxAutomationName="{loc:T '현재 경로', 'Current path'}" />
+                    <ctl:AddressBar x:Name="Tab2" DataContext="{Binding Panes[2]}"
+                                    Text="{Binding PathText, Mode=TwoWay}" Command="{Binding NavigatePathCommand}"
+                                    TextBoxAutomationId="{Binding AutomationSuffix, StringFormat=PathBar{0}}"
+                                    TextBoxAutomationName="{loc:T '현재 경로', 'Current path'}" />
+                    <ctl:AddressBar x:Name="Tab3" DataContext="{Binding Panes[3]}"
+                                    Text="{Binding PathText, Mode=TwoWay}" Command="{Binding NavigatePathCommand}"
+                                    TextBoxAutomationId="{Binding AutomationSuffix, StringFormat=PathBar{0}}"
+                                    TextBoxAutomationName="{loc:T '현재 경로', 'Current path'}" />
+                    <!-- 4분할: 탭 줄 아래 간격(8px)까지 이어 본문의 세로선과 끊기지 않게 한다 -->
+                    <Rectangle x:Name="QuadTabLine" Grid.Column="1" Width="1" HorizontalAlignment="Center" Margin="0,0,0,-8" IsHitTestVisible="False"
+                               Visibility="Collapsed" Fill="{DynamicResource ControlStrongStrokeColorDefaultBrush}" />
+                </Grid>
+
                 <v:DrivePanelView Grid.Row="1" Grid.Column="0" />
                 <GridSplitter Grid.Row="1" Grid.Column="1" Width="6" HorizontalAlignment="Stretch" Background="Transparent" Focusable="False" />
-                <v:AncestorColumnView Grid.Row="1" Grid.Column="2" DataContext="{Binding Explorer.GrandParent}" />
-                <GridSplitter Grid.Row="1" Grid.Column="3" Width="6" HorizontalAlignment="Stretch" Background="Transparent" Focusable="False" />
-                <v:AncestorColumnView Grid.Row="1" Grid.Column="4" DataContext="{Binding Explorer.Parent}" />
-                <GridSplitter Grid.Row="1" Grid.Column="5" Width="6" HorizontalAlignment="Stretch" Background="Transparent" Focusable="False" />
-                <v:FileListView Grid.Row="1" Grid.Column="6" DataContext="{Binding Explorer}" />
+
+                <!-- 폴더 영역 4칸: 4분할은 2열 2행(영역 사이 16px + 얇은 십자 선), 2묶음은 앞 두 영역을 나란히(묶음마다 폭이 좁은 상위 폴더 열 1개),
+                     한 경로는 선택된 영역 하나(상위 폴더 3개 + 현재 폴더, 선택 테두리 없음). 배치를 바꿀 때 뷰를 새로 만들지 않도록
+                     4개를 한 번만 만들어 두고 MainWindow.ApplyPaneLayout이 위치·보임·상위 열 수만 바꾼다. -->
+                <Grid x:Name="PaneHost" Grid.Row="1" Grid.Column="2">
+                    <Grid.RowDefinitions>
+                        <RowDefinition x:Name="PaneRow0" Height="*" />
+                        <RowDefinition x:Name="PaneRow1" Height="0" />
+                        <RowDefinition x:Name="PaneRow2" Height="0" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition x:Name="PaneCol0" Width="*" />
+                        <ColumnDefinition x:Name="PaneCol1" Width="6" />
+                        <ColumnDefinition x:Name="PaneCol2" Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <v:PaneView x:Name="Pane0" DataContext="{Binding Panes[0]}" />
+                    <v:PaneView x:Name="Pane1" DataContext="{Binding Panes[1]}" />
+                    <v:PaneView x:Name="Pane2" DataContext="{Binding Panes[2]}" />
+                    <v:PaneView x:Name="Pane3" DataContext="{Binding Panes[3]}" />
+                    <Rectangle x:Name="QuadVLine" Grid.Row="0" Grid.RowSpan="3" Grid.Column="1" Width="1" HorizontalAlignment="Center" IsHitTestVisible="False"
+                               Visibility="Collapsed" Fill="{DynamicResource ControlStrongStrokeColorDefaultBrush}" />
+                    <Rectangle x:Name="QuadHLine" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Height="1" VerticalAlignment="Center" IsHitTestVisible="False"
+                               Visibility="Collapsed" Fill="{DynamicResource ControlStrongStrokeColorDefaultBrush}" />
+                </Grid>
             </Grid>
         </Border>
 

@@ -33,12 +33,12 @@ public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly AppSettings _settings;
     private readonly TerminalViewModel _terminal;
-    private readonly ExplorerViewModel _explorer;
+    private readonly Func<ExplorerViewModel> _explorer;
     private readonly FavoritesViewModel _favorites;
     private readonly Services.IDialogService _dialogs;
     private bool _revertingShell;
 
-    public SettingsViewModel(AppSettings settings, TerminalViewModel terminal, ExplorerViewModel explorer, FavoritesViewModel favorites, Services.IDialogService dialogs)
+    public SettingsViewModel(AppSettings settings, TerminalViewModel terminal, Func<ExplorerViewModel> explorer, FavoritesViewModel favorites, Services.IDialogService dialogs)
     {
         _settings = settings;
         _terminal = terminal;
@@ -127,7 +127,7 @@ public sealed partial class SettingsViewModel : ObservableObject
                 });
                 return;
             }
-            _terminal.RestartShell(_terminal.CurrentPath ?? _explorer.CurrentPath, shell);
+            _terminal.RestartShell(_terminal.CurrentPath ?? _explorer().CurrentPath, shell);
         }
         _settings.TerminalShell = shell;
     }

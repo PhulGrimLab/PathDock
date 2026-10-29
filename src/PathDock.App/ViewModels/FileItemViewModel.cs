@@ -246,7 +246,7 @@ public sealed partial class AncestorColumnViewModel : ObservableObject
 {
     private readonly Action<string> _onUserSelect;
     private bool _suppress;
-    private readonly bool _marksHiddenAncestors;
+    private bool _marksHiddenAncestors;
 
     public AncestorColumnViewModel(string automationId, Action<string> onUserSelect, bool marksHiddenAncestors = false)
     {
@@ -256,6 +256,10 @@ public sealed partial class AncestorColumnViewModel : ObservableObject
     }
 
     public string AutomationId { get; }
+
+    /// <summary>이 열이 맨 왼쪽 열이라 더 위 폴더가 가려져 있으면 알릴지. 다음 <see cref="Load"/>부터 적용된다.</summary>
+    public void SetMarksHiddenAncestors(bool value) => _marksHiddenAncestors = value;
+
     public ObservableCollection<AncestorItemViewModel> Items { get; } = new();
 
     /// <summary>열 머리글: 이 열이 나열하는 폴더의 이름(루트면 "C:\").</summary>

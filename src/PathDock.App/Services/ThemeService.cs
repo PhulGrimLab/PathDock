@@ -50,6 +50,7 @@ public static class ThemeService
             res["PdAddressBarBackgroundBrush"] = System.Windows.SystemColors.WindowBrush;
             res["PdAddressBarBorderBrush"] = System.Windows.SystemColors.WindowTextBrush;
             res["PdDrivePanelBackgroundBrush"] = System.Windows.SystemColors.WindowBrush;
+            res["PdPaneActiveBrush"] = System.Windows.SystemColors.HighlightBrush;
             res["PdRefreshBackgroundBrush"] = System.Windows.SystemColors.ControlBrush;
             res["PdRefreshHoverBrush"] = System.Windows.SystemColors.HighlightBrush;
             res["PdRefreshForegroundBrush"] = System.Windows.SystemColors.ControlTextBrush;
@@ -63,6 +64,8 @@ public static class ThemeService
             return;
         }
         res["PdDrivePanelBackgroundBrush"] = Frozen(light ? "#E8EEF7" : "#1B2433");
+        // 선택된 폴더 영역 테두리: 파란 경로 탭·강조색과 겹치지 않는 따뜻한 색(다크=앰버, 라이트=진한 주황으로 흰 배경 대비 확보).
+        res["PdPaneActiveBrush"] = Frozen(light ? "#D9480F" : "#FFC83D");
         res["PdAddressBarBackgroundBrush"] = Frozen(light ? "#E6EFFA" : "#1E2F45");
         res["PdAddressBarBorderBrush"] = Frozen(light ? "#9DB8D9" : "#3B5A80");
         res["PdRefreshBackgroundBrush"] = Frozen("#2E7D32");

@@ -14,11 +14,24 @@ public sealed class FavoriteEntry
     public string Path { get; set; } = string.Empty;
 }
 
+/// <summary>폴더 탐색 영역의 배치. Quad=4개 폴더를 2열2행으로, Dual=상위 폴더 열+폴더를 한 묶음으로 2묶음, Single=한 경로를 상위 폴더 3개와 함께.</summary>
+public enum ExplorerLayout
+{
+    Quad,
+    Dual,
+    Single,
+}
+
 /// <summary>settings.json에 저장되는 사용자 설정(단순 DTO).</summary>
 public sealed class AppSettings
 {
     /// <summary>즐겨찾기 최대 칸 수(기획서: 약 10개).</summary>
     public const int MaxFavorites = 10;
+
+    /// <summary>폴더 영역 개수(4분할 배치의 칸 수).</summary>
+    public const int PaneCount = 4;
+
+    public const double DefaultQuadExplorerRatio = 0.78;
 
     public const double DefaultUiFontSize = 12;
     public const double MinUiFontSize = 10;
@@ -29,6 +42,12 @@ public sealed class AppSettings
     public List<FavoriteEntry> Favorites { get; set; } = new();
     public SyncMode SyncMode { get; set; } = SyncMode.Bidirectional;
     public string LastPath { get; set; } = string.Empty;
+    /// <summary>폴더 탐색 영역 배치(기본은 한 경로를 보여주는 Single).</summary>
+    public ExplorerLayout Layout { get; set; } = ExplorerLayout.Single;
+    /// <summary>폴더 영역 4개가 마지막으로 보던 경로(왼쪽 위, 오른쪽 위, 왼쪽 아래, 오른쪽 아래 순). 비어 있으면 저장된 적 없음.</summary>
+    public List<string> PanePaths { get; set; } = new();
+    /// <summary>마지막으로 선택(포커스)했던 폴더 영역의 번호(0~3).</summary>
+    public int ActivePane { get; set; }
     /// <summary>저장된 창 위치(null이면 OS 기본 위치). NaN은 JSON으로 저장할 수 없어 nullable로 둔다.</summary>
     public double? WindowLeft { get; set; }
     public double? WindowTop { get; set; }
@@ -37,6 +56,8 @@ public sealed class AppSettings
     public bool WindowMaximized { get; set; }
     /// <summary>탐색기 영역 높이 비율(0~1, 나머지는 터미널).</summary>
     public double ExplorerRatio { get; set; } = 0.6;
+    /// <summary>폴더 4분할 배치일 때의 탐색기 영역 높이 비율(폴더가 네 개라 터미널을 더 아래로 둔다).</summary>
+    public double QuadExplorerRatio { get; set; } = DefaultQuadExplorerRatio;
     /// <summary>화면 테마("Dark" 또는 "Light").</summary>
     public string Theme { get; set; } = "Dark";
     /// <summary>화면(탐색기/즐겨찾기/상태 표시줄 등) 글자 크기.</summary>
@@ -125,6 +146,12 @@ public sealed class SettingsService
             .Take(AppSettings.MaxFavorites)
             .ToList();
         s.LastPath ??= string.Empty;
+        s.PanePaths = (s.PanePaths ?? new List<string>()).Take(AppSettings.PaneCount).Select(p => p ?? string.Empty).ToList();
+        s.ActivePane = Math.Clamp(s.ActivePane, 0, AppSettings.PaneCount - 1);
+        if (!Enum.IsDefined(s.Layout))
+        {
+            s.Layout = ExplorerLayout.Single;
+        }
         s.Theme ??= "Dark";
         s.TerminalTheme ??= TerminalColorScheme.DefaultKey;
         s.TerminalForeground ??= string.Empty;
@@ -135,6 +162,7 @@ public sealed class SettingsService
         s.WindowLeft = s.WindowLeft is { } l && Math.Abs(l) <= 100000 ? l : null;
         s.WindowTop = s.WindowTop is { } t && Math.Abs(t) <= 100000 ? t : null;
         s.ExplorerRatio = Within(s.ExplorerRatio, 0, 1, 0.6);
+        s.QuadExplorerRatio = Within(s.QuadExplorerRatio, 0, 1, AppSettings.DefaultQuadExplorerRatio);
         s.UiFontSize = Within(s.UiFontSize, AppSettings.MinUiFontSize, AppSettings.MaxUiFontSize, AppSettings.DefaultUiFontSize);
         s.TerminalFontSize = Within(s.TerminalFontSize, AppSettings.MinTerminalFontSize, AppSettings.MaxTerminalFontSize, AppSettings.DefaultTerminalFontSize);
         return s;

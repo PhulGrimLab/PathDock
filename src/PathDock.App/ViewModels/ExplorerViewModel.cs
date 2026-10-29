@@ -75,9 +75,42 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
     }
 
 
-    /// <summary>상위 2단계 폴더 열(왼쪽부터 조부모, 부모). 현재 폴더 왼쪽에 Mdir 스타일로 표시한다.</summary>
+    /// <summary>상위 3단계 폴더 열(왼쪽부터 증조부모, 조부모, 부모). 현재 폴더 왼쪽에 Mdir 스타일로 표시한다.</summary>
+    public AncestorColumnViewModel GreatGrandParent { get; }
     public AncestorColumnViewModel GrandParent { get; }
     public AncestorColumnViewModel Parent { get; }
+
+    /// <summary>화면에 보이는 상위 폴더 열 개수(0~3). 보이지 않는 열은 폴더 목록을 읽지 않는다.</summary>
+    public int AncestorDepth { get; private set; } = MaxAncestorDepth;
+
+    private const int MaxAncestorDepth = 3;
+
+    /// <summary>보일 상위 열 개수를 바꾼다. 맨 왼쪽 열에 "…\" 표시가 붙도록 하고, 이미 폴더에 있으면 상위 열만 다시 읽는다.</summary>
+    public void SetAncestorDepth(int depth)
+    {
+        depth = Math.Clamp(depth, 0, MaxAncestorDepth);
+        if (depth == AncestorDepth)
+        {
+            return;
+        }
+        AncestorDepth = depth;
+        if (_service.Current is not null)
+        {
+            _ = LoadAncestorsAsync(_service.Current, _backgroundCts?.Token ?? CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// 여러 폴더 영역 중 사용자가 고른(포커스/클릭한) 영역인지. 이동 버튼, 터미널 연동, 즐겨찾기가 이 영역에 적용된다.
+    /// 값은 MainViewModel만 바꾼다(영역은 <see cref="ActivationRequested"/>로 요청만 한다).
+    /// </summary>
+    [ObservableProperty]
+    private bool _isActive;
+
+    /// <summary>사용자가 이 영역을 눌렀거나 포커스를 옮겼을 때(선택 요청).</summary>
+    public event Action? ActivationRequested;
+
+    public void RequestActivation() => ActivationRequested?.Invoke();
 
     /// <summary>목록 아래 요약 줄. 예: "폴더 3개 · 파일 8개 (12.3 MB) · 전체 45 MB".</summary>
     [ObservableProperty]
@@ -98,14 +131,19 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
     /// <summary>이동 실패 등 사용자에게 보여줄 오류.</summary>
     public event Action<string>? ErrorOccurred;
 
-    public ExplorerViewModel(ILog log, FolderSizeCache cache, Services.IDialogService dialogs)
+    /// <summary>여러 영역이 동시에 보일 때 UI Automation ID가 겹치지 않도록 붙이는 접미사(첫 영역은 빈 문자열).</summary>
+    public string AutomationSuffix { get; }
+
+    public ExplorerViewModel(ILog log, FolderSizeCache cache, Services.IDialogService dialogs, string automationSuffix = "")
     {
+        AutomationSuffix = automationSuffix;
         _log = log;
         _cache = cache;
         _dialogs = dialogs;
         UpdateHeaders();
-        GrandParent = new AncestorColumnViewModel("AncestorColumn_2", p => NavigateTo(p, ChangeOrigin.User), marksHiddenAncestors: true);
-        Parent = new AncestorColumnViewModel("AncestorColumn_1", p => NavigateTo(p, ChangeOrigin.User));
+        GreatGrandParent = new AncestorColumnViewModel("AncestorColumn_3" + automationSuffix, p => NavigateTo(p, ChangeOrigin.User), marksHiddenAncestors: true);
+        GrandParent = new AncestorColumnViewModel("AncestorColumn_2" + automationSuffix, p => NavigateTo(p, ChangeOrigin.User));
+        Parent = new AncestorColumnViewModel("AncestorColumn_1" + automationSuffix, p => NavigateTo(p, ChangeOrigin.User));
     }
 
     public string? CurrentPath => _service.Current;
@@ -220,20 +258,28 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
         _ = CalculateFolderSizesAsync(snapshot, force, cts.Token);
     }
 
-    /// <summary>부모/조부모 폴더의 하위 폴더 목록을 읽어 열에 채운다(현재 경로가 지나는 폴더를 선택 표시).</summary>
+    /// <summary>화면에 보이는 개수(<see cref="AncestorDepth"/>)만큼 부모/조부모/증조부모 폴더의 하위 폴더 목록을 읽어 열에 채운다(현재 경로가 지나는 폴더를 선택 표시).</summary>
     private async Task LoadAncestorsAsync(string? current, CancellationToken ct)
     {
-        string? parent = current is null ? null : ExplorerService.GetParent(current);
-        string? grand = parent is null ? null : ExplorerService.GetParent(parent);
-        bool showHidden = ShowHidden; // 백그라운드 스레드에서 읽지 않도록 UI 스레드에서 복사한다.
+        int depth = AncestorDepth; // 백그라운드 스레드에서 읽지 않도록 UI 스레드에서 복사한다.
+        string? parent = current is null || depth < 1 ? null : ExplorerService.GetParent(current);
+        string? grand = parent is null || depth < 2 ? null : ExplorerService.GetParent(parent);
+        string? great = grand is null || depth < 3 ? null : ExplorerService.GetParent(grand);
+        bool showHidden = ShowHidden;
         try
         {
-            (List<FileItem> parentDirs, List<FileItem> grandDirs) = await Task.Run(() => (
+            (List<FileItem> parentDirs, List<FileItem> grandDirs, List<FileItem> greatDirs) = await Task.Run(() => (
                 parent is null ? new List<FileItem>() : ExplorerService.ListDirectories(parent, showHidden),
-                grand is null ? new List<FileItem>() : ExplorerService.ListDirectories(grand, showHidden)), ct);
+                grand is null ? new List<FileItem>() : ExplorerService.ListDirectories(grand, showHidden),
+                great is null ? new List<FileItem>() : ExplorerService.ListDirectories(great, showHidden)), ct);
             ct.ThrowIfCancellationRequested();
+            // 맨 왼쪽에 보이는 열만 "더 위 폴더가 가려짐"을 표시한다.
+            Parent.SetMarksHiddenAncestors(depth == 1);
+            GrandParent.SetMarksHiddenAncestors(depth == 2);
+            GreatGrandParent.SetMarksHiddenAncestors(depth >= 3);
             Parent.Load(parent, parentDirs, current);
             GrandParent.Load(grand, grandDirs, parent);
+            GreatGrandParent.Load(great, greatDirs, grand);
         }
         catch (OperationCanceledException)
         {

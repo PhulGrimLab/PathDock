@@ -53,7 +53,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>설정 파일 내용(창 위치/크기, 즐겨찾기, 모드 등). 설정 창의 화면 상태는 <see cref="Preferences"/>.</summary>
     public AppSettings Settings { get; }
 
-    public ExplorerViewModel Explorer { get; }
+    /// <summary>폴더 영역 4개(왼쪽 위, 오른쪽 위, 왼쪽 아래, 오른쪽 아래). 배치에 따라 일부만 보인다.</summary>
+    public System.Collections.ObjectModel.ReadOnlyCollection<ExplorerViewModel> Panes { get; }
+
+    private ExplorerViewModel _explorer;
+
+    /// <summary>선택된 폴더 영역. 이동 버튼, 즐겨찾기, 드라이브, 터미널 연동은 모두 이 영역에 적용된다.</summary>
+    public ExplorerViewModel Explorer
+    {
+        get => _explorer;
+        private set => SetProperty(ref _explorer, value);
+    }
+
     public TerminalViewModel Terminal { get; }
     public FavoritesViewModel Favorites { get; }
     public DrivesViewModel Drives { get; }
@@ -86,6 +97,113 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>상태 표시줄 왼쪽에 보이는 동기화 요약. 예: "경로 동기화: 양방향".</summary>
     public string SyncSummary => $"{Loc.T("경로 동기화", "Path sync")}: {SelectedSyncMode.Label}";
+
+    // ----- 폴더 영역 배치 -----
+
+    /// <summary>현재 배치(4분할 / 2묶음 / 한 경로). 바꾸면 설정에 저장된다.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsQuadLayout), nameof(IsDualLayout), nameof(IsSingleLayout))]
+    private ExplorerLayout _layout;
+
+    // 배치 버튼(RadioButton)의 IsChecked 바인딩용. 켜질 때만 배치를 바꾸고, 다른 버튼이 켜져서 꺼지는 것은 무시한다.
+    public bool IsQuadLayout
+    {
+        get => Layout == ExplorerLayout.Quad;
+        set => SelectLayout(ExplorerLayout.Quad, value);
+    }
+
+    public bool IsDualLayout
+    {
+        get => Layout == ExplorerLayout.Dual;
+        set => SelectLayout(ExplorerLayout.Dual, value);
+    }
+
+    public bool IsSingleLayout
+    {
+        get => Layout == ExplorerLayout.Single;
+        set => SelectLayout(ExplorerLayout.Single, value);
+    }
+
+    private void SelectLayout(ExplorerLayout layout, bool isChecked)
+    {
+        if (isChecked)
+        {
+            Layout = layout;
+        }
+    }
+
+    // 아직 한 번도 열지 않은 영역이 이어서 열 경로(보이지 않는 영역은 시작 때 읽지 않는다). 저장할 때도 이 값을 쓴다.
+    private readonly string?[] _pendingPaths = new string?[AppSettings.PaneCount];
+
+    partial void OnLayoutChanged(ExplorerLayout value)
+    {
+        Settings.Layout = value;
+        ApplyLayout();
+        _log.Info($"폴더 영역 배치 변경: {value}");
+    }
+
+    /// <summary>배치에 보일 영역을 열고(처음 보이는 영역은 저장된 경로로 이동), 영역마다 필요한 상위 폴더 열 수를 알린다. 숨겨진 영역을 선택 중이면 첫 영역을 선택한다.</summary>
+    private void ApplyLayout()
+    {
+        int visible = Layout switch { ExplorerLayout.Quad => 4, ExplorerLayout.Dual => 2, _ => 1 };
+        int depth = Layout switch { ExplorerLayout.Quad => 0, ExplorerLayout.Dual => 1, _ => 3 };
+        foreach (ExplorerViewModel pane in Panes)
+        {
+            pane.SetAncestorDepth(depth);
+        }
+        // 한 경로 배치는 선택된 영역을 보여준다. 2묶음은 앞의 두 영역, 4분할은 모두.
+        if (Layout != ExplorerLayout.Single && Panes.IndexOf(Explorer) >= visible)
+        {
+            ActivatePane(Panes[0]);
+        }
+        IEnumerable<ExplorerViewModel> shown = Layout == ExplorerLayout.Single ? new[] { Explorer } : Panes.Take(visible);
+        foreach (ExplorerViewModel pane in shown)
+        {
+            EnsureLoaded(pane);
+        }
+    }
+
+    private void EnsureLoaded(ExplorerViewModel pane)
+    {
+        int index = Panes.IndexOf(pane);
+        if (pane.CurrentPath is not null || _pendingPaths[index] is not { } path)
+        {
+            return;
+        }
+        _pendingPaths[index] = null;
+        pane.NavigateTo(path, ChangeOrigin.Sync);
+    }
+
+    /// <summary>폴더 영역을 선택한다(영역을 누르거나 포커스를 옮겼을 때). 터미널은 선택한 영역의 폴더로 따라간다(동기화 모드에 따라).</summary>
+    private void ActivatePane(ExplorerViewModel pane)
+    {
+        if (ReferenceEquals(pane, Explorer))
+        {
+            return;
+        }
+        Explorer.IsActive = false;
+        pane.IsActive = true;
+        Explorer = pane;
+        EnsureLoaded(pane);
+        if (pane.CurrentPath is { } path)
+        {
+            Drives.MarkCurrent(path);
+            _sync.OnExplorerNavigated(path, ChangeOrigin.User);
+        }
+        _log.Info($"폴더 영역 선택: {Panes.IndexOf(pane) + 1}");
+    }
+
+    /// <summary>동기화 서비스가 쓰는 대상: 그때그때 선택된 폴더 영역.</summary>
+    private sealed class ActivePaneTarget : IPathSyncTarget
+    {
+        private readonly MainViewModel _owner;
+
+        public ActivePaneTarget(MainViewModel owner) => _owner = owner;
+
+        public string? CurrentPath => _owner.Explorer.CurrentPath;
+
+        public bool RequestChange(string path) => ((IPathSyncTarget)_owner.Explorer).RequestChange(path);
+    }
 
     // ----- 테마 -----
 
@@ -183,16 +301,24 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _sizeCache.Load();
         progress?.Invoke(Loc.T("탐색기와 터미널 준비 중...", "Preparing explorer and terminal..."));
         Info = new InfoBarViewModel();
-        Explorer = new ExplorerViewModel(log, _sizeCache, _dialogs);
-        Explorer.ShowHidden = Settings.ShowHiddenFiles;
-        Explorer.ShowHiddenChanged += v => { Settings.ShowHiddenFiles = v; SaveSettings(); };
+        Panes = Array.AsReadOnly(Enumerable.Range(0, AppSettings.PaneCount)
+            .Select(i => new ExplorerViewModel(log, _sizeCache, _dialogs, i == 0 ? string.Empty : $"_P{i + 1}") { ShowHidden = Settings.ShowHiddenFiles })
+            .ToArray());
+        // 2묶음 배치에서는 앞의 두 영역만 보이므로, 숨겨진 영역이 선택된 채 저장되었어도 첫 영역에서 시작한다.
+        _explorer = Panes[Settings.Layout == ExplorerLayout.Dual && Settings.ActivePane > 1 ? 0 : Settings.ActivePane];
+        _explorer.IsActive = true;
+        foreach (ExplorerViewModel pane in Panes)
+        {
+            pane.ShowHiddenChanged += v => OnShowHiddenChanged(pane, v);
+        }
         Terminal = new TerminalViewModel(log, _dialogs) { StartDirectoryProvider = () => Explorer.CurrentPath };
         Favorites = new FavoritesViewModel(Settings.Favorites, () => Explorer.CurrentPath, path => Explorer.NavigateTo(path, ChangeOrigin.User), _dialogs, log, SaveSettings);
         Drives = new DrivesViewModel(log, path => Explorer.NavigateTo(path, ChangeOrigin.User), () => Explorer.CurrentPath);
-        Preferences = new SettingsViewModel(Settings, Terminal, Explorer, Favorites, _dialogs);
+        Preferences = new SettingsViewModel(Settings, Terminal, () => Explorer, Favorites, _dialogs);
         _isDarkTheme = Services.ThemeService.Normalize(Settings.Theme) == Services.ThemeService.Dark;
         Terminal.IsCollapsed = Settings.TerminalCollapsed;
-        _sync = new PathSyncService(Explorer, Terminal, log) { Mode = Settings.SyncMode };
+        _sync = new PathSyncService(new ActivePaneTarget(this), Terminal, log) { Mode = Settings.SyncMode };
+        _layout = Settings.Layout;
         _selectedSyncMode = SyncModes.First(o => o.Mode == Settings.SyncMode);
         Loc.LanguageChanged += OnLanguageChanged;
         WireEvents();
@@ -202,16 +328,24 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>탐색기·터미널·동기화 서비스의 이벤트를 서로 연결한다.</summary>
     private void WireEvents()
     {
-        Explorer.Navigated += (path, origin) =>
+        foreach (ExplorerViewModel pane in Panes)
         {
-            Info.Clear();
-            _sync.OnExplorerNavigated(path, origin);
-            Drives.MarkCurrent(path);
-            _ = Drives.RefreshAsync();
-        };
-        Explorer.ErrorOccurred += Info.Show;
-        Explorer.Notified += Info.ShowSuccess;
-        Explorer.SendPathsToTerminalRequested += SendPathsToTerminal;
+            pane.Navigated += (path, origin) =>
+            {
+                if (!ReferenceEquals(pane, Explorer))
+                {
+                    return; // 선택되지 않은 영역의 이동은 터미널·드라이브 표시에 영향을 주지 않는다(경로는 종료 때 저장).
+                }
+                Info.Clear();
+                _sync.OnExplorerNavigated(path, origin);
+                Drives.MarkCurrent(path);
+                _ = Drives.RefreshAsync();
+            };
+            pane.ErrorOccurred += Info.Show;
+            pane.Notified += Info.ShowSuccess;
+            pane.SendPathsToTerminalRequested += SendPathsToTerminal;
+            pane.ActivationRequested += () => ActivatePane(pane);
+        }
         Terminal.Notice += Notify;
         Terminal.CwdChanged += (path, fromRequest) =>
             _sync.OnTerminalCwdChanged(path, fromRequest ? ChangeOrigin.Sync : ChangeOrigin.User);
@@ -255,9 +389,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>시작 경로(마지막 경로 → 사용자 폴더)로 탐색기를 열고 터미널을 같은 경로에서 시작한다.</summary>
     public void Initialize(Action<string>? progress = null)
     {
-        string start = ResolveStartPath();
+        // 영역마다 저장된 경로로 시작한다. 저장된 적이 없는 영역은 마지막 경로(없으면 사용자 폴더)에서 시작한다.
+        for (int i = 0; i < Panes.Count; i++)
+        {
+            string saved = i < Settings.PanePaths.Count && Settings.PanePaths[i].Length > 0 ? Settings.PanePaths[i] : Settings.LastPath;
+            _pendingPaths[i] = ResolveStartPath(saved);
+        }
+        string start = _pendingPaths[Panes.IndexOf(Explorer)]!;
         progress?.Invoke(Loc.T("폴더 목록 읽는 중...", "Reading folder contents..."));
-        Explorer.NavigateTo(start, ChangeOrigin.Sync);
+        ApplyLayout(); // 보이는 영역을 저장된 경로로 연다.
+        EnsureLoaded(Explorer); // 한 경로 배치가 아니어도 선택된 영역은 반드시 연다.
         progress?.Invoke(Loc.T("터미널 시작 중...", "Starting terminal..."));
         Terminal.Start(Explorer.CurrentPath ?? start, Settings.TerminalShell);
         Preferences.TerminalStarted = true;
@@ -265,9 +406,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _log.Info($"앱 시작: start={start}, mode={Settings.SyncMode}");
     }
 
-    private string ResolveStartPath()
+    /// <summary>모든 영역에 공통인 숨김 파일 표시 설정을 다른 영역에도 맞추고 저장한다.</summary>
+    private void OnShowHiddenChanged(ExplorerViewModel source, bool value)
     {
-        string? last = PathNormalizer.Normalize(Settings.LastPath);
+        Settings.ShowHiddenFiles = value;
+        foreach (ExplorerViewModel pane in Panes.Where(p => !ReferenceEquals(p, source)))
+        {
+            pane.ShowHidden = value; // 값이 바뀐 영역만 다시 읽는다(이미 같은 값이면 아무 일도 없다).
+        }
+        SaveSettings();
+    }
+
+    private string ResolveStartPath(string saved)
+    {
+        string? last = PathNormalizer.Normalize(saved);
         // 마지막 경로가 꺼진 네트워크 공유면 확인이 OS 시간 제한까지(수십 초) UI 스레드를 막으므로 2초만 기다린다(그 안에 답이 없으면 사용자 폴더로 시작).
         if (Settings.StartAtLastPath && last is not null && SafeIo.DirectoryExistsWithTimeout(last, StartPathCheckTimeout))
         {
@@ -309,6 +461,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         Settings.Favorites = Favorites.ToEntries();
         Settings.LastPath = Explorer.CurrentPath ?? string.Empty;
+        Settings.Layout = Layout;
+        Settings.ActivePane = Panes.IndexOf(Explorer);
+        Settings.PanePaths = Panes.Select((p, i) => p.CurrentPath ?? _pendingPaths[i] ?? string.Empty).ToList();
         Settings.TerminalCollapsed = Terminal.IsCollapsed;
         _settingsService.Save(Settings);
         _sizeCache.Save();

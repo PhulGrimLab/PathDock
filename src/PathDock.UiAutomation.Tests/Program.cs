@@ -18,7 +18,7 @@ string MakeDir(string name)
     return p;
 }
 
-string NewDataDir(string[]? favorites = null, string mode = "Bidirectional", string? lastPath = null)
+string NewDataDir(string[]? favorites = null, string mode = "Bidirectional", string? lastPath = null, string? layout = null, string[]? panes = null, int activePane = 0)
 {
     string d = MakeDir("data_" + Guid.NewGuid().ToString("N")[..4]);
     var s = new Dictionary<string, object?>
@@ -27,9 +27,18 @@ string NewDataDir(string[]? favorites = null, string mode = "Bidirectional", str
         ["LastPath"] = lastPath ?? root,
         ["Favorites"] = (favorites ?? Array.Empty<string>()).Select(f => new { Name = Path.GetFileName(f), Path = f }).ToArray(),
     };
+    if (layout is not null)
+    {
+        s["Layout"] = layout;
+        s["PanePaths"] = panes ?? Array.Empty<string>();
+        s["ActivePane"] = activePane;
+    }
     File.WriteAllText(Path.Combine(d, "settings.json"), JsonSerializer.Serialize(s));
     return d;
 }
+
+string PathOf(AppDriver app, string pathBarId) =>
+    ((ValuePattern)app.Find(pathBarId).GetCurrentPattern(ValuePattern.Pattern)).Current.Value;
 
 var tests = new List<(string Name, Action Body)>
 {
@@ -824,6 +833,81 @@ var tests = new List<(string Name, Action Body)>
         }
         using var app2 = AppDriver.Launch(data);
         app2.WaitUntil(() => app2.SelectedSyncModeName() == "터미널 → 탐색기", $"모드 복원 실패: '{app2.SelectedSyncModeName()}'");
+    }),
+    // ----- 폴더 영역 배치(4분할 / 2묶음 / 한 경로) -----
+
+    ("PaneLayout_Quad_ShowsFourPaths_AndLayoutButtonsSwitch", () =>
+    {
+        string[] d = { MakeDir("pdA_quad"), MakeDir("pdB_quad"), MakeDir("pdC_quad"), MakeDir("pdD_quad") };
+        using var app = AppDriver.Launch(NewDataDir(null, "Off", d[0], "Quad", d));
+        string[] ids = { "PathBar", "PathBar_P2", "PathBar_P3", "PathBar_P4" };
+        for (int i = 0; i < 4; i++)
+        {
+            int k = i;
+            app.WaitUntil(() => PathOf(app, ids[k]) == d[k], $"{k + 1}번 영역 경로가 저장된 경로가 아님: '{PathOf(app, ids[k])}'");
+        }
+        if (app.Exists("AncestorColumn_1"))
+        {
+            throw new TestFailedException("4분할에는 상위 폴더 열이 없어야 함");
+        }
+
+        app.Select("LayoutDualButton");
+        app.WaitUntil(() => app.Exists("AncestorColumn_1") && app.Exists("AncestorColumn_1_P2"), "2묶음: 묶음마다 상위 폴더 열이 하나씩 있어야 함");
+        if (app.Exists("PathBar_P3"))
+        {
+            throw new TestFailedException("2묶음에는 영역이 두 개만 보여야 함");
+        }
+
+        app.Select("LayoutSingleButton");
+        app.WaitUntil(() => app.Exists("AncestorColumn_3") && app.Exists("AncestorColumn_2") && app.Exists("AncestorColumn_1"), "한 경로: 상위 폴더 열이 3개여야 함");
+        if (app.Exists("PathBar_P2"))
+        {
+            throw new TestFailedException("한 경로에는 영역이 하나만 보여야 함");
+        }
+    }),
+
+    ("PaneLayout_ClickingPane_SelectsIt_TerminalFollows_AndNavButtonsApplyToIt", () =>
+    {
+        string[] d = { MakeDir("pdA_sel"), MakeDir("pdB_sel"), MakeDir("pdC_sel"), MakeDir("pdD_sel") };
+        using var app = AppDriver.Launch(NewDataDir(null, "Bidirectional", d[0], "Quad", d));
+        app.WaitUntil(() => app.TerminalText().Contains("pdA_sel>"), $"터미널이 기본(왼쪽 위) 영역 폴더에서 시작하지 않음:\n{app.TerminalText()}", 25000);
+
+        app.Activate();
+        app.Find("PathBar_P3").SetFocus();
+        app.WaitUntil(() => app.TerminalText().Contains("pdC_sel>"), $"선택한 영역(3번)의 폴더로 터미널이 따라가지 않음:\n{app.TerminalText()}", 25000);
+
+        // 이동 버튼은 선택된 영역에만 적용된다(3번은 상위 폴더로, 1번은 그대로).
+        app.Click("UpButton");
+        string parent = Path.GetDirectoryName(d[2])!;
+        app.WaitUntil(() => PathOf(app, "PathBar_P3") == parent, $"3번 영역이 상위 폴더로 가지 않음: '{PathOf(app, "PathBar_P3")}'");
+        if (PathOf(app, "PathBar") != d[0] || PathOf(app, "PathBar_P2") != d[1])
+        {
+            throw new TestFailedException("선택되지 않은 영역이 함께 이동함");
+        }
+    }),
+
+    ("PaneLayout_PanePaths_LayoutAndSelection_RestoreAfterRestart", () =>
+    {
+        string[] d = { MakeDir("pdA_rest"), MakeDir("pdB_rest"), MakeDir("pdC_rest"), MakeDir("pdD_rest") };
+        string data = NewDataDir(null, "Off", d[0], "Quad", d);
+        string parent = Path.GetDirectoryName(d[3])!;
+        using (var app = AppDriver.Launch(data))
+        {
+            app.WaitUntil(() => PathOf(app, "PathBar_P4") == d[3], "시작 경로 불일치");
+            app.Activate();
+            app.Find("PathBar_P4").SetFocus();
+            app.Click("UpButton"); // 4번 영역만 상위 폴더로
+            app.WaitUntil(() => PathOf(app, "PathBar_P4") == parent, "4번 영역 이동 실패");
+            app.CloseGracefully();
+        }
+        string json = File.ReadAllText(Path.Combine(data, "settings.json"));
+        if (!json.Contains("\"Quad\"") || !json.Contains("\"ActivePane\": 3"))
+        {
+            throw new TestFailedException("배치/선택 영역이 저장되지 않음:\n" + json);
+        }
+        using var app2 = AppDriver.Launch(data);
+        app2.WaitUntil(() => PathOf(app2, "PathBar") == d[0] && PathOf(app2, "PathBar_P2") == d[1] && PathOf(app2, "PathBar_P3") == d[2] && PathOf(app2, "PathBar_P4") == parent,
+            $"영역별 마지막 경로가 복원되지 않음: '{PathOf(app2, "PathBar")}' '{PathOf(app2, "PathBar_P2")}' '{PathOf(app2, "PathBar_P3")}' '{PathOf(app2, "PathBar_P4")}'");
     }),
 };
 

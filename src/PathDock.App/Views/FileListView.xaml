@@ -23,7 +23,7 @@
                        PressedBackground="{DynamicResource PdRefreshHoverBrush}" Foreground="{DynamicResource PdRefreshForegroundBrush}"
                        Icon="{ui:SymbolIcon ArrowClockwise24}" Command="{Binding RefreshCommand}"
                        ToolTip="{loc:T '새로 고침 (F5) - 폴더 크기도 다시 계산', 'Refresh (F5) - recalculates folder sizes too'}"
-                       AutomationProperties.AutomationId="ListRefreshButton" AutomationProperties.Name="{loc:T '새로 고침', 'Refresh'}" />
+                       AutomationProperties.AutomationId="{Binding AutomationSuffix, StringFormat=ListRefreshButton{0}}" AutomationProperties.Name="{loc:T '새로 고침', 'Refresh'}" />
             <!-- 이름 검색(Ctrl+F로 이동): 입력한 글자가 이름에 들어간 파일/폴더만 목록에 보인다. Esc나 폴더 이동 시 해제 -->
             <ui:TextBox x:Name="FilterBox" Width="170" MinHeight="26" Height="26" Margin="4,-4,-6,-4" Padding="6,2"
                         FontSize="{DynamicResource PdFontSize}"
@@ -31,7 +31,7 @@
                         Icon="{ui:SymbolIcon Search24}"
                         Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
                         KeyDown="FilterBox_KeyDown"
-                        AutomationProperties.AutomationId="FilterBox" AutomationProperties.Name="{loc:T '이름 검색', 'Search names'}" />
+                        AutomationProperties.AutomationId="{Binding AutomationSuffix, StringFormat=FilterBox{0}}" AutomationProperties.Name="{loc:T '이름 검색', 'Search names'}" />
         </StackPanel>
         </ctl:PanelCard.HeaderTrailing>
         <Grid>
@@ -52,7 +52,7 @@
                          DragLeave="OnListDragLeave"
                          Drop="OnListDrop"
                          SelectionChanged="FileList_SelectionChanged"
-                         AutomationProperties.AutomationId="FileList"
+                         AutomationProperties.AutomationId="{Binding AutomationSuffix, StringFormat=FileList{0}}"
                          AutomationProperties.Name="{loc:T '파일 목록', 'File list'}"
                          MouseDoubleClick="FileList_MouseDoubleClick"
                          KeyDown="FileList_KeyDown">

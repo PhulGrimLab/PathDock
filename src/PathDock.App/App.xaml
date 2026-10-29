@@ -21,6 +21,7 @@
             <SolidColorBrush x:Key="PdAddressBarBackgroundBrush" Color="#1E2F45" />
             <SolidColorBrush x:Key="PdAddressBarBorderBrush" Color="#3B5A80" />
             <!-- 목록 머리글의 새로 고침 버튼(녹색). 밝은 글자(흰색)와의 대비 4.5:1 이상. 고대비 모드에서는 ThemeService가 시스템 색으로 바꾼다. -->
+            <SolidColorBrush x:Key="PdPaneActiveBrush" Color="#FFC83D" />
             <SolidColorBrush x:Key="PdRefreshBackgroundBrush" Color="#2E7D32" />
             <SolidColorBrush x:Key="PdRefreshHoverBrush" Color="#3E9B44" />
             <SolidColorBrush x:Key="PdRefreshForegroundBrush" Color="#FFFFFF" />
