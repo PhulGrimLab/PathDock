@@ -230,9 +230,12 @@ public sealed class VtParser
         }
     }
 
-    /// <summary>ESC c: 화면을 지우고 커서와 글자 속성을 처음 상태로.</summary>
+    /// <summary>ESC c: 대체 화면에서 나오고, 스크롤 영역과 커서 표시를 되돌리고, 화면을 지우고 커서와 글자 속성을 처음 상태로.</summary>
     private void FullReset()
     {
+        _b.SetAlternate(false); // TUI가 비정상 종료한 뒤 reset으로 빠져나올 수 있어야 한다.
+        _b.SetScrollRegion(0, _b.Rows - 1);
+        _b.CursorVisible = true;
         _b.EraseDisplay(2);
         _b.MoveTo(0, 0);
         ResetSgr();

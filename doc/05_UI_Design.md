@@ -75,7 +75,7 @@
 | `AboutWindow` | (AppInfo) | 정보 창 |
 | `InputDialog` / `ConfirmDialog` | - | 이름 변경/새 폴더 입력 / 자체 확인 창(삭제, 여러 줄 붙여넣기, 휴지통 비우기 등) |
 
-제목 표시줄(`MainWindow`): 로고(정보 창) + 버전·빌드 날짜, 시계, 계산기(Ctrl+Alt+C, 이미 떠 있으면 앞으로), 휴지통 비우기(Ctrl+Alt+E, 항목 수/용량 확인 후), 설정, 테마 전환.
+제목 표시줄(`MainWindow`): 로고(정보 창) + 버전·빌드 날짜, 바탕화면/다운로드(선택한 폴더 영역 이동), 시계, 계산기(Ctrl+Alt+C, 이미 떠 있으면 앞으로), 휴지통 비우기(Ctrl+Alt+E, 항목 수/용량 확인 후), PC 정리(Ctrl+Alt+L, 임시 파일·캐시·휴지통·메모리 정리 창), 설정, 테마 전환. 오른쪽 버튼은 색 아이콘+글자가 있는 바탕 있는 버튼이다.
 
 ## 4. 정보 창 (`AboutWindow`)
 
@@ -115,6 +115,6 @@
 
 기존 ID 유지(주소 표시줄 `PathBar`는 안쪽 TextBox가 가짐): `FavoritesBar`, `Favorite_1..10`, `PathBar`, `SyncModeCombo`, `FileList`, `Terminal`, `TerminalStatus`, `FolderSummary`, `Drive_<문자>`, `AncestorColumn_1/2`, `InfoBar`.
 신규: `AboutButton`, `ThemeButton`, `Meter_Cpu/Gpu/Memory`(이름: "CPU 12%" 등), `SyncSummary`, 정보 창(`AboutVersionTextBlock`, `AboutEnvironmentTextBlock`, `AboutCopyButton`, `AboutLogsButton`, `AboutCloseButton`).
-이후 추가: 제목 표시줄 `CalculatorButton`, `EmptyRecycleBinButton`, `SettingsButton`, `ClockText`, `VersionLabel` / 탐색 `BackButton`, `ForwardButton`, `UpButton`, `RefreshButton`, `FilterBox`, `ImagePreview`, `TextPreview` /
+이후 추가: 제목 표시줄 `CalculatorButton`, `EmptyRecycleBinButton`, `CleanupButton`(정리 창: `CleanupStartButton`, `CleanupScanButton`, `Cleanup_<항목>`), `DesktopButton`, `DownloadsButton`, `SettingsButton`, `ClockText`, `VersionLabel` / 탐색 `BackButton`, `ForwardButton`, `UpButton`, `RefreshButton`, `FilterBox`, `ImagePreview`, `TextPreview` /
 터미널 `TerminalClearButton`, `TerminalSaveButton`, `TerminalCollapseButton`, `TerminalHelp`, 탭 줄 `TerminalTabAdd`, `TerminalTab_<번호>`, `TerminalTabClose_<번호>`(번호는 1부터, 닫아도 재사용하지 않음; 탭이 하나면 닫기 버튼은 숨김=UIA 트리에 없음) / 설정 창(`LanguageCombo`, `UiFontSizeSlider`, `TerminalFontSizeSlider`, `TerminalShellCombo`, `TerminalThemeCombo`,
 `TerminalForegroundBox`, `TerminalBackgroundBox`, `TerminalColorError`, `StartAtLastPathCheck`, `Reset*Button`, `SettingsCloseButton`) / 대화상자(`InputBox`, `InputOk`, `InputCancel`, `InputError`, `ConfirmMessage`, `ConfirmYes`, `ConfirmNo`).

@@ -59,12 +59,44 @@ public static class SafeIo
     /// </summary>
     public static bool DirectoryExistsWithTimeout(string path, TimeSpan timeout)
     {
+        // 시간 초과한 서버(공유)는 잠시 동안 다시 확인하지 않는다: 시간 초과된 확인은 OS가 포기할 때까지 스레드 풀 스레드를 붙잡고
+        // 호출마다 UI가 최대 timeout씩 멈추므로, 꺼진 서버로 동기화가 반복되면 스레드가 쌓이고 창이 계속 멈칫한다.
+        string server = Path.GetPathRoot(path) ?? path;
+        if (_unreachable.TryGetValue(server, out DateTime until) && DateTime.UtcNow < until)
+        {
+            return false;
+        }
         Task<bool> probe = Task.Run(() =>
         {
             try { return Directory.Exists(path); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { return false; }
         });
-        return probe.Wait(timeout) && probe.Result;
+        if (!probe.Wait(timeout))
+        {
+            _unreachable[server] = DateTime.UtcNow + UnreachableMemory;
+            return false;
+        }
+        return probe.Result;
+    }
+
+    private static readonly TimeSpan UnreachableMemory = TimeSpan.FromSeconds(30);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> _unreachable = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>네트워크 위치인지: UNC 경로이거나 네트워크 드라이브로 연결된 드라이브 문자. 끊긴 서버는 응답을 오래 기다리게 하므로 시간 제한 대상이다.</summary>
+    public static bool IsNetworkPath(string path)
+    {
+        if (IsUnc(path))
+        {
+            return true;
+        }
+        try
+        {
+            return path.Length >= 2 && path[1] == ':' && char.IsAsciiLetter(path[0]) && new DriveInfo(path[0].ToString()).DriveType == DriveType.Network;
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException)
+        {
+            return false;
+        }
     }
 
     /// <summary>경로가 UNC(네트워크) 경로인지.</summary>

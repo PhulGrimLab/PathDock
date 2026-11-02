@@ -80,9 +80,12 @@ public sealed class SystemMonitor : IDisposable
         }
     }
 
+    private int _ticking;
+
     private void Tick()
     {
-        if (_disposed)
+        // 이전 측정(특히 느린 GPU 카운터)이 아직 끝나지 않았으면 건너뛴다: 주기 타이머는 겹쳐서 호출되므로 스레드가 쌓인다.
+        if (_disposed || Interlocked.Exchange(ref _ticking, 1) == 1)
         {
             return;
         }
@@ -90,10 +93,14 @@ public sealed class SystemMonitor : IDisposable
         {
             Updated?.Invoke(Sample());
         }
-        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            // 종료 중 경쟁: 무시.
+            // 타이머 스레드의 처리되지 않은 예외는 앱을 끝낸다(종료 중 경쟁, 구독자 예외 등). 기록만 하고 다음 주기에 다시 한다.
             _log.Warn($"시스템 사용량 측정 실패: {ex.Message}");
+        }
+        finally
+        {
+            Volatile.Write(ref _ticking, 0);
         }
     }
 

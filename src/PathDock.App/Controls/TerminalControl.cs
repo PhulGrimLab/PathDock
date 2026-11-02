@@ -74,14 +74,35 @@ public sealed class TerminalControl : FrameworkElement
         MeasureCell();
         _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(RefreshIntervalMs) };
         _timer.Tick += (_, _) => RefreshIfChanged();
-        Loaded += (_, _) => _timer.Start();
+        // 접혀 있거나 가려진 동안에는 깨우지 않는다(Unloaded는 Collapsed일 때 오지 않는다).
+        Loaded += (_, _) => UpdateTimer();
+        IsVisibleChanged += (_, _) => UpdateTimer();
         Unloaded += (_, _) => _timer.Stop();
+    }
+
+    private void UpdateTimer()
+    {
+        if (IsLoaded && IsVisible)
+        {
+            _timer.Start();
+        }
+        else
+        {
+            _timer.Stop();
+        }
     }
 
     private void OnSessionChanged()
     {
         _renderedVersion = -1;
         _scrollOffset = 0;
+        // 선택 영역은 이전 탭 화면의 좌표다: 남겨 두면 새 탭에서 엉뚱한 곳이 강조되고 Ctrl+C가 중단 대신 복사로 처리된다.
+        _selection.Clear();
+        _selection.EndDrag();
+        if (IsMouseCaptured)
+        {
+            ReleaseMouseCapture();
+        }
         ApplySize();
     }
 
@@ -97,6 +118,22 @@ public sealed class TerminalControl : FrameworkElement
         MeasureCell();
         _renderedVersion = -1;
         ApplySize();
+    }
+
+    /// <summary>다른 배율의 모니터로 옮겨 DPI가 바뀌면 글자 칸 크기를 다시 재야 한다(안 그러면 칸과 글자가 어긋난다).</summary>
+    protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+    {
+        base.OnDpiChanged(oldDpi, newDpi);
+        MeasureCell();
+        _renderedVersion = -1;
+        ApplySize();
+    }
+
+    /// <summary>드래그 중 포커스를 잃어(Alt+Tab 등) 마우스 캡처가 풀리면 드래그 상태도 끝낸다(안 그러면 "끌고 있는 중"이 남는다).</summary>
+    protected override void OnLostMouseCapture(MouseEventArgs e)
+    {
+        base.OnLostMouseCapture(e);
+        _selection.EndDrag();
     }
 
     private void MeasureCell() => _renderer.MeasureCell(TerminalFontSize, VisualTreeHelper.GetDpi(this).PixelsPerDip);
@@ -386,12 +423,21 @@ public sealed class TerminalControl : FrameworkElement
 
     private void PasteFromClipboard(TerminalSession s)
     {
-        if (!Clipboard.ContainsText())
+        string clipboardText;
+        try
         {
-            return; // 텍스트가 아닌 클립보드: 무시.
+            if (!Clipboard.ContainsText())
+            {
+                return; // 텍스트가 아닌 클립보드: 무시.
+            }
+            clipboardText = Clipboard.GetText();
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            return; // 다른 프로그램이 클립보드를 쓰는 중: 이번 붙여넣기는 건너뛴다(복사와 같은 처리).
         }
         // 줄바꿈은 Enter(\r)로 통일하고 눈에 안 보이는 제어 문자는 제거한다(PasteGuard).
-        string text = PasteGuard.Normalize(Clipboard.GetText());
+        string text = PasteGuard.Normalize(clipboardText);
         if (text.Length == 0)
         {
             return;

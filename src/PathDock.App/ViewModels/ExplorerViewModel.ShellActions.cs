@@ -68,9 +68,11 @@ public sealed partial class ExplorerViewModel
         {
             return;
         }
+        // 전체 경로로 실행한다: 이름만 주면 앱 폴더에서 같은 이름의 파일을 먼저 찾을 수 있다(이 앱은 관리자 권한).
+        string explorerExe = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
         bool select = Targets().Count > 0;
         string arguments = select ? $"/select,\"{path}\"" : $"\"{path}\"";
-        RunShell(() => Process.Start(new ProcessStartInfo("explorer.exe", arguments) { UseShellExecute = false })?.Dispose(), path);
+        RunShell(() => Process.Start(new ProcessStartInfo(explorerExe, arguments) { UseShellExecute = false })?.Dispose(), path);
     }
 
     /// <summary>"연결 프로그램 선택" 창을 연다(파일만). 관리자 권한 앱이라 선택한 프로그램도 관리자로 뜨지 않도록 탐색기(일반 권한)에 맡긴다.</summary>

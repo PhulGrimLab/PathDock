@@ -24,17 +24,18 @@ public static class FolderSizeCalculator
         var options = new EnumerationOptions
         {
             RecurseSubdirectories = true,
-            IgnoreInaccessible = true,
+            IgnoreInaccessible = false, // 접근 오류를 SizeEnumerator.ContinueOnError가 받아 "불완전"로 기록하고 건너뛴다.
             AttributesToSkip = FileAttributes.ReparsePoint, // 숨김/시스템은 크기에 포함한다.
             ReturnSpecialDirectories = false,
         };
 
+        SizeEnumerator? enumerator = null;
         try
         {
-            var enumerable = new FileSystemEnumerable<(bool IsDir, long Length)>(path,
-                (ref FileSystemEntry e) => (e.IsDirectory, e.IsDirectory ? 0 : e.Length), options);
-            foreach ((bool isDir, long length) in enumerable)
+            enumerator = new SizeEnumerator(path, options);
+            while (enumerator.MoveNext())
             {
+                (bool isDir, long length) = enumerator.Current;
                 ct.ThrowIfCancellationRequested();
                 if (isDir)
                 {
@@ -56,6 +57,26 @@ public static class FolderSizeCalculator
             // 루트 자체에 접근 불가/삭제됨: 지금까지의 합계만 돌려주고 불완전으로 표시한다.
             incomplete = true;
         }
-        return new FolderStats(total, files, folders, incomplete);
+        bool sawError = enumerator?.SawError ?? false;
+        enumerator?.Dispose();
+        return new FolderStats(total, files, folders, incomplete || sawError);
+    }
+
+    /// <summary>하위 항목 접근 오류를 건너뛰되 "불완전"으로 기록하는 열거자(IgnoreInaccessible은 오류를 조용히 삼켜 표시할 수 없다).</summary>
+    private sealed class SizeEnumerator : FileSystemEnumerator<(bool IsDir, long Length)>
+    {
+        public bool SawError { get; private set; }
+
+        public SizeEnumerator(string path, EnumerationOptions options) : base(path, options)
+        {
+        }
+
+        protected override (bool IsDir, long Length) TransformEntry(ref FileSystemEntry entry) => (entry.IsDirectory, entry.IsDirectory ? 0 : entry.Length);
+
+        protected override bool ContinueOnError(int error)
+        {
+            SawError = true;
+            return true;
+        }
     }
 }

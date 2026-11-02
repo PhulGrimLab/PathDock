@@ -172,7 +172,15 @@ internal sealed class TerminalRenderer
                 runFg = fg;
                 runAttr = style;
             }
-            run.Append(char.ConvertFromUtf32(c.Ch));
+            // 기본 평면(BMP)의 글자는 문자열을 만들지 않고 바로 붙인다(화면이 바뀔 때마다 수천 개의 임시 문자열이 생겼다).
+            if (c.Ch < 0x10000)
+            {
+                run.Append((char)c.Ch);
+            }
+            else
+            {
+                run.Append(char.ConvertFromUtf32(c.Ch));
+            }
         }
     }
 

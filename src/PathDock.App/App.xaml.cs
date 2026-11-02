@@ -47,6 +47,14 @@ public partial class App : Application
         {
             _logger.Error($"처리되지 않은 예외: {args.Exception}");
             args.Handled = true;
+            if (MainWindow is null)
+            {
+                // 시작 도중 실패: 창이 없으면 앱이 끝나지 않고 보이지 않는 프로세스(와 멈춘 로딩 팝업, 잡힌 단일 실행 잠금)로 남는다.
+                _splash?.CloseNow();
+                MessageBox.Show(Loc.T($"PathDock을 시작하지 못했습니다.\n\n{args.Exception.Message}", $"PathDock could not start.\n\n{args.Exception.Message}"), "PathDock");
+                Shutdown(1);
+                return;
+            }
             _viewModel?.ReportUnexpectedError(args.Exception);
         };
         // 다른 스레드의 처리되지 않은 예외는 프로세스가 종료된다: 기록하고, 이번 세션의 설정(즐겨찾기 등)을 마지막으로 저장해 본다.

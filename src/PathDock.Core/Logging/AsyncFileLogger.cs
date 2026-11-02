@@ -93,28 +93,48 @@ public sealed class AsyncFileLogger : ILog, IDisposable
         {
             foreach (string line in _queue.Reader.ReadAllAsync().ToBlockingEnumerable())
             {
-                string file = Path.Combine(_dir, $"pathdock-{DateTime.Now:yyyyMMdd}.log");
-                if (file != currentFile)
+                try
                 {
-                    // 로그 폴더나 파일이 링크로 바뀌어 있으면 쓰지 않는다(관리자 권한 앱이 링크를 따라 엉뚱한 파일에 덧붙이지 않도록). 로그는 버린다.
-                    if (SafeIo.IsReparsePoint(_dir) || SafeIo.IsReparsePoint(file))
+                    string file = Path.Combine(_dir, $"pathdock-{DateTime.Now:yyyyMMdd}.log");
+                    if (file != currentFile)
                     {
-                        continue;
+                        // 로그 폴더나 파일이 링크로 바뀌어 있으면 쓰지 않는다(관리자 권한 앱이 링크를 따라 엉뚱한 파일에 덧붙이지 않도록). 로그는 버린다.
+                        if (SafeIo.IsReparsePoint(_dir) || SafeIo.IsReparsePoint(file))
+                        {
+                            continue;
+                        }
+                        writer?.Dispose();
+                        writer = null;
+                        currentFile = null;
+                        writer = new StreamWriter(new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.ReadWrite)) { AutoFlush = true };
+                        currentFile = file;
                     }
-                    writer?.Dispose();
-                    writer = new StreamWriter(new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.ReadWrite)) { AutoFlush = true };
-                    currentFile = file;
+                    writer!.WriteLine(line);
                 }
-                writer!.WriteLine(line);
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // 백신 잠금, 디스크 가득 참, 접근 거부: 이 줄만 버리고 다음 줄에서 파일을 다시 연다(로깅이 앱 동작을 막거나 앱을 끝내면 안 됨).
+                    DisposeQuietly(writer);
+                    writer = null;
+                    currentFile = null;
+                }
             }
-        }
-        catch (IOException)
-        {
-            // 로그 파일을 열 수 없으면 조용히 포기한다(로깅이 앱 동작을 막으면 안 됨).
         }
         finally
         {
+            DisposeQuietly(writer);
+        }
+    }
+
+    private static void DisposeQuietly(StreamWriter? writer)
+    {
+        try
+        {
             writer?.Dispose();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // 닫다가 실패해도 할 일이 없다.
         }
     }
 

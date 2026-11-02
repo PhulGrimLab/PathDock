@@ -89,11 +89,7 @@ public sealed partial class ExplorerViewModel
     {
         FileItemViewModel? selected = SelectedItem;
         List<FileItemViewModel> sorted = SortItems(Items.ToList());
-        Items.Clear();
-        foreach (FileItemViewModel i in sorted)
-        {
-            Items.Add(i);
-        }
+        Items.ReplaceAll(sorted);
         SelectedItem = selected;
     }
 
@@ -228,8 +224,26 @@ public sealed partial class ExplorerViewModel
     }
 
     /// <summary>끌어 놓을 때의 동작(복사/이동/불가)을 정한다(규칙은 Core의 <see cref="DropRules"/>).</summary>
-    public DropEffect GetDropEffect(IReadOnlyList<string> sources, string destFolder, bool ctrlHeld, bool shiftHeld) =>
-        DropRules.Decide(sources, destFolder, ctrlHeld, shiftHeld);
+    public DropEffect GetDropEffect(IReadOnlyList<string> sources, string destFolder, bool ctrlHeld, bool shiftHeld)
+    {
+        // DragOver는 마우스가 움직이는 내내 수십 ms마다 불리는데 규칙 판정은 디스크를 확인한다(폴더 존재, 링크를 푼 실제 경로).
+        // 같은 입력이면 잠깐(DropEffectCacheMs) 직전 결과를 재사용해 UI 스레드의 I/O를 줄인다. UI 스레드에서만 호출된다.
+        string key = string.Join('|', sources) + '|' + destFolder + (ctrlHeld ? "C" : "-") + (shiftHeld ? "S" : "-");
+        long now = Environment.TickCount64;
+        if (key == _dropEffectKey && now - _dropEffectTicks < DropEffectCacheMs)
+        {
+            return _dropEffect;
+        }
+        _dropEffect = DropRules.Decide(sources, destFolder, ctrlHeld, shiftHeld);
+        _dropEffectKey = key;
+        _dropEffectTicks = now;
+        return _dropEffect;
+    }
+
+    private const int DropEffectCacheMs = 500;
+    private string? _dropEffectKey;
+    private long _dropEffectTicks;
+    private DropEffect _dropEffect;
 
     /// <summary>복사/이동 본체: 크기를 재고, 진행 표시와 함께 백그라운드에서 실행하고, 끝나면 캐시를 무효화하고 목록을 새로 읽는다.</summary>
     private async Task TransferAsync(List<string> paths, string dest, bool cut, bool fromClipboard)
@@ -331,8 +345,9 @@ public sealed partial class ExplorerViewModel
             {
                 return (sources, errors, true);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
             {
+                // 경로에 ':' 같은 글자가 있어 NotSupportedException이 나는 항목 하나 때문에 나머지 복사가 멈추지 않게 항목 단위로 처리한다.
                 errors.Add($"{Path.GetFileName(p)}: {ex.Message}");
             }
         }

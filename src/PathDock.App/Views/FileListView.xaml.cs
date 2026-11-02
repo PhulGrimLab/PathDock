@@ -152,11 +152,12 @@ public partial class FileListView : UserControl
         {
             return;
         }
-        if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.Alt)
+        Key key = e.Key == Key.System ? e.SystemKey : e.Key; // Alt를 누른 채는 Key.System으로 오고 실제 키는 SystemKey에 있다.
+        if (key == Key.Enter && Keyboard.Modifiers == ModifierKeys.Alt)
         {
             vm.ShowPropertiesCommand.Execute(null);
         }
-        else if (e.Key == Key.Enter && vm.SelectedItem is { } item)
+        else if (key == Key.Enter && vm.SelectedItem is { } item)
         {
             vm.OpenItemCommand.Execute(item);
         }

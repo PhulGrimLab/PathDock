@@ -32,7 +32,11 @@ public sealed partial class InfoBarViewModel : ObservableObject
     public bool HasInfo => !string.IsNullOrEmpty(Message);
 
     /// <summary>알림/오류를 보인다(경고색, 10초 뒤 자동 닫힘).</summary>
-    public void Show(string message) => Message = message;
+    public void Show(string message)
+    {
+        Message = string.Empty; // 같은 문구도 다시 보이고 자동 닫힘 시간이 새로 시작되게 한다.
+        Message = message;
+    }
 
     /// <summary>작업이 잘 끝났음을 알린다. 초록 막대로 보였다가 몇 초 뒤 저절로 사라진다.</summary>
     public void ShowSuccess(string message)

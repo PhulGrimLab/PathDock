@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Threading.Channels;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
@@ -19,12 +20,15 @@ public sealed class ConPtySession : IDisposable
     private const int StartfUseStdHandles = 0x00000100;
     private const uint InfiniteWait = 0xFFFFFFFF;
 
-    private readonly object _writeLock = new();
+    // 입력은 큐에 넣고 전용 스레드가 파이프에 쓴다: 자식이 입력을 읽지 않을 때(바쁜 명령 + 큰 붙여넣기) 파이프가 차서 UI 스레드가 멈추는 것을 막는다.
+    private readonly Channel<byte[]> _input = Channel.CreateUnbounded<byte[]>(new UnboundedChannelOptions { SingleReader = true });
+    private readonly object _stateLock = new();
     private readonly Action<byte[], int> _onOutput;
     private readonly Action<int> _onExit;
     private IntPtr _hPC;
     private IntPtr _attrList;
-    private IntPtr _hProcess;
+    // SafeHandle: 감시 스레드가 기다리는 동안 Dispose가 핸들을 닫아도 대기가 끝날 때까지 실제 닫기가 미뤄진다(닫힌 핸들 값 재사용 방지).
+    private SafeProcessHandle? _hProcess;
     private IntPtr _hThread;
     private SafeFileHandle? _inWrite;
     private SafeFileHandle? _outRead;
@@ -65,15 +69,25 @@ public sealed class ConPtySession : IDisposable
     /// </summary>
     public void Start(string commandLine, string? workingDirectory, int cols, int rows, uint flags = 0, IReadOnlyDictionary<string, string>? extraEnvironment = null)
     {
-        if (!CreatePipe(out SafeFileHandle inRead, out SafeFileHandle inWrite, IntPtr.Zero, 0)
-            || !CreatePipe(out SafeFileHandle outRead, out SafeFileHandle outWrite, IntPtr.Zero, 0))
+        if (!CreatePipe(out SafeFileHandle inRead, out SafeFileHandle inWrite, IntPtr.Zero, 0))
         {
             throw new Win32Exception(Marshal.GetLastWin32Error(), "CreatePipe 실패");
+        }
+        if (!CreatePipe(out SafeFileHandle outRead, out SafeFileHandle outWrite, IntPtr.Zero, 0))
+        {
+            int error = Marshal.GetLastWin32Error();
+            inRead.Dispose();
+            inWrite.Dispose();
+            throw new Win32Exception(error, "CreatePipe 실패");
         }
 
         int hr = CreatePseudoConsole(new Coord((short)cols, (short)rows), inRead, outWrite, flags, out _hPC);
         if (hr != 0)
         {
+            inRead.Dispose();
+            inWrite.Dispose();
+            outRead.Dispose();
+            outWrite.Dispose();
             throw new Win32Exception(hr, "CreatePseudoConsole 실패");
         }
 
@@ -114,11 +128,12 @@ public sealed class ConPtySession : IDisposable
                 Marshal.FreeHGlobal(env);
             }
         }
-        _hProcess = pi.hProcess;
+        _hProcess = new SafeProcessHandle(pi.hProcess, ownsHandle: true);
         _hThread = pi.hThread;
 
         new Thread(ReadLoop) { IsBackground = true, Name = "PathDock.ConPtyRead" }.Start();
         new Thread(WaitLoop) { IsBackground = true, Name = "PathDock.ConPtyWait" }.Start();
+        new Thread(WriteLoop) { IsBackground = true, Name = "PathDock.ConPtyWrite" }.Start();
     }
 
     private void ReadLoop()
@@ -141,8 +156,16 @@ public sealed class ConPtySession : IDisposable
 
     private void WaitLoop()
     {
-        WaitForSingleObject(_hProcess, InfiniteWait);
-        GetExitCodeProcess(_hProcess, out uint code);
+        uint code = 0;
+        try
+        {
+            WaitForSingleObject(_hProcess!, InfiniteWait);
+            GetExitCodeProcess(_hProcess!, out code);
+        }
+        catch (ObjectDisposedException)
+        {
+            // Dispose가 핸들을 닫음: 종료 콜백은 부르지 않는다(아래).
+        }
         if (!_disposed)
         {
             _onExit((int)code);
@@ -153,36 +176,44 @@ public sealed class ConPtySession : IDisposable
         }
     }
 
-    /// <summary>입력 바이트를 셸에 보낸다(스레드 안전). 세션이 끝났으면 무시한다.</summary>
+    /// <summary>입력 바이트를 셸에 보낸다(스레드 안전, 기다리지 않음: 큐에 넣고 바로 돌아온다). 세션이 끝났으면 무시한다.</summary>
     public void Write(byte[] data)
     {
-        lock (_writeLock)
+        if (!_disposed)
         {
-            if (_disposed || _writeStream is null)
+            _input.Writer.TryWrite(data);
+        }
+    }
+
+    private void WriteLoop()
+    {
+        try
+        {
+            foreach (byte[] data in _input.Reader.ReadAllAsync().ToBlockingEnumerable())
             {
-                return;
-            }
-            try
-            {
+                if (_disposed || _writeStream is null)
+                {
+                    return;
+                }
                 _writeStream.Write(data, 0, data.Length);
                 _writeStream.Flush();
             }
-            catch (IOException)
-            {
-                // 셸이 이미 종료됨.
-            }
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+        {
+            // 셸이 이미 종료됨(또는 Dispose가 파이프를 닫음): 남은 입력은 버린다.
         }
     }
 
     public void Resize(int cols, int rows)
     {
-        if (!_disposed && _hPC != IntPtr.Zero)
+        // Dispose가 의사 콘솔을 닫는 중에 크기 변경이 끼어들지 않게 같은 잠금으로 확인과 호출을 묶는다.
+        lock (_stateLock)
         {
-            ResizePseudoConsole(_hPC, new Coord((short)Math.Max(1, cols), (short)Math.Max(1, rows)));
-        }
-        else
-        {
-            // 세션이 없거나 종료됨.
+            if (!_disposed && _hPC != IntPtr.Zero)
+            {
+                ResizePseudoConsole(_hPC, new Coord((short)Math.Max(1, cols), (short)Math.Max(1, rows)));
+            }
         }
     }
 
@@ -193,14 +224,27 @@ public sealed class ConPtySession : IDisposable
             return;
         }
         _disposed = true;
-        if (_hProcess != IntPtr.Zero)
+        _input.Writer.TryComplete();
+        if (_hProcess is not null)
         {
-            TerminateProcess(_hProcess, 0);
+            try
+            {
+                TerminateProcess(_hProcess, 0);
+            }
+            catch (ObjectDisposedException)
+            {
+                // 이미 닫힘.
+            }
         }
         // ClosePseudoConsole은 출력 파이프가 비워질 때까지 블록할 수 있어 별도 스레드에서 수행한다(종료 지연 방지).
-        IntPtr hPC = _hPC;
+        IntPtr hPC;
+        lock (_stateLock)
+        {
+            hPC = _hPC;
+            _hPC = IntPtr.Zero; // 이후의 Resize는 이 핸들을 쓰지 않는다.
+        }
         IntPtr attr = _attrList;
-        IntPtr hProcess = _hProcess;
+        SafeProcessHandle? hProcess = _hProcess;
         IntPtr hThread = _hThread;
         SafeFileHandle? outRead = _outRead;
         _writeStream?.Dispose();
@@ -221,10 +265,7 @@ public sealed class ConPtySession : IDisposable
             {
                 CloseHandle(hThread);
             }
-            if (hProcess != IntPtr.Zero)
-            {
-                CloseHandle(hProcess);
-            }
+            hProcess?.Dispose(); // 감시 스레드가 아직 기다리는 중이면 대기가 끝난 뒤에 실제로 닫힌다.
         });
     }
 
@@ -290,13 +331,13 @@ public sealed class ConPtySession : IDisposable
         uint flags, IntPtr env, string? cwd, ref StartupInfoEx si, out ProcessInformation pi);
 
     [DllImport("kernel32.dll")]
-    private static extern uint WaitForSingleObject(IntPtr handle, uint ms);
+    private static extern uint WaitForSingleObject(SafeProcessHandle handle, uint ms);
 
     [DllImport("kernel32.dll")]
-    private static extern bool GetExitCodeProcess(IntPtr handle, out uint code);
+    private static extern bool GetExitCodeProcess(SafeProcessHandle handle, out uint code);
 
     [DllImport("kernel32.dll")]
-    private static extern bool TerminateProcess(IntPtr handle, uint code);
+    private static extern bool TerminateProcess(SafeProcessHandle handle, uint code);
 
     [DllImport("kernel32.dll")]
     private static extern bool CloseHandle(IntPtr handle);

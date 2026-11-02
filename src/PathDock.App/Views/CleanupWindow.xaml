@@ -1,0 +1,74 @@
+<ui:FluentWindow x:Class="PathDock.App.Views.CleanupWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:PathDock.App.Localization"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:ctl="clr-namespace:PathDock.App.Controls"
+                 FontFamily="{StaticResource PdFontFamily}"
+                 Title="{loc:T 'PC 정리', 'Clean up PC'}" Width="600" SizeToContent="Height"
+                 ResizeMode="NoResize" ShowInTaskbar="False"
+                 WindowStartupLocation="CenterOwner"
+                 ExtendsContentIntoTitleBar="True" WindowBackdropType="Mica">
+    <ui:FluentWindow.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </ui:FluentWindow.Resources>
+    <!-- PC 정리 창. DataContext: CleanupViewModel. 열리면 바로 검사하고, 고른 항목만 확인 후 정리한다. -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="{loc:T 'PC 정리', 'Clean up PC'}" ShowMinimize="False" ShowMaximize="False" />
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="24,8,24,22">
+                <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Text="{loc:T 'Windows에 쌓인 임시 파일과 캐시를 지워 저장 공간을 확보하고, 메모리를 정리합니다. 문서나 설정은 지우지 않습니다.', 'Frees disk space by deleting temp files and caches that pile up in Windows, and trims memory. Your documents and settings are not touched.'}" />
+
+                <ctl:PanelCard Margin="0,14,0,0" Header="{loc:T '정리할 항목', 'Items to clean'}" Symbol="Broom24" ContentPadding="14,6">
+                    <ItemsControl ItemsSource="{Binding Items}" Focusable="False" Grid.IsSharedSizeScope="True">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="CleanupSize" />
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox IsChecked="{Binding IsSelected}" VerticalContentAlignment="Top"
+                                              AutomationProperties.AutomationId="{Binding Id, StringFormat=Cleanup_{0}}"
+                                              AutomationProperties.Name="{Binding Name}">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                            <TextBlock Text="{Binding Description}" TextWrapping="Wrap" FontSize="12" Margin="0,2,0,0"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                        </StackPanel>
+                                    </CheckBox>
+                                    <TextBlock Grid.Column="1" Text="{Binding SizeText}" Margin="16,0,0,0" VerticalAlignment="Top"
+                                               FontWeight="SemiBold" Foreground="{DynamicResource SystemAccentColorPrimaryBrush}"
+                                               AutomationProperties.AutomationId="{Binding Id, StringFormat=CleanupSize_{0}}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ctl:PanelCard>
+
+                <TextBlock Margin="2,12,0,0" Text="{Binding SummaryText}" FontWeight="SemiBold"
+                           AutomationProperties.AutomationId="CleanupSummary" />
+                <ProgressBar Margin="0,8,0,0" IsIndeterminate="True" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}" />
+                <TextBlock Margin="2,6,0,0" Text="{Binding StatusText}" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           AutomationProperties.AutomationId="CleanupStatus" />
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+                    <ui:Button Content="{loc:T '다시 검사', 'Rescan'}" Icon="{ui:SymbolIcon ArrowSync24}" Margin="0,0,8,0"
+                               Command="{Binding ScanCommand}" AutomationProperties.AutomationId="CleanupScanButton" />
+                    <ui:Button Content="{loc:T '정리 시작', 'Clean up'}" Icon="{ui:SymbolIcon Broom24}" Appearance="Primary" Margin="0,0,8,0"
+                               Command="{Binding CleanCommand}" AutomationProperties.AutomationId="CleanupStartButton" />
+                    <ui:Button Content="{loc:T '닫기', 'Close'}" MinWidth="80" IsCancel="True"
+                               Click="OnCloseClick" AutomationProperties.AutomationId="CleanupCloseButton" />
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</ui:FluentWindow>

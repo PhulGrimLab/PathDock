@@ -19,7 +19,7 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
     private readonly ExplorerService _service = new();
     private readonly ILog _log;
 
-    public ObservableCollection<FileItemViewModel> Items { get; } = new();
+    public BulkObservableCollection<FileItemViewModel> Items { get; } = new();
 
     /// <summary>경로 표시줄의 텍스트(편집 가능). Enter로 이동한다.</summary>
     [ObservableProperty]
@@ -225,11 +225,7 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
     private void ApplyListing(List<FileItem> items)
     {
         FilterText = string.Empty; // 다른 폴더로 이동하면 검색을 해제한다(새로고침도 포함).
-        Items.Clear();
-        foreach (FileItemViewModel vm in SortItems(items.Select(i => new FileItemViewModel(i))))
-        {
-            Items.Add(vm);
-        }
+        Items.ReplaceAll(SortItems(items.Select(i => new FileItemViewModel(i))));
         PathText = _service.Current ?? string.Empty;
         OnPropertyChanged(nameof(CurrentFolderName));
         GoBackCommand.NotifyCanExecuteChanged();
@@ -396,13 +392,39 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
         }
     }
 
+    private List<FileItemViewModel>? _summarySnapshot;
+    private int _summaryDirCount;
+    private int _summaryFileCount;
+    private long _summaryFileBytes;
+
     /// <summary>요약 줄 갱신. 폴더 크기 계산이 끝나지 않았으면 진행 상황을 함께 표시한다.</summary>
     private void UpdateSummary(List<FileItemViewModel> snapshot, int dirsDone)
     {
-        int dirCount = snapshot.Count(i => i.IsDirectory);
-        var files = snapshot.Where(i => !i.IsDirectory).ToList();
-        long fileBytes = files.Sum(f => f.Item.Size);
-        string text = Loc.T($"폴더 {dirCount:N0}개 · 파일 {files.Count:N0}개 ({SizeFormatter.Format(fileBytes)})", $"{Loc.Plural(dirCount, "folder", "folders")} · {Loc.Plural(files.Count, "file", "files")} ({SizeFormatter.Format(fileBytes)})");
+        // 폴더 크기 계산은 폴더 하나가 끝날 때마다 이 메서드를 부른다. 폴더/파일 개수와 파일 크기 합은 같은 목록이면 변하지 않으므로
+        // 목록(snapshot)이 바뀔 때만 다시 센다(파일이 수만 개면 호출마다 전체를 훑고 큰 리스트를 만들었다).
+        if (!ReferenceEquals(_summarySnapshot, snapshot))
+        {
+            _summarySnapshot = snapshot;
+            _summaryDirCount = 0;
+            _summaryFileCount = 0;
+            _summaryFileBytes = 0;
+            foreach (FileItemViewModel i in snapshot)
+            {
+                if (i.IsDirectory)
+                {
+                    _summaryDirCount++;
+                }
+                else
+                {
+                    _summaryFileCount++;
+                    _summaryFileBytes += i.Item.Size;
+                }
+            }
+        }
+        int dirCount = _summaryDirCount;
+        int fileCount = _summaryFileCount;
+        long fileBytes = _summaryFileBytes;
+        string text = Loc.T($"폴더 {dirCount:N0}개 · 파일 {fileCount:N0}개 ({SizeFormatter.Format(fileBytes)})", $"{Loc.Plural(dirCount, "folder", "folders")} · {Loc.Plural(fileCount, "file", "files")} ({SizeFormatter.Format(fileBytes)})");
         if (dirCount > 0)
         {
             if (dirsDone < dirCount)
@@ -428,7 +450,7 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
     [RelayCommand(CanExecute = nameof(CanGoBack))]
     private void GoBack()
     {
-        MoveInHistory(_service.GoBack());
+        MoveInHistory(_service.GoBack(), () => _service.GoForward());
     }
 
     private bool CanGoBack() => _service.CanGoBack;
@@ -436,7 +458,7 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
     [RelayCommand(CanExecute = nameof(CanGoForward))]
     private void GoForward()
     {
-        MoveInHistory(_service.GoForward());
+        MoveInHistory(_service.GoForward(), () => _service.GoBack());
     }
 
     private bool CanGoForward() => _service.CanGoForward;
@@ -511,8 +533,8 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
         }
     }
 
-    /// <summary>뒤로/앞으로: 이력 포인터는 이미 움직였으므로 목록만 읽고, 실패하면 오류를 알린다.</summary>
-    private void MoveInHistory(string? target)
+    /// <summary>뒤로/앞으로: 이력 포인터는 이미 움직였으므로 목록만 읽는다. 실패하면 오류를 알리고 포인터를 <paramref name="undo"/>로 되돌려 화면과 이력이 어긋나지 않게 한다.</summary>
+    private void MoveInHistory(string? target, Action undo)
     {
         if (target is null)
         {
@@ -522,8 +544,9 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
         {
             ApplyListing(ExplorerService.List(target, ShowHidden));
         }
-        catch (Exception ex) when (ex is DirectoryNotFoundException or UnauthorizedAccessException or IOException)
+        catch (Exception ex) when (ex is DirectoryNotFoundException or UnauthorizedAccessException or IOException or ArgumentException)
         {
+            undo();
             _log.Warn($"이력 이동 실패: {target} ({ex.GetType().Name})");
             ErrorOccurred?.Invoke(Loc.T($"폴더를 열 수 없습니다: {target}", $"Could not open the folder: {target}"));
             return;

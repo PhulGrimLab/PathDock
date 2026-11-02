@@ -129,7 +129,25 @@ public sealed class SettingsService
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             _log.Warn($"설정 로드 실패, 기본값 사용: {ex.Message}");
+            if (ex is JsonException)
+            {
+                BackUpCorruptFile();
+            }
             return new AppSettings();
+        }
+    }
+
+    /// <summary>읽지 못한 설정 파일을 ".bad"로 보관한다. 기본값으로 시작한 뒤 첫 저장이 이 파일을 덮어쓰면 즐겨찾기 등을 되찾을 수 없다.</summary>
+    private void BackUpCorruptFile()
+    {
+        try
+        {
+            File.Copy(_filePath, _filePath + ".bad", overwrite: true);
+            _log.Warn($"손상된 설정 파일을 보관했습니다: {_filePath}.bad");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log.Warn($"손상된 설정 파일 보관 실패: {ex.Message}");
         }
     }
 

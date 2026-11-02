@@ -431,8 +431,9 @@ public sealed class ScreenBuffer
             _savedMain = null;
             _top = 0;
             _bottom = Rows - 1;
-            CursorX = _mainSavedX;
-            CursorY = _mainSavedY;
+            // 대체 화면에 있는 동안 크기가 바뀌었을 수 있어 저장해 둔 커서를 현재 크기 안으로 보정한다(밖이면 Put이 배열 범위를 벗어난다).
+            CursorX = Math.Min(_mainSavedX, Cols - 1);
+            CursorY = Math.Min(_mainSavedY, Rows - 1);
         }
         Touch();
     }

@@ -107,8 +107,17 @@ public sealed class TerminalSession : IDisposable
 
     private void OnOutput(byte[] data, int count)
     {
-        _parser.Feed(data, count);
-        ScreenChanged?.Invoke();
+        // ConPTY 읽기 스레드에서 호출된다. 파서/화면 버퍼의 예기치 않은 예외가 이 스레드에서 처리되지 않으면 앱 전체가 종료되므로,
+        // 기록만 하고 다음 출력부터 계속 처리한다.
+        try
+        {
+            _parser.Feed(data, count);
+            ScreenChanged?.Invoke();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _log.Error($"터미널 출력 처리 오류: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     private void OnExit(int code)
@@ -243,6 +252,9 @@ public sealed class TerminalSession : IDisposable
         get { lock (_stateLock) { return _pending; } }
     }
 
+    // 사용자가 입력하던 줄이 있으면 뒤에 명령이 이어 붙어 엉뚱한 명령이 실행되므로, 먼저 Esc로 입력줄을 비운다(ClearScreen과 같은 방식).
+    private const string DiscardInputLine = "\u001b";
+
     private void InjectChangeDirectory(string path)
     {
         lock (_stateLock)
@@ -252,11 +264,11 @@ public sealed class TerminalSession : IDisposable
         _log.Info($"터미널 cd 주입: {path}");
         if (_shell == TerminalShell.CommandPrompt)
         {
-            SendInput(BuildCmdChangeDirectory(path));
+            SendInput(DiscardInputLine + BuildCmdChangeDirectory(path));
             return;
         }
         string quoted = EscapeSingleQuoted(path);
-        SendInput($"Set-Location -LiteralPath '{quoted}'\r");
+        SendInput($"{DiscardInputLine}Set-Location -LiteralPath '{quoted}'\r");
     }
 
     /// <summary>cmd용 이동 명령. UNC는 cd가 지원하지 않아 pushd를 쓴다. 따옴표 안에서도 %가 확장되므로 %는 ^로 끊을 수 없어 그대로 둔다(드문 경우).</summary>

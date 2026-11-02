@@ -21,6 +21,9 @@ public interface IDialogService
 
     /// <summary>설정 창(모달)을 연다. <paramref name="dataContext"/>는 창의 바인딩 대상(MainViewModel).</summary>
     void ShowSettings(object dataContext);
+
+    /// <summary>PC 정리 창(모달)을 연다. <paramref name="dataContext"/>는 창의 바인딩 대상(CleanupViewModel).</summary>
+    void ShowCleanup(object dataContext);
 }
 
 /// <summary>WPF 구현. Owner: App/MainViewModel, Lifetime: 앱 전체. UI 스레드에서만 호출한다.</summary>
@@ -28,7 +31,9 @@ public sealed class WpfDialogService : IDialogService
 {
     public bool Confirm(string title, string message)
     {
-        return ConfirmDialog.Ask(Application.Current?.MainWindow, title, message);
+        // 모달 창(PC 정리, 설정)이 열려 있으면 그 창 위에 띄운다: 비활성인 메인 창을 소유자로 하면 확인 창이 모달 창 뒤에 가려질 수 있다.
+        Window? owner = Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? Application.Current?.MainWindow;
+        return ConfirmDialog.Ask(owner, title, message);
     }
 
     public void ShowAbout()
@@ -39,6 +44,11 @@ public sealed class WpfDialogService : IDialogService
     public void ShowSettings(object dataContext)
     {
         new SettingsWindow { Owner = Application.Current?.MainWindow, DataContext = dataContext }.ShowDialog();
+    }
+
+    public void ShowCleanup(object dataContext)
+    {
+        new CleanupWindow { Owner = Application.Current?.MainWindow, DataContext = dataContext }.ShowDialog();
     }
 
     public string? PickSaveFile(string title, string defaultFileName)

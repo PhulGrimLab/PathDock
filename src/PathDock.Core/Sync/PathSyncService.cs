@@ -87,7 +87,7 @@ public sealed class PathSyncService
 
         string? normalized = PathNormalizer.Normalize(path);
         // 네트워크(UNC) 경로는 응답 없는 서버를 기다리는 동안 UI 스레드가 멈추므로 시간 제한을 둔다(그 안에 답이 없으면 "찾을 수 없음"으로 처리).
-        bool exists = normalized is not null && (SafeIo.IsUnc(normalized)
+        bool exists = normalized is not null && (SafeIo.IsNetworkPath(normalized)
             ? SafeIo.DirectoryExistsWithTimeout(normalized, UncCheckTimeout)
             : Directory.Exists(normalized));
         if (normalized is null || !exists)

@@ -1,3 +1,4 @@
+using System.Buffers;
 using Microsoft.VisualBasic.FileIO;
 using PathDock.Core.Localization;
 using PathDock.Core.Paths;
@@ -84,7 +85,22 @@ public static class FileOperations
             // 대소문자만 바꾸는 경우: 같은 위치로의 직접 이동이 거부될 수 있어 임시 이름을 거친다.
             string temp = Path.Combine(parent, "~pd_" + Guid.NewGuid().ToString("N"));
             Move(path, temp, isDir);
-            Move(temp, target, isDir);
+            try
+            {
+                Move(temp, target, isDir);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                try
+                {
+                    Move(temp, path, isDir); // 임시 이름("~pd_...")이 남지 않게 원래 이름으로 되돌린다.
+                }
+                catch (Exception ex2) when (ex2 is IOException or UnauthorizedAccessException)
+                {
+                    // 되돌리지 못하면 원래 오류를 우선한다.
+                }
+                throw;
+            }
         }
         else
         {
@@ -238,20 +254,24 @@ public static class FileOperations
             return;
         }
         bool completed = false;
+        bool created = false;
+        // 파일마다 1MB 배열을 새로 만들면 작은 파일이 많을 때 대형 객체 힙에 가비지가 쌓인다: 공유 풀에서 빌린다.
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(CopyBufferBytes);
         try
         {
             using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, CopyBufferBytes, FileOptions.SequentialScan))
             using (var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None, CopyBufferBytes, FileOptions.SequentialScan))
             {
-                var buffer = new byte[CopyBufferBytes];
+                created = true;
                 int read;
-                while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+                while ((read = input.Read(buffer, 0, CopyBufferBytes)) > 0)
                 {
                     ct.ThrowIfCancellationRequested();
                     output.Write(buffer, 0, read);
                     progress?.Report(read);
                 }
             }
+            CopyZoneIdentifier(source, target);
             File.SetAttributes(target, File.GetAttributes(source));
             File.SetCreationTimeUtc(target, File.GetCreationTimeUtc(source));
             File.SetLastWriteTimeUtc(target, File.GetLastWriteTimeUtc(source));
@@ -259,10 +279,30 @@ public static class FileOperations
         }
         finally
         {
-            if (!completed)
+            ArrayPool<byte>.Shared.Return(buffer);
+            // 이 호출이 만든 파일만 지운다(CreateNew가 "이미 있음"으로 실패했다면 남의 파일이다).
+            if (!completed && created)
             {
                 try { File.Delete(target); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* 지우지 못해도 원래 오류를 우선한다. */ }
             }
+        }
+    }
+
+    /// <summary>
+    /// 웹에서 받은 파일 표식(NTFS 대체 스트림 Zone.Identifier)을 복사본에 옮긴다. 스트림 단위로 복사하면 표식이 사라져,
+    /// 복사본을 실행할 때 Windows의 "인터넷에서 받은 파일" 경고가 빠진다. 표식이 없거나 NTFS가 아니면 아무것도 하지 않는다.
+    /// </summary>
+    private static void CopyZoneIdentifier(string source, string target)
+    {
+        const string Stream = ":Zone.Identifier";
+        try
+        {
+            byte[] mark = File.ReadAllBytes(source + Stream);
+            File.WriteAllBytes(target + Stream, mark);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
+        {
+            // 표식 없음(FileNotFound), ReFS/FAT 등 스트림 미지원: 건너뛴다.
         }
     }
 
@@ -319,7 +359,7 @@ public static class FileOperations
             throw new FileNotFoundException(Loc.T("대상을 찾을 수 없습니다.", "The item could not be found."), source);
         }
         string trimmed = source.TrimEnd('\\', '/');
-        if (string.Equals(Path.GetDirectoryName(trimmed), Path.GetFullPath(destDir).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(Path.TrimEndingDirectorySeparator(Path.GetDirectoryName(trimmed) ?? string.Empty), Path.TrimEndingDirectorySeparator(Path.GetFullPath(destDir)), StringComparison.OrdinalIgnoreCase))
         {
             return source;
         }

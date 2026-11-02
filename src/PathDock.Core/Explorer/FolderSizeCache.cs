@@ -106,6 +106,14 @@ public sealed class FolderSizeCache
         lock (_lock)
         {
             _entries[key] = e;
+            if (_entries.Count > MaxEntries * 2)
+            {
+                // 저장할 때만 자르면 오래 켜 둔 세션에서 메모리가 계속 늘어난다: 상한의 두 배를 넘으면 오래된 것부터 상한까지 줄인다.
+                foreach (string old in _entries.OrderBy(kv => kv.Value.ComputedUtc).Take(_entries.Count - MaxEntries).Select(kv => kv.Key).ToList())
+                {
+                    _entries.Remove(old);
+                }
+            }
         }
     }
 
@@ -177,7 +185,8 @@ public sealed class FolderSizeCache
             lock (_lock)
             {
                 _entries.Clear();
-                foreach (var kv in loaded)
+                // 손으로 편집되었거나 손상된 파일의 null 값은 조회 때 NullReferenceException이 되므로 버린다. 항목이 너무 많으면 최근 것만 남긴다.
+                foreach (var kv in loaded.Where(kv => kv.Value is not null).OrderByDescending(kv => kv.Value.ComputedUtc).Take(MaxEntries))
                 {
                     _entries[kv.Key] = kv.Value;
                 }

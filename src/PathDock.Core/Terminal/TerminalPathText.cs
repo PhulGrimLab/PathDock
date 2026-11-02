@@ -7,7 +7,8 @@
 /// </summary>
 public static class TerminalPathText
 {
-    private const string PowerShellSpecials = " \t&()[]{}^=;!'+,`~@#$%";
+    // PowerShell은 ' 말고도 ‘ ’ ‚ ‛ 를 작은따옴표로 취급하므로 이 글자들도 따옴표로 감싸야 하는 글자다.
+    private const string PowerShellSpecials = " \t&()[]{}^=;!'+,`~@#$%\u2018\u2019\u201A\u201B";
     private const string CmdSpecials = " \t&()[]{}^=;!'+,`~@#%";
 
     /// <summary>경로 하나를 입력줄용으로 만든다. 제어 문자가 있으면 null.</summary>
@@ -24,7 +25,7 @@ public static class TerminalPathText
                 : path;
         }
         return path.IndexOfAny(PowerShellSpecials.ToCharArray()) >= 0
-            ? $"'{path.Replace("'", "''")}'"
+            ? $"'{TerminalSession.EscapeSingleQuoted(path)}'"
             : path;
     }
 

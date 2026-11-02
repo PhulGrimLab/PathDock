@@ -39,6 +39,7 @@ public partial class MainWindow : FluentWindow
         Loc.LanguageChanged += UpdateVersionLabel;
         Closed += (_, _) => Loc.LanguageChanged -= UpdateVersionLabel;
         ApplyMinSize(vm.Preferences.UiFontSize);
+        SizeChanged += (_, _) => UpdateTitleLabels();
         vm.Preferences.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(SettingsViewModel.UiFontSize))
@@ -47,7 +48,6 @@ public partial class MainWindow : FluentWindow
             }
         };
         RestoreWindowState();
-        LayoutButtons.LayoutUpdated += (_, _) => CenterLayoutButtons();
         ApplyPaneLayout();
         _vm.PropertyChanged += (_, e) =>
         {
@@ -121,24 +121,6 @@ public partial class MainWindow : FluentWindow
         }
     }
 
-    /// <summary>
-    /// 배치 버튼(TitleBar.CenterContent)을 창의 가로 가운데로 옮긴다. 제목 표시줄은 앞뒤 내용 때문에 가운데 칸이 한쪽으로 치우쳐
-    /// 있으므로, 지금 위치와 창 가운데의 차이만큼 렌더 변환을 더한다(레이아웃은 바뀌지 않아 반복되지 않는다).
-    /// </summary>
-    private void CenterLayoutButtons()
-    {
-        if (!LayoutButtons.IsVisible || LayoutButtons.ActualWidth <= 0 || ActualWidth <= 0)
-        {
-            return;
-        }
-        double current = LayoutButtons.TransformToAncestor(this).Transform(new Point(LayoutButtons.ActualWidth / 2, 0)).X; // 지금의 이동량이 포함된 값
-        double delta = ActualWidth / 2 - current;
-        if (Math.Abs(delta) > 0.5)
-        {
-            LayoutButtonsShift.X += delta;
-        }
-    }
-
     /// <summary>제목 표시줄의 버전·빌드 날짜 문구와 툴팁을 현재 언어로 만든다.</summary>
     private void UpdateVersionLabel()
     {
@@ -148,6 +130,23 @@ public partial class MainWindow : FluentWindow
             : Loc.T($"버전 {Services.AppInfo.Version}", $"Version {Services.AppInfo.Version}");
     }
 
+    private const double TitleLabelsBaseWidth = 1700;
+    private const double TitleLabelsHysteresis = 40;
+    private double _titleLabelsMinWidth = TitleLabelsBaseWidth;
+
+    /// <summary>제목 표시줄 버튼의 글자는 창이 충분히 넓을 때만 보인다(좁으면 아이콘만 남겨 시계·배치 버튼과 겹치지 않게 한다).</summary>
+    private void UpdateTitleLabels()
+    {
+        // 경계 근처에서 창 폭을 조금씩 바꿀 때마다 창 전체 리소스가 무효화되지 않게, 보이는 중에는 조금 더 좁아질 때까지 유지한다.
+        bool showing = (Visibility)Resources["TitleLabelVisibility"] == Visibility.Visible;
+        double threshold = showing ? _titleLabelsMinWidth - TitleLabelsHysteresis : _titleLabelsMinWidth;
+        Visibility v = ActualWidth >= threshold ? Visibility.Visible : Visibility.Collapsed;
+        if ((Visibility)Resources["TitleLabelVisibility"] != v)
+        {
+            Resources["TitleLabelVisibility"] = v;
+        }
+    }
+
     /// <summary>
     /// 화면 글자가 커지면 즐겨찾기 줄 수와 목록 행 높이가 늘어 같은 창 크기로는 탐색기가 사라지므로, 창/탐색기 최소 크기를 글자 크기에 비례해 키운다.
     /// 작업 영역보다 커지지는 않는다.
@@ -155,8 +154,13 @@ public partial class MainWindow : FluentWindow
     private void ApplyMinSize(double fontSize)
     {
         double extra = Math.Max(0, fontSize - 12);
-        MinWidth = Math.Min(760 + extra * 25, SystemParameters.WorkArea.Width);
+        MinWidth = Math.Min(1100 + extra * 25, SystemParameters.WorkArea.Width); // 제목 표시줄(아이콘만 보이는 상태)이 한 줄에 들어가는 너비
         MinHeight = Math.Min(600 + extra * 25, SystemParameters.WorkArea.Height);
+        _titleLabelsMinWidth = TitleLabelsBaseWidth + extra * 60; // 글자가 커지면 버튼 글자 폭도 늘어 더 넓은 창에서만 보인다.
+        if (IsLoaded)
+        {
+            UpdateTitleLabels();
+        }
         ExplorerRow.MinHeight = 260 + extra * 12;
         if (Width < MinWidth)
         {

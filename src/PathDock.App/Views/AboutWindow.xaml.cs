@@ -27,7 +27,7 @@ public partial class AboutWindow : FluentWindow
         new("Ctrl+C / X / V", Loc.T("파일 복사 / 잘라내기 / 붙여넣기", "Copy / cut / paste files")),
         new("F5", Loc.T("새로 고침", "Refresh")),
         new("Ctrl+F", Loc.T("이름 검색 (Esc로 해제)", "Filter by name (Esc to clear)")),
-        new("Ctrl+Alt+C / E", Loc.T("계산기 / 휴지통 비우기", "Calculator / empty Recycle Bin")),
+        new("Ctrl+Alt+C / E / L", Loc.T("계산기 / 휴지통 비우기 / PC 정리", "Calculator / empty Recycle Bin / clean up PC")),
         new("Ctrl+Shift+T / W", Loc.T("터미널 새 탭 / 현재 탭 닫기", "New terminal tab / close current tab")),
         new("Ctrl+Tab / Ctrl+Shift+Tab", Loc.T("다음 / 이전 터미널 탭", "Next / previous terminal tab")),
         new(Loc.T("터미널 Ctrl+C", "Terminal Ctrl+C"), Loc.T("선택이 있으면 복사, 없으면 실행 중단", "Copy if text is selected, otherwise interrupt")),

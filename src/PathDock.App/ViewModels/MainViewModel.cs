@@ -277,6 +277,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>제목 표시줄 바탕화면 버튼: 선택된 폴더 영역을 바탕화면 폴더로 이동한다.</summary>
+    [RelayCommand]
+    private void OpenDesktop() => Explorer.NavigateTo(Services.KnownFolders.Desktop, ChangeOrigin.User);
+
+    /// <summary>제목 표시줄 다운로드 버튼: 선택된 폴더 영역을 다운로드 폴더로 이동한다.</summary>
+    [RelayCommand]
+    private void OpenDownloads() => Explorer.NavigateTo(Services.KnownFolders.Downloads, ChangeOrigin.User);
+
+    /// <summary>제목 표시줄 정리 버튼: 임시 파일, 캐시, 휴지통, 메모리를 정리하는 창.</summary>
+    [RelayCommand]
+    private void ShowCleanup() => _dialogs.ShowCleanup(new CleanupViewModel(_log, _dialogs));
+
     /// <summary>제목 표시줄 톱니 버튼: 설정 창.</summary>
     [RelayCommand]
     private void ShowSettings() => _dialogs.ShowSettings(Preferences);
@@ -409,13 +421,27 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>모든 영역에 공통인 숨김 파일 표시 설정을 다른 영역에도 맞추고 저장한다.</summary>
     private void OnShowHiddenChanged(ExplorerViewModel source, bool value)
     {
-        Settings.ShowHiddenFiles = value;
-        foreach (ExplorerViewModel pane in Panes.Where(p => !ReferenceEquals(p, source)))
+        if (_propagatingShowHidden)
         {
-            pane.ShowHidden = value; // 값이 바뀐 영역만 다시 읽는다(이미 같은 값이면 아무 일도 없다).
+            return; // 다른 영역에 맞추는 중에 그 영역이 다시 알려 오는 변경: 저장은 한 번만 한다.
+        }
+        Settings.ShowHiddenFiles = value;
+        _propagatingShowHidden = true;
+        try
+        {
+            foreach (ExplorerViewModel pane in Panes.Where(p => !ReferenceEquals(p, source)))
+            {
+                pane.ShowHidden = value; // 값이 바뀐 영역만 다시 읽는다(이미 같은 값이면 아무 일도 없다).
+            }
+        }
+        finally
+        {
+            _propagatingShowHidden = false;
         }
         SaveSettings();
     }
+
+    private bool _propagatingShowHidden;
 
     private string ResolveStartPath(string saved)
     {
@@ -437,7 +463,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         OnPropertyChanged(string.Empty); // 이 ViewModel의 모든 바인딩(SyncSummary, 테마 툴팁 등)을 다시 읽는다.
         Preferences.RefreshLanguage();
-        Explorer.RefreshLanguage();
+        foreach (ExplorerViewModel pane in Panes)
+        {
+            pane.RefreshLanguage(); // 4분할에서는 선택된 영역만이 아니라 모든 영역의 문구가 바뀌어야 한다.
+        }
         Terminal.RefreshLanguage();
         Drives.RefreshLanguage();
         Favorites.RefreshLanguage();
