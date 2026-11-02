@@ -30,20 +30,45 @@ public static class NetworkLogon
     [DllImport("mpr.dll", CharSet = CharSet.Unicode)]
     private static extern int WNetAddConnection3(IntPtr owner, ref NetResource resource, string? password, string? userName, uint flags);
 
+    [DllImport("mpr.dll", CharSet = CharSet.Unicode)]
+    private static extern int WNetGetConnection(string localName, System.Text.StringBuilder remoteName, ref int length);
+
+    private const int ErrorConnectionUnavail = 1201; // 기억된 네트워크 드라이브가 지금 끊겨 있음(원격 이름은 채워져 돌아온다)
+
+    /// <summary>"Z:\..."의 Z가 네트워크 드라이브로 연결(또는 기억)돼 있으면 그 공유 경로(\\서버\공유). 아니면 null.</summary>
+    private static string? MappedDriveRemote(string path)
+    {
+        if (path.Length < 2 || path[1] != ':' || !char.IsAsciiLetter(path[0]))
+        {
+            return null;
+        }
+        var sb = new System.Text.StringBuilder(512);
+        int length = sb.Capacity;
+        int result = WNetGetConnection(path.Substring(0, 2), sb, ref length);
+        return (result is 0 or ErrorConnectionUnavail) && sb.Length > 0 ? sb.ToString() : null;
+    }
+
     /// <summary>
-    /// 공유에 연결을 시도한다(필요하면 로그인 창). 연결되면 true. 사용자가 취소하거나 서버를 찾지 못하면 false이고
-    /// <paramref name="cancelled"/>로 취소 여부를 알린다. 이미 연결돼 있으면 true.
+    /// 공유(UNC 경로, 또는 끊긴 네트워크 드라이브 문자)에 연결을 시도한다(필요하면 로그인 창). 연결되면 true.
+    /// 사용자가 취소하거나 서버를 찾지 못하면 false이고 <paramref name="cancelled"/>로 취소 여부를 알린다.
+    /// 연결 대상이 아닌 경로면 false이고 <paramref name="error"/>는 -1(시도하지 않음).
     /// </summary>
     public static bool TryConnect(string path, out bool cancelled, out int error)
     {
         cancelled = false;
-        error = 0;
+        error = -1;
+        string? local = null;
         string? share = Core.Paths.SafeIo.UncShareRoot(path);
+        if (share is null)
+        {
+            share = MappedDriveRemote(path);
+            local = share is null ? null : path.Substring(0, 2);
+        }
         if (share is null)
         {
             return false;
         }
-        var resource = new NetResource { Type = ResourceTypeDisk, RemoteName = share };
+        var resource = new NetResource { Type = ResourceTypeDisk, LocalName = local, RemoteName = share };
         error = WNetAddConnection3(OwnerHandle(), ref resource, null, null, ConnectInteractive);
         cancelled = error == ErrorCancelled;
         return error == 0;

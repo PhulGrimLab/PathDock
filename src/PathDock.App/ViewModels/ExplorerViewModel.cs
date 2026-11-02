@@ -191,7 +191,7 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
         catch (Exception ex) when (ex is DirectoryNotFoundException or UnauthorizedAccessException or IOException or ArgumentException)
         {
             // 로그인이 필요한 공유는 존재하지 않는 폴더처럼 실패한다: 사용자가 직접 연 경우에는 로그인 창으로 연결을 시도하고 한 번 더 읽는다.
-            items = origin == ChangeOrigin.User && ex is not ArgumentException ? RetryAfterNetworkLogon(path) : null;
+            items = origin == ChangeOrigin.User && ex is not ArgumentException ? RetryAfterNetworkLogon(path, () => _service.NavigateTo(path)) : null;
             if (items is null)
             {
                 ReportNavigationFailure(path, origin, ex);
@@ -213,12 +213,15 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
         return true;
     }
 
-    /// <summary>UNC 경로면 Windows 로그인 창으로 공유에 연결한 뒤 다시 읽는다. UNC가 아니거나 연결(취소 포함)·재시도가 실패하면 null.</summary>
-    private List<FileItem>? RetryAfterNetworkLogon(string path)
+    /// <summary>
+    /// UNC 경로나 끊긴 네트워크 드라이브면 Windows 로그인 창으로 연결한 뒤 <paramref name="read"/>로 다시 읽는다.
+    /// 네트워크 경로가 아니거나 연결(취소 포함)·재시도가 실패하면 null.
+    /// </summary>
+    private List<FileItem>? RetryAfterNetworkLogon(string path, Func<List<FileItem>> read)
     {
         if (!Services.NetworkLogon.TryConnect(path, out bool cancelled, out int error))
         {
-            if (Core.Paths.SafeIo.UncShareRoot(path) is not null)
+            if (error != -1)
             {
                 _log.Info($"네트워크 로그인 연결 안 됨: {path} (취소={cancelled}, 오류={error})");
             }
@@ -227,7 +230,7 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
         _log.Info($"네트워크 로그인 연결됨: {path}");
         try
         {
-            return _service.NavigateTo(path);
+            return read();
         }
         catch (Exception ex) when (ex is DirectoryNotFoundException or UnauthorizedAccessException or IOException or ArgumentException)
         {
@@ -569,7 +572,22 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
         }
         try
         {
-            ApplyListing(ExplorerService.List(target, ShowHidden));
+            List<FileItem> items;
+            try
+            {
+                items = ExplorerService.List(target, ShowHidden);
+            }
+            catch (Exception ex) when (ex is DirectoryNotFoundException or UnauthorizedAccessException or IOException)
+            {
+                // 이력의 네트워크 공유가 다시 로그인이 필요해졌으면(연결이 끊김) 주소창 이동과 같게 로그인 창으로 연결해 본다.
+                List<FileItem>? retried = RetryAfterNetworkLogon(target, () => ExplorerService.List(target, ShowHidden));
+                if (retried is null)
+                {
+                    throw;
+                }
+                items = retried;
+            }
+            ApplyListing(items);
         }
         catch (Exception ex) when (ex is DirectoryNotFoundException or UnauthorizedAccessException or IOException or ArgumentException)
         {
