@@ -183,15 +183,20 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
     public bool NavigateTo(string path, ChangeOrigin origin)
     {
         string? previous = _service.Current;
-        List<FileItem> items;
+        List<FileItem>? items;
         try
         {
             items = _service.NavigateTo(path);
         }
         catch (Exception ex) when (ex is DirectoryNotFoundException or UnauthorizedAccessException or IOException or ArgumentException)
         {
-            ReportNavigationFailure(path, origin, ex);
-            return false;
+            // 로그인이 필요한 공유는 존재하지 않는 폴더처럼 실패한다: 사용자가 직접 연 경우에는 로그인 창으로 연결을 시도하고 한 번 더 읽는다.
+            items = origin == ChangeOrigin.User && ex is not ArgumentException ? RetryAfterNetworkLogon(path) : null;
+            if (items is null)
+            {
+                ReportNavigationFailure(path, origin, ex);
+                return false;
+            }
         }
 
         ApplyListing(items);
@@ -206,6 +211,28 @@ public sealed partial class ExplorerViewModel : ObservableObject, IPathSyncTarge
             // 새로고침: 목록만 갱신했으므로 알림 없음.
         }
         return true;
+    }
+
+    /// <summary>UNC 경로면 Windows 로그인 창으로 공유에 연결한 뒤 다시 읽는다. UNC가 아니거나 연결(취소 포함)·재시도가 실패하면 null.</summary>
+    private List<FileItem>? RetryAfterNetworkLogon(string path)
+    {
+        if (!Services.NetworkLogon.TryConnect(path, out bool cancelled, out int error))
+        {
+            if (Core.Paths.SafeIo.UncShareRoot(path) is not null)
+            {
+                _log.Info($"네트워크 로그인 연결 안 됨: {path} (취소={cancelled}, 오류={error})");
+            }
+            return null;
+        }
+        _log.Info($"네트워크 로그인 연결됨: {path}");
+        try
+        {
+            return _service.NavigateTo(path);
+        }
+        catch (Exception ex) when (ex is DirectoryNotFoundException or UnauthorizedAccessException or IOException or ArgumentException)
+        {
+            return null; // 연결은 됐지만 그 폴더가 없거나 권한이 없음: 원래 실패와 같은 알림을 띄운다.
+        }
     }
 
     /// <summary>이동 실패를 기록하고 알린다. 주소창을 현재 경로로 되돌리되, 사용자가 직접 친 경로면 고쳐 쓸 수 있게 남겨 둔다.</summary>

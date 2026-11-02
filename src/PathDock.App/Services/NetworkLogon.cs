@@ -1,0 +1,57 @@
+using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Interop;
+
+namespace PathDock.App.Services;
+
+/// <summary>
+/// 로그인이 필요한 네트워크 공유(UNC)에 Windows 표준 자격 증명 창으로 연결한다(탐색기가 처음 접속할 때 띄우는 창과 같다).
+/// 이미 저장된 자격 증명이나 현재 로그인 계정으로 접속되면 창은 뜨지 않는다. UI 스레드에서 호출해야 한다(창이 닫힐 때까지 돌아오지 않는다).
+/// </summary>
+public static class NetworkLogon
+{
+    private const uint ConnectInteractive = 0x00000008; // 인증이 필요하면 창을 띄운다
+    private const uint ResourceTypeDisk = 1;
+    private const int ErrorCancelled = 1223;
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct NetResource
+    {
+        public uint Scope;
+        public uint Type;
+        public uint DisplayType;
+        public uint Usage;
+        public string? LocalName;
+        public string? RemoteName;
+        public string? Comment;
+        public string? Provider;
+    }
+
+    [DllImport("mpr.dll", CharSet = CharSet.Unicode)]
+    private static extern int WNetAddConnection3(IntPtr owner, ref NetResource resource, string? password, string? userName, uint flags);
+
+    /// <summary>
+    /// 공유에 연결을 시도한다(필요하면 로그인 창). 연결되면 true. 사용자가 취소하거나 서버를 찾지 못하면 false이고
+    /// <paramref name="cancelled"/>로 취소 여부를 알린다. 이미 연결돼 있으면 true.
+    /// </summary>
+    public static bool TryConnect(string path, out bool cancelled, out int error)
+    {
+        cancelled = false;
+        error = 0;
+        string? share = Core.Paths.SafeIo.UncShareRoot(path);
+        if (share is null)
+        {
+            return false;
+        }
+        var resource = new NetResource { Type = ResourceTypeDisk, RemoteName = share };
+        error = WNetAddConnection3(OwnerHandle(), ref resource, null, null, ConnectInteractive);
+        cancelled = error == ErrorCancelled;
+        return error == 0;
+    }
+
+    private static IntPtr OwnerHandle()
+    {
+        Window? owner = Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? Application.Current?.MainWindow;
+        return owner is null ? IntPtr.Zero : new WindowInteropHelper(owner).Handle;
+    }
+}

@@ -99,6 +99,17 @@ public static class SafeIo
         }
     }
 
+    /// <summary>UNC 경로에서 접속 대상(\\서버\공유)을 뽑는다. UNC가 아니거나 서버 이름만 있으면 null.</summary>
+    public static string? UncShareRoot(string path)
+    {
+        if (!path.StartsWith(@"\\", StringComparison.Ordinal) || path.StartsWith(@"\\?\", StringComparison.Ordinal))
+        {
+            return null;
+        }
+        string[] parts = path.Substring(2).Split('\\', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2 ? $@"\\{parts[0]}\{parts[1]}" : null;
+    }
+
     /// <summary>경로가 UNC(네트워크) 경로인지.</summary>
     public static bool IsUnc(string path) => path.StartsWith(@"\\", StringComparison.Ordinal) && !path.StartsWith(@"\\?\", StringComparison.Ordinal)
         || path.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase);

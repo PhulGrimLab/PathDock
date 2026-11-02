@@ -203,3 +203,18 @@ public class VtResetReviewTests
         Assert.IsTrue(b.CursorY <= 5);
     }
 }
+[TestClass]
+public class NetworkLogonTests
+{
+    [TestMethod]
+    [DataRow(@"\\server\share", @"\\server\share")]
+    [DataRow(@"\\server\share\a\b", @"\\server\share")]
+    [DataRow(@"\\192.168.0.5\data\", @"\\192.168.0.5\data")]
+    [DataRow(@"\\server", null)]
+    [DataRow(@"\\?\C:\x", null)]
+    [DataRow(@"C:\Users", null)]
+    public void UncShareRoot_TakesServerAndShare_OnlyForUnc(string path, string? expected)
+    {
+        Assert.AreEqual(expected, PathDock.Core.Paths.SafeIo.UncShareRoot(path));
+    }
+}
